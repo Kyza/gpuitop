@@ -238,10 +238,37 @@ impl SystemCollector {
 					}
 				}
 
-				// Set is_electron on all tree processes
+				// Only mark as Electron if the root binary is actually
+				// electron, not a plain Chromium browser using --type=.
+				// Flatpak bundles rename the binary so also check for
+				// .asar (Electron packaging) in any subprocess cmdline.
+				let is_electron_root = |pid: i32| -> bool {
+					let exe = std::fs::read_link(format!("/proc/{pid}/exe"))
+						.unwrap_or_default();
+					if exe.to_string_lossy().contains("electron") {
+						return true;
+					}
+					electron_subs.iter().any(|sub| {
+						root_map.get(sub) == Some(&pid)
+							&& pid_to_proc
+								.get(sub)
+								.map(|p| p.command.contains(".asar"))
+								.unwrap_or(false)
+					})
+				};
+				let roots: HashSet<i32> = root_map.values().copied().collect();
+				let real_electron_roots: HashSet<i32> = roots
+					.iter()
+					.filter(|r| is_electron_root(**r))
+					.copied()
+					.collect();
+
 				for pid in &electron_pids {
-					if let Some(proc) = pid_to_proc.get_mut(pid) {
-						proc.is_electron = true;
+					let root = root_map.get(pid).unwrap_or(pid);
+					if real_electron_roots.contains(root) {
+						if let Some(proc) = pid_to_proc.get_mut(pid) {
+							proc.is_electron = true;
+						}
 					}
 				}
 

@@ -4,6 +4,23 @@ use std::path::Path;
 
 use crate::model::ProcessInfo;
 
+/// Check if a cgroup path belongs to a systemd service unit.
+///
+/// The cgroup string comes from `/proc/{pid}/cgroup` and may contain a
+/// trailing newline. On cgroups v2 the format is `0::/path/to/unit`.
+/// A service unit's cgroup segment ends with `.service`.
+pub fn is_systemd_service_cgroup(cgroup: &str) -> bool {
+	cgroup
+		.lines()
+		.next()
+		.unwrap_or("")
+		.trim()
+		.rsplit('/')
+		.next()
+		.map(|s| s.ends_with(".service"))
+		.unwrap_or(false)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InitSystem {
 	Systemd,
@@ -93,8 +110,7 @@ pub fn is_service(
 			if proc.cgroup.is_empty() {
 				return proc.ppid == 1;
 			}
-			!proc.cgroup.contains("/user.slice/")
-				&& proc.cgroup.contains(".service")
+			is_systemd_service_cgroup(&proc.cgroup)
 		}
 		InitSystem::OpenRc => {
 			proc.ppid == 1
@@ -104,5 +120,56 @@ pub fn is_service(
 		InitSystem::Dinit | InitSystem::SysV | InitSystem::Unknown => {
 			proc.ppid == 1
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn systemd_cgroup_matches_service() {
+		assert!(is_systemd_service_cgroup(
+			"0::/system.slice/sshd.service\n"
+		));
+	}
+
+	#[test]
+	fn systemd_cgroup_matches_user_service() {
+		assert!(is_systemd_service_cgroup(
+			"0::/user.slice/user-1000.slice/user@1000.service/app.slice/gnome-keyring-daemon.service\n"
+		));
+	}
+
+	#[test]
+	fn systemd_cgroup_rejects_scope_unit() {
+		assert!(!is_systemd_service_cgroup(
+			"0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-ghostty-surface-transient-1562569.scope\n"
+		));
+	}
+
+	#[test]
+	fn systemd_cgroup_rejects_empty() {
+		assert!(!is_systemd_service_cgroup(""));
+	}
+
+	#[test]
+	fn systemd_cgroup_no_newline() {
+		assert!(is_systemd_service_cgroup(
+			"0::/system.slice/cron.service"
+		));
+	}
+
+	#[test]
+	fn systemd_cgroup_init_scope_rejected() {
+		assert!(!is_systemd_service_cgroup(
+			"0::/init.scope\n"
+		));
+	}
+
+	#[test]
+	fn detect_init_on_current_system() {
+		// Just checks the function doesn't panic
+		let _init = detect_init();
 	}
 }

@@ -1,7 +1,8 @@
 use crate::model::{Filter, ProcessInfo};
-use crate::platform::system::InitSystem;
+use crate::platform::system::{is_service, InitSystem};
 use gpui::*;
 use gpui_component::{ActiveTheme, IconName};
+use std::collections::HashSet;
 
 pub fn theme_dark_or_light(cx: &App) -> bool {
 	cx.theme().is_dark()
@@ -81,17 +82,12 @@ pub fn tag_icons(
 	if !proc.is_kthread && !proc.is_owned_by_current_user && proc.ppid != 1 {
 		tags.push((IconName::Settings2, tag_color(TagType::System, dark)));
 	}
-	let is_svc = match init_system {
-		InitSystem::Systemd => {
-			if proc.cgroup.is_empty() {
-				proc.ppid == 1
-			} else {
-				!proc.cgroup.contains("/user.slice/")
-					&& proc.cgroup.contains(".service")
-			}
-		}
-		_ => proc.ppid == 1,
-	};
+	let is_svc = is_service(
+		proc,
+		init_system,
+		&HashSet::new(),
+		&HashSet::new(),
+	);
 	if is_svc {
 		tags.push((
 			IconName::SquareTerminal,
