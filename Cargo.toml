@@ -1,0 +1,38 @@
+[package]
+name = "gpuitop"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
+    "wayland",
+    "x11",
+    "font-kit",
+    "runtime_shaders",
+] }
+gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+procfs = "0.16"
+nvml-wrapper = "0.10"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+parking_lot = "0.12"
+anyhow = "1"
+users = "0.11"
+libc = "0.2"
+num_cpus = "1"
+bytesize = "1"
+hotpath = "0.22"
+
+[features]
+hotpath = ["hotpath/hotpath"]
+hotpath-cpu = ["hotpath/hotpath-cpu"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]
+
+[profile.release]
+lto = "thin"
+strip = "symbols"
+
+[profile.dev.package."*"]
+opt-level = 2
