@@ -23,7 +23,7 @@ use gpui_component::{
 		TableEvent, TableState,
 	},
 	tag::Tag,
-	ActiveTheme, Icon, IconName, Sizable,
+	ActiveTheme, Disableable, Icon, IconName, Sizable,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -48,7 +48,7 @@ impl ViewState {
 	}
 }
 
-pub struct ProcessesTab {
+	pub struct ProcessesTab {
 	snapshot_cell: Rc<RefCell<Rc<SystemSnapshot>>>,
 	cum_cache: Rc<RefCell<Option<std::collections::HashMap<i32, CumulativeResources>>>>,
 	pid_index: Rc<RefCell<Option<std::collections::HashMap<i32, usize>>>>,
@@ -57,10 +57,13 @@ pub struct ProcessesTab {
 	input_state: Option<Entity<InputState>>,
 	clear_search_on_pin: bool,
 	needs_clear_input: bool,
+	needs_set_input: Option<String>,
 	needs_focus_input: bool,
 	_events: Option<Subscription>,
 	_subscriptions: Vec<Subscription>,
 	has_data: bool,
+	is_picking: std::sync::Arc<std::sync::atomic::AtomicBool>,
+	pick_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl ProcessesTab {
@@ -88,10 +91,13 @@ impl ProcessesTab {
 			input_state: None,
 			clear_search_on_pin: config.clear_search_on_pin,
 			needs_clear_input: false,
+			needs_set_input: None,
 			needs_focus_input: false,
 			_events: None,
 			_subscriptions: Vec::new(),
 			has_data: false,
+			is_picking: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+			pick_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
 		}
 	}
 
@@ -351,19 +357,24 @@ impl ProcessTableDelegate {
 
 		let all = self.snapshot_cell.borrow().processes.clone();
 
+		let mut matcher = nucleo::Matcher::new(nucleo::Config::DEFAULT);
+
 		let mut result: Vec<ProcessInfo> = all
 			.iter()
 			.filter(|p| {
 				if !search.is_empty() {
-					if !p.name.to_lowercase().contains(&search)
+					if !fuzzy_match(&search, &p.name.to_lowercase(), &mut matcher)
 						&& !p.pid.to_string().contains(&search)
-						&& !p.user.to_lowercase().contains(&search)
-						&& !p
-							.electron_app_name
-							.as_deref()
-							.unwrap_or_default()
-							.to_lowercase()
-							.contains(&search)
+						&& !fuzzy_match(&search, &p.user.to_lowercase(), &mut matcher)
+						&& !fuzzy_match(&search, &p.command.to_lowercase(), &mut matcher)
+						&& !fuzzy_match(
+							&search,
+							&p.electron_app_name
+								.as_deref()
+								.unwrap_or_default()
+								.to_lowercase(),
+							&mut matcher,
+						)
 					{
 						return false;
 					}
@@ -396,6 +407,14 @@ impl ProcessTableDelegate {
 			};
 
 		result.sort_by(|a, b| {
+			if !search.is_empty() {
+				let sa = best_fuzzy_score(&search, a, &mut matcher);
+				let sb = best_fuzzy_score(&search, b, &mut matcher);
+				match sb.cmp(&sa) {
+					std::cmp::Ordering::Equal => {}
+					other => return other,
+				}
+			}
 			let cmp = match col {
 				1 => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
 				2 => a.pid.cmp(&b.pid),
@@ -529,6 +548,48 @@ impl ProcessTableDelegate {
 			},
 		}
 	}
+}
+
+fn fuzzy_match(needle: &str, haystack: &str, matcher: &mut nucleo::Matcher) -> bool {
+	nucleo_fuzzy_score(needle, haystack, matcher).is_some()
+}
+
+fn nucleo_fuzzy_score(
+	needle: &str,
+	haystack: &str,
+	matcher: &mut nucleo::Matcher,
+) -> Option<u32> {
+	let pattern = nucleo::pattern::Pattern::new(
+		needle,
+		nucleo::pattern::CaseMatching::Ignore,
+		nucleo::pattern::Normalization::Smart,
+		nucleo::pattern::AtomKind::Fuzzy,
+	);
+	let hs = nucleo::Utf32String::from(haystack);
+	pattern.score(hs.slice(..), matcher)
+}
+
+fn best_fuzzy_score(
+	needle: &str,
+	p: &ProcessInfo,
+	matcher: &mut nucleo::Matcher,
+) -> u32 {
+	let name_score =
+		nucleo_fuzzy_score(needle, &p.name.to_lowercase(), matcher)
+			.unwrap_or(0);
+	let cmd_score =
+		nucleo_fuzzy_score(needle, &p.command.to_lowercase(), matcher)
+			.unwrap_or(0);
+	let electron_score = nucleo_fuzzy_score(
+		needle,
+		&p.electron_app_name
+			.as_deref()
+			.unwrap_or_default()
+			.to_lowercase(),
+		matcher,
+	)
+	.unwrap_or(0);
+	name_score.max(cmd_score).max(electron_score)
 }
 
 fn theme_dark_or_light(cx: &App) -> bool {
@@ -1108,6 +1169,13 @@ impl Render for ProcessesTab {
 		let has_data = self.has_data;
 		drop(snapshot);
 
+		if let Some(app_id) = self.pick_result.lock().unwrap().take() {
+			self.is_picking.store(false, std::sync::atomic::Ordering::Relaxed);
+			let keyword = app_id.rsplit('.').next().unwrap_or(&app_id).to_string();
+			self.needs_set_input = Some(keyword);
+			cx.notify();
+		}
+
 		if self.table_state.is_none() {
 			let delegate = self.get_delegate();
 			let state = cx.new(|cx| TableState::new(delegate, window, cx));
@@ -1173,6 +1241,18 @@ impl Render for ProcessesTab {
 				});
 			}
 			self.needs_clear_input = false;
+		}
+
+		if let Some(value) = self.needs_set_input.take() {
+			if let Some(ref is) = self.input_state {
+				let vs = self.view_state.clone();
+				is.update(cx, |state, cx| {
+					state.set_value(value.clone(), window, cx);
+				});
+				ViewState::mutate(&vs, |s| {
+					s.search = value;
+				});
+			}
 		}
 
 		if self.needs_focus_input {
@@ -1245,7 +1325,26 @@ impl Render for ProcessesTab {
                                         Icon::new(IconName::Search)
                                             .size(px(12.0))
                                             .text_color(cx.theme().muted_foreground),
-                                    ),
+                                    )
+                                    .when(self.view_state.borrow().search.len() > 0, |input| {
+										let view_state = self.view_state.clone();
+										let input_state = self.input_state.as_ref().unwrap().clone();
+										input.suffix(
+											Button::new("clear-search")
+												.ghost()
+												.icon(Icon::new(IconName::Close).size(px(14.0)).text_color(cx.theme().muted_foreground))
+												.small()
+												.on_click(cx.listener(move |_, _, window, cx| {
+													ViewState::mutate(&view_state, |s| {
+														s.search.clear();
+													});
+													input_state.update(cx, |state, cx| {
+														state.set_value(String::new(), window, cx);
+													});
+													cx.notify();
+												})),
+										)
+									}),
                             )
 							.child(
 								Button::new("and-or")
@@ -1310,6 +1409,32 @@ impl Render for ProcessesTab {
 											get_state_item('I', &active, vs.clone()),
 										)
 									})
+							})
+							.child({
+								let pick_result = self.pick_result.clone();
+								let is_picking = self.is_picking.clone();
+								let picking = self.is_picking.load(std::sync::atomic::Ordering::Relaxed);
+								Button::new("pick-window")
+									.ghost()
+									.label(if picking { "Picking…" } else { "Pick" })
+									.small()
+									.disabled(picking)
+									.on_click(cx.listener(move |_this, _, _, cx| {
+										is_picking.store(true, std::sync::atomic::Ordering::Relaxed);
+										let r = pick_result.clone();
+										let p = is_picking.clone();
+										std::thread::spawn(move || {
+											for _ in 0..50 {
+												std::thread::sleep(std::time::Duration::from_millis(200));
+												if let Some(id) = crate::wayland::get_focused_window_app_id() {
+													*r.lock().unwrap() = Some(id);
+													break;
+												}
+											}
+											p.store(false, std::sync::atomic::Ordering::Relaxed);
+										});
+										cx.notify();
+									}))
 							}),
 					)
 					.child(

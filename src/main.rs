@@ -3,10 +3,13 @@ mod collect;
 mod config;
 mod model;
 mod tabs;
+mod wayland;
 mod widgets;
 
 use gpui::*;
 use gpui_component::Root;
+
+pub const GPUITOP_APP_ID: &str = "com.github.kyza.gpuitop";
 
 #[hotpath::main]
 fn main() {
@@ -42,6 +45,7 @@ fn main() {
 					..Default::default()
 				}),
 				window_decorations: Some(WindowDecorations::Client),
+				app_id: Some(GPUITOP_APP_ID.into()),
 				..Default::default()
 			},
 			|window, cx| {
