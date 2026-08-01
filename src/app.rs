@@ -1,4 +1,4 @@
-use crate::collect::{detect_gpu, SystemCollector};
+use crate::platform::{detect_gpu, SystemCollector};
 use crate::config::Config;
 use crate::model::{GpuBackend, SystemSnapshot, Theme};
 use crate::tabs::{PerformanceTab, ProcessesTab, SettingsTab};

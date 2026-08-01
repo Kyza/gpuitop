@@ -1,10 +1,9 @@
 #![recursion_limit = "512"]
 mod app;
-mod collect;
 mod config;
 mod model;
+mod platform;
 mod tabs;
-mod wayland;
 mod widgets;
 
 use gpui::*;
