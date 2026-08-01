@@ -3,19 +3,22 @@ use bytesize::ByteSize;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::ActiveTheme;
-use parking_lot::RwLock;
-use std::sync::Arc;
+use std::rc::Rc;
 
 pub struct PerformanceTab {
-	snapshot: Arc<RwLock<SystemSnapshot>>,
+	snapshot: Rc<SystemSnapshot>,
 }
 
 impl PerformanceTab {
 	pub fn new(
-		snapshot: Arc<RwLock<SystemSnapshot>>,
+		snapshot: Rc<SystemSnapshot>,
 		_cx: &mut Context<Self>,
 	) -> Self {
 		Self { snapshot }
+	}
+
+	pub fn set_snapshot(&mut self, snapshot: Rc<SystemSnapshot>) {
+		self.snapshot = snapshot;
 	}
 }
 
@@ -25,11 +28,10 @@ impl Render for PerformanceTab {
 		_window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		let snapshot = self.snapshot.read();
-		let cpu = &snapshot.cpu;
-		let mem = &snapshot.memory;
-		let disks = &snapshot.disks;
-		let nets = &snapshot.networks;
+		let cpu = &self.snapshot.cpu;
+		let mem = &self.snapshot.memory;
+		let disks = &self.snapshot.disks;
+		let nets = &self.snapshot.networks;
 
 		div()
 			.size_full()

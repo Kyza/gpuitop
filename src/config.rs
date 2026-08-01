@@ -78,7 +78,7 @@ impl Default for Config {
 			default_grouping: ProcessGrouping::Auto,
 			vram_polling: VramPolling::Auto,
 			pid_filter_mode: PidFilterMode::DirectChildren,
-			resource_view_mode: ResourceViewMode::Cumulative,
+			resource_view_mode: ResourceViewMode::SelfOnly,
 			clear_search_on_pin: true,
 			theme: Theme::System,
 			disk_devices: Vec::new(),

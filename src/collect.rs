@@ -1,15 +1,12 @@
 use crate::model::*;
-use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::sync::Arc;
 use std::time::Instant;
 
 const HISTORY_LEN: usize = 60;
 
 pub struct SystemCollector {
-	snapshot: Arc<RwLock<SystemSnapshot>>,
-	gpu_backend: Arc<RwLock<GpuBackend>>,
+	gpu_backend: GpuBackend,
 	current_uid: u32,
 	user_cache: HashMap<u32, String>,
 	prev_cpu_totals: Option<Vec<(u64, u64)>>,
@@ -24,12 +21,8 @@ pub struct SystemCollector {
 }
 
 impl SystemCollector {
-	pub fn new(
-		snapshot: Arc<RwLock<SystemSnapshot>>,
-		gpu_backend: Arc<RwLock<GpuBackend>>,
-	) -> Self {
+	pub fn new(gpu_backend: GpuBackend) -> Self {
 		Self {
-			snapshot,
 			gpu_backend,
 			current_uid: unsafe { libc::getuid() },
 			user_cache: HashMap::new(),
@@ -46,23 +39,24 @@ impl SystemCollector {
 	}
 
 	#[hotpath::measure]
-	pub fn tick(&mut self) {
+	pub fn tick(&mut self) -> SystemSnapshot {
 		let now = Instant::now();
 		let cpu = self.collect_cpu(now);
 		let memory = self.collect_memory();
+		let total_mem = memory.total.max(1);
 		let disks = self.collect_disks(now);
 		let networks = self.collect_networks(now);
-		let processes = self.collect_processes(now);
+		let processes = self.collect_processes(now, total_mem);
 
-		let mut snap = self.snapshot.write();
-		*snap = SystemSnapshot {
+		SystemSnapshot {
 			processes,
 			cpu,
 			memory,
 			disks,
 			networks,
 			timestamp: now,
-		};
+			gpu_backend: self.gpu_backend,
+		}
 	}
 
 	fn read(path: &str) -> Option<String> {
@@ -305,15 +299,14 @@ impl SystemCollector {
 
 	// ---- Processes ----
 	#[hotpath::measure]
-	fn collect_processes(&mut self, now: Instant) -> Vec<ProcessInfo> {
+	fn collect_processes(
+		&mut self,
+		now: Instant,
+		total_mem: u64,
+	) -> Vec<ProcessInfo> {
 		let Ok(entries) = fs::read_dir("/proc") else {
 			return Vec::new();
 		};
-		let total_mem = self
-			.snapshot
-			.try_read()
-			.map(|s| s.memory.total)
-			.unwrap_or(1);
 		let num_cpus = num_cpus::get() as f32;
 
 		let mut cur_proc_data: HashMap<i32, (u64, u64, u64, u64)> =
@@ -322,7 +315,7 @@ impl SystemCollector {
 		let mut children_map: HashMap<i32, Vec<i32>> = HashMap::new();
 
 		// Build VRAM map once instead of querying per-PID
-		let vram_map = build_vram_map(&self.gpu_backend);
+		let vram_map = build_vram_map(self.gpu_backend);
 
 		for entry in entries.flatten() {
 			let name_str = entry.file_name().to_string_lossy().to_string();
@@ -635,9 +628,8 @@ fn get_user_name(uid: u32) -> String {
 }
 
 #[hotpath::measure]
-fn build_vram_map(gpu_backend: &Arc<RwLock<GpuBackend>>) -> HashMap<i32, u64> {
-	let backend = *gpu_backend.read();
-	match backend {
+fn build_vram_map(gpu_backend: GpuBackend) -> HashMap<i32, u64> {
+	match gpu_backend {
 		GpuBackend::Nvidia => build_nvidia_vram_map(),
 		GpuBackend::Amd => build_rocm_vram_map(),
 		GpuBackend::None => HashMap::new(),
@@ -725,12 +717,8 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_processes() {
-		let snapshot = Arc::new(RwLock::new(SystemSnapshot::empty()));
-		let gpu = Arc::new(RwLock::new(GpuBackend::None));
-		let mut collector = SystemCollector::new(snapshot.clone(), gpu);
-
-		collector.tick();
-		let snap = snapshot.read();
+		let mut collector = SystemCollector::new(GpuBackend::None);
+		let snap = collector.tick();
 
 		assert!(
 			!snap.processes.is_empty(),
@@ -765,13 +753,10 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_cpu_data() {
-		let snapshot = Arc::new(RwLock::new(SystemSnapshot::empty()));
-		let gpu = Arc::new(RwLock::new(GpuBackend::None));
-		let mut collector = SystemCollector::new(snapshot.clone(), gpu);
+		let mut collector = SystemCollector::new(GpuBackend::None);
 
 		collector.tick();
-		collector.tick();
-		let snap = snapshot.read();
+		let snap = collector.tick();
 
 		assert!(!snap.cpu.cores.is_empty(), "No CPU cores detected");
 		eprintln!(
@@ -783,12 +768,8 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_memory_data() {
-		let snapshot = Arc::new(RwLock::new(SystemSnapshot::empty()));
-		let gpu = Arc::new(RwLock::new(GpuBackend::None));
-		let mut collector = SystemCollector::new(snapshot.clone(), gpu);
-
-		collector.tick();
-		let snap = snapshot.read();
+		let mut collector = SystemCollector::new(GpuBackend::None);
+		let snap = collector.tick();
 
 		assert!(snap.memory.total > 0, "Total memory is 0");
 		eprintln!(
@@ -798,6 +779,26 @@ mod tests {
 			snap.memory.available,
 			snap.memory.swap_used
 		);
+	}
+
+	#[test]
+	fn test_processes_flat_list() {
+		let mut collector = SystemCollector::new(GpuBackend::None);
+		let snap = collector.tick();
+
+		let total = snap.processes.len();
+		eprintln!("Flat list: {} processes", total);
+		assert!(total > 10, "Too few processes: {}", total);
+
+		let with_children =
+			snap.processes.iter().filter(|p| p.has_children).count();
+		eprintln!("  with children: {}", with_children);
+		assert!(with_children > 0, "No processes have has_children=true");
+
+		let gui = snap.processes.iter().filter(|p| p.is_gui).count();
+		eprintln!("  GUI processes: {}", gui);
+
+		assert!(snap.processes.iter().any(|p| p.pid == 1), "PID 1 missing");
 	}
 
 	#[test]
@@ -877,37 +878,8 @@ mod tests {
 	}
 
 	#[test]
-	fn test_processes_flat_list() {
-		let snapshot = Arc::new(RwLock::new(SystemSnapshot::empty()));
-		let gpu = Arc::new(RwLock::new(GpuBackend::None));
-		let mut collector = SystemCollector::new(snapshot.clone(), gpu);
-
-		collector.tick();
-		let snap = snapshot.read();
-
-		let total = snap.processes.len();
-		eprintln!("Flat list: {} processes", total);
-		assert!(total > 10, "Too few processes: {}", total);
-
-		// Check that has_children is populated
-		let with_children =
-			snap.processes.iter().filter(|p| p.has_children).count();
-		eprintln!("  with children: {}", with_children);
-		assert!(with_children > 0, "No processes have has_children=true");
-
-		// Check that GUI detection works
-		let gui = snap.processes.iter().filter(|p| p.is_gui).count();
-		eprintln!("  GUI processes: {}", gui);
-
-		// Check PID 1 exists
-		assert!(snap.processes.iter().any(|p| p.pid == 1), "PID 1 missing");
-	}
-
-	#[test]
 	fn bench_collector_tick() {
-		let snapshot = Arc::new(RwLock::new(SystemSnapshot::empty()));
-		let gpu = Arc::new(RwLock::new(GpuBackend::None));
-		let mut collector = SystemCollector::new(snapshot.clone(), gpu);
+		let mut collector = SystemCollector::new(GpuBackend::None);
 
 		// Warmup
 		collector.tick();
@@ -925,7 +897,7 @@ mod tests {
 			iterations, elapsed, avg
 		);
 
-		let snap = snapshot.read();
+		let snap = collector.tick();
 		eprintln!("  processes per tick: {}", snap.processes.len());
 		eprintln!(
 			"  total={:?} avg={:?} ({} µs/proc)",

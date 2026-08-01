@@ -83,6 +83,7 @@ impl SystemSnapshot {
 			disks: Vec::new(),
 			networks: Vec::new(),
 			timestamp: std::time::Instant::now(),
+			gpu_backend: GpuBackend::None,
 		}
 	}
 }
@@ -95,6 +96,7 @@ pub struct SystemSnapshot {
 	pub disks: Vec<DiskInfo>,
 	pub networks: Vec<NetInfo>,
 	pub timestamp: std::time::Instant,
+	pub gpu_backend: GpuBackend,
 }
 
 #[derive(

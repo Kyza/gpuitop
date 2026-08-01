@@ -5,21 +5,20 @@ use crate::tabs::{PerformanceTab, ProcessesTab, SettingsTab};
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{ActiveTheme, Icon, IconName, TitleBar};
-use parking_lot::RwLock;
 use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-	pub struct App {
+pub struct App {
 	active_tab: usize,
-	refresh_ms: u64,
 	config: Config,
 	theme: Rc<Cell<Theme>>,
-	snapshot: Arc<RwLock<SystemSnapshot>>,
-	collecting: Arc<AtomicBool>,
-	gpu_backend: Arc<RwLock<GpuBackend>>,
+	snapshot: Rc<SystemSnapshot>,
+	gpu_backend: GpuBackend,
+	rx: mpsc::Receiver<SystemSnapshot>,
 	processes_tab: Entity<ProcessesTab>,
 	performance_tab: Entity<PerformanceTab>,
 	settings_tab: Entity<SettingsTab>,
@@ -37,41 +36,42 @@ fn apply_theme(theme: Theme, window: &mut Window, app: &mut gpui::App) {
 impl App {
 	pub fn new(cx: &mut Context<Self>) -> Self {
 		let config = Config::load();
-		let snapshot = Arc::new(RwLock::new(SystemSnapshot::empty()));
-		let gpu_backend = Arc::new(RwLock::new(detect_gpu()));
-		let collecting = Arc::new(AtomicBool::new(false));
-		let theme = Rc::new(Cell::new(config.theme));
+		let gpu_backend = detect_gpu();
+
+		let initial_snapshot = Rc::new(SystemSnapshot::empty());
 
 		let processes_tab = cx.new(|cx| {
-			ProcessesTab::new(config.clone(), snapshot.clone(), cx)
+			ProcessesTab::new(config.clone(), initial_snapshot.clone(), cx)
 		});
 		let performance_tab =
-			cx.new(|cx| PerformanceTab::new(snapshot.clone(), cx));
-		let settings_tab = cx.new(|cx| SettingsTab::new(config.clone(), cx));
+			cx.new(|cx| PerformanceTab::new(initial_snapshot.clone(), cx));
+		let refresh_ms = Arc::new(AtomicU64::new(config.refresh_ms));
+		let settings_tab = cx.new(|cx| {
+			SettingsTab::new(config.clone(), refresh_ms.clone(), cx)
+		});
 
-		let refresh_ms = config.refresh_ms;
-		let snap = snapshot.clone();
-		let gpu = gpu_backend.clone();
-		let col = collecting.clone();
+		let (tx, rx) = mpsc::channel::<SystemSnapshot>();
+		let thread_refresh = refresh_ms.clone();
 
 		std::thread::spawn(move || {
-			let mut collector = SystemCollector::new(snap, gpu);
+			let mut collector = SystemCollector::new(gpu_backend);
 			loop {
-				col.store(true, Ordering::SeqCst);
-				collector.tick();
-				col.store(false, Ordering::SeqCst);
-				std::thread::sleep(Duration::from_millis(refresh_ms));
+				let snapshot = collector.tick();
+				if tx.send(snapshot).is_err() {
+					break;
+				}
+				let ms = thread_refresh.load(Ordering::SeqCst);
+				std::thread::sleep(Duration::from_millis(ms));
 			}
 		});
 
 		Self {
 			active_tab: 0,
-			refresh_ms: config.refresh_ms,
+			theme: Rc::new(Cell::new(config.theme)),
 			config,
-			theme,
-			snapshot,
-			collecting,
+			snapshot: initial_snapshot,
 			gpu_backend,
+			rx,
 			processes_tab,
 			performance_tab,
 			settings_tab,
@@ -88,6 +88,16 @@ impl Render for App {
 		hotpath::measure_block!("render", {
 			cx.on_next_frame(window, |_, _, cx| cx.notify());
 
+			while let Ok(new_snap) = self.rx.try_recv() {
+				self.gpu_backend = new_snap.gpu_backend;
+				let snap = Rc::new(new_snap);
+				self.processes_tab
+					.update(cx, |tab, _| tab.set_snapshot(snap.clone()));
+				self.performance_tab
+					.update(cx, |tab, _| tab.set_snapshot(snap.clone()));
+				self.snapshot = snap;
+			}
+
 			let active = self.active_tab;
 			let labels = ["Processes", "Performance", "Settings"];
 			let icons =
@@ -99,7 +109,7 @@ impl Render for App {
 				Theme::Light => IconName::Sun,
 				Theme::System => IconName::Palette,
 			};
-			let gpu = *self.gpu_backend.read();
+			let gpu = self.gpu_backend;
 
 			let tabs = labels
 				.iter()
@@ -155,13 +165,6 @@ impl Render for App {
 				_ => div().into_any_element(),
 			};
 
-			let now = Instant::now();
-			let last_refresh = self.snapshot.read().timestamp;
-		let refresh_progress =
-			(now.duration_since(last_refresh).as_secs_f32()
-				/ (self.refresh_ms as f32 / 1000.0))
-				.clamp(0.0, 1.0);
-
 			div()
 				.size_full()
 				.flex()
@@ -207,11 +210,6 @@ impl Render for App {
 								let config = self.config.clone();
 								div()
 									.id(ElementId::Name("theme-btn".into()))
-									// .tooltip(move |_, _| {
-									// 	div()
-									// 		.text_sm()
-									// 		.child(theme_tooltip.clone())
-									// })
 									.px(px(8.0))
 									.h(px(32.0))
 									.flex()
@@ -245,18 +243,6 @@ impl Render for App {
 					),
 				)
 				.child(div().flex_grow(1.0).size_full().child(content))
-			.child(
-				div()
-					.w_full()
-					.h(px(3.0))
-					.bg(cx.theme().muted.opacity(0.12))
-					.child(
-						div()
-							.h_full()
-							.bg(cx.theme().primary.opacity(0.5))
-							.w(relative(refresh_progress)),
-					),
-			)
 		})
 	}
 }

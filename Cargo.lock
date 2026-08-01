@@ -2728,7 +2728,6 @@ dependencies = [
  "libc",
  "num_cpus",
  "nvml-wrapper",
- "parking_lot",
  "procfs",
  "serde",
  "toml 0.8.23",

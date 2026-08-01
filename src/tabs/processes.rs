@@ -25,26 +25,40 @@ use gpui_component::{
 	tag::Tag,
 	ActiveTheme, Icon, IconName, Sizable,
 };
-use parking_lot::RwLock;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
+
+struct ViewState {
+	generation: u64,
+	filters: Vec<Filter>,
+	filter_mode: FilterMode,
+	pid_filter_mode: PidFilterMode,
+	search: String,
+	sort_col: usize,
+	sort_dir: ColumnSort,
+	resource_view_mode: ResourceViewMode,
+	cached: Option<(std::time::Instant, u64, Rc<Vec<ProcessInfo>>)>,
+}
+
+impl ViewState {
+	fn mutate(state: &Rc<RefCell<ViewState>>, f: impl FnOnce(&mut ViewState)) {
+		let mut s = state.borrow_mut();
+		f(&mut s);
+		s.generation = s.generation.wrapping_add(1);
+	}
+}
 
 pub struct ProcessesTab {
-	snapshot: Arc<RwLock<SystemSnapshot>>,
+	snapshot_cell: Rc<RefCell<Rc<SystemSnapshot>>>,
+	cum_cache: Rc<RefCell<Option<std::collections::HashMap<i32, CumulativeResources>>>>,
+	pid_index: Rc<RefCell<Option<std::collections::HashMap<i32, usize>>>>,
+	view_state: Rc<RefCell<ViewState>>,
 	table_state: Option<Entity<TableState<ProcessTableDelegate>>>,
-	filters: Rc<RefCell<Vec<Filter>>>,
-	filter_mode: Rc<RefCell<FilterMode>>,
-	pid_filter_mode: Rc<RefCell<PidFilterMode>>,
-	search_text: Rc<RefCell<String>>,
-	sort_col: Rc<RefCell<usize>>,
-	sort_dir: Rc<RefCell<ColumnSort>>,
 	input_state: Option<Entity<InputState>>,
 	clear_search_on_pin: bool,
 	needs_clear_input: bool,
 	needs_focus_input: bool,
-    resource_view_mode: Rc<RefCell<ResourceViewMode>>,
-    _events: Option<Subscription>,
+	_events: Option<Subscription>,
 	_subscriptions: Vec<Subscription>,
 	has_data: bool,
 }
@@ -52,61 +66,69 @@ pub struct ProcessesTab {
 impl ProcessesTab {
 	pub fn new(
 		config: Config,
-		snapshot: Arc<RwLock<SystemSnapshot>>,
+		snapshot: Rc<SystemSnapshot>,
 		_cx: &mut Context<Self>,
 	) -> Self {
 		Self {
-			snapshot,
+			snapshot_cell: Rc::new(RefCell::new(snapshot)),
+			cum_cache: Rc::new(RefCell::new(None)),
+			pid_index: Rc::new(RefCell::new(None)),
+			view_state: Rc::new(RefCell::new(ViewState {
+				generation: 0,
+				filters: Vec::new(),
+				filter_mode: FilterMode::And,
+				pid_filter_mode: config.pid_filter_mode,
+				search: String::new(),
+				sort_col: 5,
+				sort_dir: ColumnSort::Descending,
+				resource_view_mode: config.resource_view_mode,
+				cached: None,
+			})),
 			table_state: None,
-			filters: Rc::new(RefCell::new(Vec::new())),
-			filter_mode: Rc::new(RefCell::new(FilterMode::And)),
-			pid_filter_mode: Rc::new(RefCell::new(config.pid_filter_mode)),
-			search_text: Rc::new(RefCell::new(String::new())),
-			sort_col: Rc::new(RefCell::new(5)),
-			sort_dir: Rc::new(RefCell::new(ColumnSort::Descending)),
 			input_state: None,
 			clear_search_on_pin: config.clear_search_on_pin,
 			needs_clear_input: false,
 			needs_focus_input: false,
-			resource_view_mode: Rc::new(RefCell::new(
-				config.resource_view_mode,
-			)),
 			_events: None,
 			_subscriptions: Vec::new(),
 			has_data: false,
 		}
 	}
 
-	fn toggle_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
-		let mut filters = self.filters.borrow_mut();
-		if let Some(pos) = filters.iter().position(|f| *f == filter) {
-			filters.remove(pos);
-		} else {
-			filters.push(filter);
-		}
-		cx.notify();
+	pub fn set_snapshot(&mut self, snapshot: Rc<SystemSnapshot>) {
+		*self.snapshot_cell.borrow_mut() = snapshot;
+		*self.cum_cache.borrow_mut() = None;
+		*self.pid_index.borrow_mut() = None;
 	}
 
-	fn remove_pid_filter(&mut self, filter: &Filter, cx: &mut Context<Self>) {
-		self.filters.borrow_mut().retain(|f| f != filter);
+	fn toggle_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
+		ViewState::mutate(&self.view_state, |s| {
+			if let Some(pos) = s.filters.iter().position(|f| *f == filter) {
+				s.filters.remove(pos);
+			} else {
+				s.filters.push(filter);
+			}
+		});
 		cx.notify();
 	}
 
 	fn toggle_filter_mode(&mut self, cx: &mut Context<Self>) {
-		let mut mode = self.filter_mode.borrow_mut();
-		*mode = match *mode {
-			FilterMode::And => FilterMode::Or,
-			FilterMode::Or => FilterMode::And,
-		};
+		ViewState::mutate(&self.view_state, |s| {
+			s.filter_mode = match s.filter_mode {
+				FilterMode::And => FilterMode::Or,
+				FilterMode::Or => FilterMode::And,
+			};
+		});
 		cx.notify();
 	}
 
 	fn toggle_pid_filter_mode(&mut self, cx: &mut Context<Self>) {
-		let mut mode = self.pid_filter_mode.borrow_mut();
-		*mode = match *mode {
-			PidFilterMode::AllDescendants => PidFilterMode::DirectChildren,
-			PidFilterMode::DirectChildren => PidFilterMode::AllDescendants,
-		};
+		ViewState::mutate(&self.view_state, |s| {
+			s.pid_filter_mode = match s.pid_filter_mode {
+				PidFilterMode::AllDescendants => PidFilterMode::DirectChildren,
+				PidFilterMode::DirectChildren => PidFilterMode::AllDescendants,
+			};
+		});
 		cx.notify();
 	}
 
@@ -115,86 +137,222 @@ impl ProcessesTab {
 	}
 
 	fn toggle_resource_view_mode(&mut self, cx: &mut Context<Self>) {
-		let mut mode = self.resource_view_mode.borrow_mut();
-		*mode = match *mode {
-			ResourceViewMode::SelfOnly => ResourceViewMode::Cumulative,
-			ResourceViewMode::Cumulative => ResourceViewMode::SelfOnly,
-		};
+		ViewState::mutate(&self.view_state, |s| {
+			s.resource_view_mode = match s.resource_view_mode {
+				ResourceViewMode::SelfOnly => ResourceViewMode::Cumulative,
+				ResourceViewMode::Cumulative => ResourceViewMode::SelfOnly,
+			};
+		});
 		cx.notify();
 	}
 
 	fn get_delegate(&self) -> ProcessTableDelegate {
 		ProcessTableDelegate {
-			snapshot: self.snapshot.clone(),
-			filters: self.filters.clone(),
-			filter_mode: self.filter_mode.clone(),
-			pid_filter_mode: self.pid_filter_mode.clone(),
-			search: self.search_text.clone(),
-			sort_col: self.sort_col.clone(),
-			sort_dir: self.sort_dir.clone(),
-			resource_view_mode: self.resource_view_mode.clone(),
+			snapshot_cell: self.snapshot_cell.clone(),
+			cum_cache: self.cum_cache.clone(),
+			pid_index: self.pid_index.clone(),
+			view_state: self.view_state.clone(),
 		}
 	}
 }
 
-struct ProcessTableDelegate {
-	snapshot: Arc<RwLock<SystemSnapshot>>,
-	filters: Rc<RefCell<Vec<Filter>>>,
-	filter_mode: Rc<RefCell<FilterMode>>,
-	pid_filter_mode: Rc<RefCell<PidFilterMode>>,
-	search: Rc<RefCell<String>>,
-	sort_col: Rc<RefCell<usize>>,
-	sort_dir: Rc<RefCell<ColumnSort>>,
-	resource_view_mode: Rc<RefCell<ResourceViewMode>>,
+	struct ProcessTableDelegate {
+	snapshot_cell: Rc<RefCell<Rc<SystemSnapshot>>>,
+	cum_cache: Rc<RefCell<Option<std::collections::HashMap<i32, CumulativeResources>>>>,
+	pid_index: Rc<RefCell<Option<std::collections::HashMap<i32, usize>>>>,
+	view_state: Rc<RefCell<ViewState>>,
 }
 
 impl ProcessTableDelegate {
 	fn is_descendant_of(&self, child_pid: i32, ancestor: i32) -> bool {
-		let all = self.snapshot.read();
-		is_descendant(child_pid, ancestor, &all.processes)
+		let procs = &self.snapshot_cell.borrow().processes;
+		if self.pid_index.borrow().is_none() {
+			let mut map =
+				std::collections::HashMap::with_capacity(procs.len());
+			for (i, p) in procs.iter().enumerate() {
+				map.insert(p.pid, i);
+			}
+			*self.pid_index.borrow_mut() = Some(map);
+		}
+		let idx_map = self.pid_index.borrow();
+		let idx_map = idx_map.as_ref().unwrap();
+		if child_pid == ancestor {
+			return false;
+		}
+		let mut current = child_pid;
+		for _ in 0..100 {
+			if current == ancestor {
+				return true;
+			}
+			if let Some(&idx) = idx_map.get(&current) {
+				let p = &procs[idx];
+				if p.ppid == 0 || p.ppid == current {
+					return false;
+				}
+				current = p.ppid;
+			} else {
+				return false;
+			}
+		}
+		false
 	}
 
 	fn count_descendants_of(&self, pid: i32) -> usize {
-		let all = self.snapshot.read();
-		count_descendants(pid, &all.processes)
+		self.snapshot_cell
+			.borrow()
+			.processes
+			.iter()
+			.filter(|p| self.is_descendant_of(p.pid, pid))
+			.count()
 	}
 
 	fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessInfo> {
-		let all = self.snapshot.read();
-		ancestor_chain(target_pid, &all.processes)
+		let procs = &self.snapshot_cell.borrow().processes;
+		if self.pid_index.borrow().is_none() {
+			let mut map =
+				std::collections::HashMap::with_capacity(procs.len());
+			for (i, p) in procs.iter().enumerate() {
+				map.insert(p.pid, i);
+			}
+			*self.pid_index.borrow_mut() = Some(map);
+		}
+		let idx_map = self.pid_index.borrow();
+		let idx_map = idx_map.as_ref().unwrap();
+		let mut chain = Vec::new();
+		let mut current = target_pid;
+		for _ in 0..100 {
+			if let Some(&idx) = idx_map.get(&current) {
+				let proc = &procs[idx];
+				chain.push(proc.clone());
+				if proc.ppid == 0 || proc.ppid == current {
+					break;
+				}
+				current = proc.ppid;
+			} else {
+				break;
+			}
+		}
+		chain.reverse();
+		chain
 	}
 
-    #[hotpath::measure]
-    fn cumulative_resources(&self, pid: i32) -> CumulativeResources {
-		let all = self.snapshot.read();
-		let procs = &all.processes;
-		let mut total = CumulativeResources::default();
+	#[hotpath::measure]
+	fn compute_aggregate_cumulative_map(
+		&self,
+	) -> std::collections::HashMap<i32, CumulativeResources> {
+		if let Some(ref cached) = *self.cum_cache.borrow() {
+			return cached.clone();
+		}
+		let procs = &self.snapshot_cell.borrow().processes;
+		if procs.is_empty() {
+			return std::collections::HashMap::new();
+		}
+
+		let mut cum: std::collections::HashMap<i32, CumulativeResources> =
+			std::collections::HashMap::with_capacity(procs.len());
+		let mut pid_map: std::collections::HashMap<i32, &ProcessInfo> =
+			std::collections::HashMap::with_capacity(procs.len());
+		let mut pids: Vec<i32> = Vec::with_capacity(procs.len());
+
 		for p in procs {
-			if p.pid == pid || is_descendant(p.pid, pid, procs) {
-				total.cpu += p.cpu_percent;
-				total.mem_rss += p.mem_rss;
-				total.vram = match (total.vram, p.vram_bytes) {
+			pid_map.insert(p.pid, p);
+			pids.push(p.pid);
+			cum.insert(
+				p.pid,
+				CumulativeResources {
+					cpu: p.cpu_percent,
+					mem_rss: p.mem_rss,
+					vram: p.vram_bytes,
+					disk_read: p.disk_read_bytes_per_sec,
+					disk_write: p.disk_write_bytes_per_sec,
+				},
+			);
+		}
+
+		let mut depth: std::collections::HashMap<i32, usize> =
+			std::collections::HashMap::with_capacity(procs.len());
+		for &pid in &pids {
+			if depth.contains_key(&pid) {
+				continue;
+			}
+			let mut chain = vec![pid];
+			let mut cur = pid;
+			loop {
+				let ppid = pid_map.get(&cur).map(|p| p.ppid).unwrap_or(0);
+				if ppid == 0 || ppid == cur || depth.contains_key(&ppid) {
+					break;
+				}
+				chain.push(ppid);
+				cur = ppid;
+			}
+			let last = *chain.last().unwrap();
+			let last_ppid = pid_map.get(&last).map(|p| p.ppid).unwrap_or(0);
+			let base = if last_ppid == 0 || last_ppid == last {
+				0
+			} else {
+				depth.get(&last_ppid).copied().unwrap_or(0)
+			};
+			for (i, &node) in chain.iter().rev().enumerate() {
+				depth.insert(node, base + i + 1);
+			}
+		}
+
+		pids.sort_by_key(|pid| {
+			std::cmp::Reverse(depth.get(pid).copied().unwrap_or(0))
+		});
+
+		for &pid in &pids {
+			let ppid = pid_map.get(&pid).map(|p| p.ppid).unwrap_or(0);
+			if ppid == 0 || ppid == pid {
+				continue;
+			}
+			let child_cpu = cum[&pid].cpu;
+			let child_mem = cum[&pid].mem_rss;
+			let child_vram = cum[&pid].vram;
+			let child_dr = cum[&pid].disk_read;
+			let child_dw = cum[&pid].disk_write;
+			if let Some(parent) = cum.get_mut(&ppid) {
+				parent.cpu += child_cpu;
+				parent.mem_rss += child_mem;
+				parent.vram = match (parent.vram, child_vram) {
 					(Some(a), Some(b)) => Some(a + b),
 					(a, None) => a,
 					(None, b) => b,
 				};
-				total.disk_read += p.disk_read_bytes_per_sec;
-				total.disk_write += p.disk_write_bytes_per_sec;
+				parent.disk_read += child_dr;
+				parent.disk_write += child_dw;
 			}
 		}
-		total
+
+		*self.cum_cache.borrow_mut() = Some(cum.clone());
+		cum
 	}
 
 	#[hotpath::measure]
-	fn filtered_sorted_rows(&self) -> Vec<ProcessInfo> {
-		let snapshot = self.snapshot.read();
-		let all = snapshot.processes.clone();
-		let filters = self.filters.borrow();
-		let mode = *self.filter_mode.borrow();
-		let search = self.search.borrow().to_lowercase();
+	fn filtered_sorted_rows(&self) -> Rc<Vec<ProcessInfo>> {
+		let ts = self.snapshot_cell.borrow().timestamp;
+		{
+			let vs = self.view_state.borrow();
+			if let Some((cached_ts, cached_gen, ref rows)) = vs.cached {
+				if cached_ts == ts && cached_gen == vs.generation {
+					return rows.clone();
+				}
+			}
+		}
+
+		let vs_ref = self.view_state.borrow();
+		let search = vs_ref.search.to_lowercase();
+		let filters = vs_ref.filters.clone();
+		let filter_mode = vs_ref.filter_mode;
+		let resource_view_mode = vs_ref.resource_view_mode;
+		let sort_col = vs_ref.sort_col;
+		let sort_dir = vs_ref.sort_dir;
+		drop(vs_ref);
+
+		let all = self.snapshot_cell.borrow().processes.clone();
 
 		let mut result: Vec<ProcessInfo> = all
-			.into_iter()
+			.iter()
 			.filter(|p| {
 				if !search.is_empty() {
 					if !p.name.to_lowercase().contains(&search)
@@ -213,30 +371,30 @@ impl ProcessTableDelegate {
 				if filters.is_empty() {
 					return true;
 				}
-				match mode {
-					FilterMode::And => filters.iter().all(|f| {
-						proc_matches(
-							p,
-							f,
-							&snapshot.processes,
-							self.pid_filter_mode(),
-						)
-					}),
-					FilterMode::Or => filters.iter().any(|f| {
-						proc_matches(
-							p,
-							f,
-							&snapshot.processes,
-							self.pid_filter_mode(),
-						)
-					}),
+				match filter_mode {
+					FilterMode::And => {
+						filters.iter().all(|f| self.proc_matches(p, f))
+					}
+					FilterMode::Or => {
+						filters.iter().any(|f| self.proc_matches(p, f))
+					}
 				}
 			})
+			.cloned()
 			.collect();
 
-		let col = *self.sort_col.borrow();
-		let dir = *self.sort_dir.borrow();
-		let use_cum = col >= 5 && *self.resource_view_mode.borrow() == ResourceViewMode::Cumulative;
+		let col = sort_col;
+		let dir = sort_dir;
+		let use_cum =
+			col >= 5 && resource_view_mode == ResourceViewMode::Cumulative;
+
+		let cum_map: std::collections::HashMap<i32, CumulativeResources> =
+			if use_cum {
+				self.compute_aggregate_cumulative_map()
+			} else {
+				std::collections::HashMap::new()
+			};
+
 		result.sort_by(|a, b| {
 			let cmp = match col {
 				1 => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
@@ -244,28 +402,68 @@ impl ProcessTableDelegate {
 				3 => a.user.to_lowercase().cmp(&b.user.to_lowercase()),
 				4 => a.state.cmp(&b.state),
 				5 => {
-					let va = if use_cum { self.cumulative_resources(a.pid).cpu } else { a.cpu_percent };
-					let vb = if use_cum { self.cumulative_resources(b.pid).cpu } else { b.cpu_percent };
+					let va = if use_cum {
+						cum_map.get(&a.pid).map_or(0.0, |c| c.cpu)
+					} else {
+						a.cpu_percent
+					};
+					let vb = if use_cum {
+						cum_map.get(&b.pid).map_or(0.0, |c| c.cpu)
+					} else {
+						b.cpu_percent
+					};
 					va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
 				}
 				6 => {
-					let va = if use_cum { self.cumulative_resources(a.pid).mem_rss as f32 } else { a.mem_rss as f32 };
-					let vb = if use_cum { self.cumulative_resources(b.pid).mem_rss as f32 } else { b.mem_rss as f32 };
+					let va = if use_cum {
+						cum_map.get(&a.pid).map_or(0, |c| c.mem_rss) as f32
+					} else {
+						a.mem_rss as f32
+					};
+					let vb = if use_cum {
+						cum_map.get(&b.pid).map_or(0, |c| c.mem_rss) as f32
+					} else {
+						b.mem_rss as f32
+					};
 					va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
 				}
 				7 => {
-					let va = if use_cum { self.cumulative_resources(a.pid).vram } else { a.vram_bytes };
-					let vb = if use_cum { self.cumulative_resources(b.pid).vram } else { b.vram_bytes };
+					let va = if use_cum {
+						cum_map.get(&a.pid).and_then(|c| c.vram)
+					} else {
+						a.vram_bytes
+					};
+					let vb = if use_cum {
+						cum_map.get(&b.pid).and_then(|c| c.vram)
+					} else {
+						b.vram_bytes
+					};
 					va.cmp(&vb)
 				}
 				8 => {
-					let va = if use_cum { self.cumulative_resources(a.pid).disk_read } else { a.disk_read_bytes_per_sec };
-					let vb = if use_cum { self.cumulative_resources(b.pid).disk_read } else { b.disk_read_bytes_per_sec };
+					let va = if use_cum {
+						cum_map.get(&a.pid).map_or(0.0, |c| c.disk_read)
+					} else {
+						a.disk_read_bytes_per_sec
+					};
+					let vb = if use_cum {
+						cum_map.get(&b.pid).map_or(0.0, |c| c.disk_read)
+					} else {
+						b.disk_read_bytes_per_sec
+					};
 					va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
 				}
 				9 => {
-					let va = if use_cum { self.cumulative_resources(a.pid).disk_write } else { a.disk_write_bytes_per_sec };
-					let vb = if use_cum { self.cumulative_resources(b.pid).disk_write } else { b.disk_write_bytes_per_sec };
+					let va = if use_cum {
+						cum_map.get(&a.pid).map_or(0.0, |c| c.disk_write)
+					} else {
+						a.disk_write_bytes_per_sec
+					};
+					let vb = if use_cum {
+						cum_map.get(&b.pid).map_or(0.0, |c| c.disk_write)
+					} else {
+						b.disk_write_bytes_per_sec
+					};
 					va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
 				}
 				_ => std::cmp::Ordering::Equal,
@@ -289,94 +487,47 @@ impl ProcessTableDelegate {
 			}
 		}
 
-		result
+		let gen = self.view_state.borrow().generation;
+		self.view_state.borrow_mut().cached =
+			Some((ts, gen, Rc::new(result)));
+		self.view_state.borrow().cached.as_ref().unwrap().2.clone()
 	}
 
 	fn pid_filter_mode(&self) -> PidFilterMode {
-		*self.pid_filter_mode.borrow()
+		self.view_state.borrow().pid_filter_mode
 	}
 
 	fn pinned_pid(&self) -> Option<i32> {
-		self.filters.borrow().iter().find_map(|f| match f {
+		self.view_state.borrow().filters.iter().find_map(|f| match f {
 			Filter::Pid(pid) => Some(*pid),
 			_ => None,
 		})
 	}
-}
 
-fn proc_matches(
-	proc: &ProcessInfo,
-	filter: &Filter,
-	all: &[ProcessInfo],
-	pid_mode: PidFilterMode,
-) -> bool {
-	match filter {
-		Filter::Gui => proc.is_gui,
-		Filter::User => proc.is_owned_by_current_user && !proc.is_gui,
-		Filter::System => {
-			!proc.is_kthread
-				&& !proc.is_owned_by_current_user
-				&& proc.ppid != 1
-		}
-		Filter::Systemd => proc.ppid == 1,
-		Filter::Kernel => proc.is_kthread,
-		Filter::Parent => proc.has_children,
-		Filter::Vram => proc.vram_bytes.is_some(),
-		Filter::Electron => proc.is_electron,
-		Filter::Pid(pid) => match pid_mode {
-			PidFilterMode::AllDescendants => {
-				proc.pid == *pid || is_descendant(proc.pid, *pid, all)
+	fn proc_matches(&self, proc: &ProcessInfo, filter: &Filter) -> bool {
+		match filter {
+			Filter::Gui => proc.is_gui,
+			Filter::User => proc.is_owned_by_current_user && !proc.is_gui,
+			Filter::System => {
+				!proc.is_kthread
+					&& !proc.is_owned_by_current_user
+					&& proc.ppid != 1
 			}
-			PidFilterMode::DirectChildren => {
-				proc.pid == *pid || proc.ppid == *pid
-			}
-		},
-	}
-}
-
-fn is_descendant(child_pid: i32, ancestor: i32, all: &[ProcessInfo]) -> bool {
-	if child_pid == ancestor {
-		return false;
-	}
-	let mut current = child_pid;
-	for _ in 0..100 {
-		if current == ancestor {
-			return true;
-		}
-		if let Some(p) = all.iter().find(|p| p.pid == current) {
-			if p.ppid == 0 {
-				return false;
-			}
-			current = p.ppid;
-		} else {
-			return false;
+			Filter::Systemd => proc.ppid == 1,
+			Filter::Kernel => proc.is_kthread,
+			Filter::Parent => proc.has_children,
+			Filter::Vram => proc.vram_bytes.is_some(),
+			Filter::Electron => proc.is_electron,
+			Filter::Pid(pid) => match self.pid_filter_mode() {
+				PidFilterMode::AllDescendants => {
+					proc.pid == *pid || self.is_descendant_of(proc.pid, *pid)
+				}
+				PidFilterMode::DirectChildren => {
+					proc.pid == *pid || proc.ppid == *pid
+				}
+			},
 		}
 	}
-	false
-}
-
-fn count_descendants(pid: i32, all: &[ProcessInfo]) -> usize {
-	all.iter()
-		.filter(|p| is_descendant(p.pid, pid, all))
-		.count()
-}
-
-fn ancestor_chain(target_pid: i32, all: &[ProcessInfo]) -> Vec<ProcessInfo> {
-	let mut chain = Vec::new();
-	let mut current = target_pid;
-	for _ in 0..100 {
-		if let Some(proc) = all.iter().find(|p| p.pid == current) {
-			chain.push(proc.clone());
-			if proc.ppid == 0 {
-				break;
-			}
-			current = proc.ppid;
-		} else {
-			break;
-		}
-	}
-	chain.reverse();
-	chain
 }
 
 fn theme_dark_or_light(cx: &App) -> bool {
@@ -558,13 +709,12 @@ impl TableDelegate for ProcessTableDelegate {
 			return div().into_any();
 		};
 
-		let cum = if *self.resource_view_mode.borrow()
-			== ResourceViewMode::Cumulative
-		{
-			Some(self.cumulative_resources(proc.pid))
-		} else {
-			None
-		};
+		let cum = self
+			.cum_cache
+			.borrow()
+			.as_ref()
+			.and_then(|m| m.get(&proc.pid))
+			.cloned();
 
 		match col_ix {
 			0 => {
@@ -661,7 +811,7 @@ impl TableDelegate for ProcessTableDelegate {
 				let mem_val =
 					cum.as_ref().map_or(proc.mem_rss, |c| c.mem_rss);
 				let mem_pct = if let Some(ref c) = cum {
-					let total_mem = self.snapshot.read().memory.total;
+					let total_mem = self.snapshot_cell.borrow().memory.total;
 					if total_mem > 0 {
 						c.mem_rss as f32 / total_mem as f32 * 100.0
 					} else {
@@ -738,8 +888,10 @@ impl TableDelegate for ProcessTableDelegate {
 		_: &mut Window,
 		cx: &mut Context<TableState<Self>>,
 	) {
-		*self.sort_col.borrow_mut() = col_ix;
-		*self.sort_dir.borrow_mut() = sort;
+		ViewState::mutate(&self.view_state, |s| {
+			s.sort_col = col_ix;
+			s.sort_dir = sort;
+		});
 		cx.notify();
 	}
 
@@ -871,9 +1023,9 @@ fn render_filter_chip(
 							))
 							.cursor(CursorStyle::PointingHand)
 							.on_click(cx.listener(move |this, _, _, cx| {
-								this.filters
-									.borrow_mut()
-									.retain(|flt| flt != &f);
+								ViewState::mutate(&this.view_state, |s| {
+									s.filters.retain(|flt| flt != &f);
+								});
 								cx.notify();
 							}))
 							.child(Icon::new(IconName::Close).size(px(10.0))),
@@ -918,7 +1070,7 @@ impl Render for ProcessesTab {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		let snapshot = self.snapshot.read();
+		let snapshot = self.snapshot_cell.borrow().clone();
 		self.has_data = !snapshot.processes.is_empty();
 		let has_data = self.has_data;
 		drop(snapshot);
@@ -936,16 +1088,14 @@ impl Render for ProcessesTab {
 							.get(*row_ix)
 							.map(|p| p.pid);
 						if let Some(pid) = pid {
-							let snapshot = this.snapshot.read();
-							let count =
-								count_descendants(pid, &snapshot.processes);
-							drop(snapshot);
-							this.filters.borrow_mut().clear();
-							this.filters.borrow_mut().push(Filter::Pid(pid));
-							let _ = count;
+							ViewState::mutate(&this.view_state, |s| {
+								s.filters.clear();
+								s.filters.push(Filter::Pid(pid));
+							});
 							if this.clear_search_on_pin {
-								*this.search_text.borrow_mut() =
-									String::new();
+								ViewState::mutate(&this.view_state, |s| {
+									s.search.clear();
+								});
 								this.needs_clear_input = true;
 							}
 							cx.notify();
@@ -965,7 +1115,7 @@ impl Render for ProcessesTab {
 				InputState::new(window, cx)
 					.placeholder("Search by name, PID, user...")
 			});
-			let search_text = self.search_text.clone();
+			let view_state = self.view_state.clone();
 			let is_clone = input_state.clone();
 			self._subscriptions = vec![cx.subscribe_in(
 				&input_state,
@@ -973,7 +1123,9 @@ impl Render for ProcessesTab {
 				move |_, _, ev: &InputEvent, _, cx| match ev {
 					InputEvent::Change => {
 						let value = is_clone.read(cx).value();
-						*search_text.borrow_mut() = value.to_string();
+						ViewState::mutate(&view_state, |s| {
+							s.search = value.to_string();
+						});
 					}
 					_ => {}
 				},
@@ -1002,11 +1154,11 @@ impl Render for ProcessesTab {
 			}
 		}
 
-		let snapshot = self.snapshot.read();
+		let snapshot = self.snapshot_cell.borrow().clone();
 		let total_count = snapshot.processes.len();
 		let filtered_count = self.get_delegate().filtered_sorted_rows().len();
-		let active_filters = self.filters.borrow().len();
-		let mode = *self.filter_mode.borrow();
+		let active_filters = self.view_state.borrow().filters.len();
+		let mode = self.view_state.borrow().filter_mode;
 
 		let type_filters: Vec<Filter> = vec![
 			Filter::Gui,
@@ -1020,8 +1172,9 @@ impl Render for ProcessesTab {
 		];
 
 		let pid_filters: Vec<(Filter, String)> = self
-			.filters
+			.view_state
 			.borrow()
+			.filters
 			.iter()
 			.filter(|f| matches!(f, Filter::Pid(_)))
 			.map(|f| {
@@ -1073,7 +1226,7 @@ impl Render for ProcessesTab {
 									)),
 							)
 							.child({
-								let view_label = (*self.resource_view_mode.borrow()).to_string();
+								let view_label = self.view_state.borrow().resource_view_mode.to_string();
 								Button::new("resource-view")
 									.ghost()
 									.label(view_label)
@@ -1093,7 +1246,7 @@ impl Render for ProcessesTab {
 							.gap(px(4.0))
 							.children(type_filters.iter().map(|f| {
 								let is_active =
-									self.filters.borrow().contains(f);
+									self.view_state.borrow().filters.contains(f);
 								render_filter_chip(
 									f,
 									&f.label(&[]),
@@ -1116,12 +1269,14 @@ impl Render for ProcessesTab {
                                         .hover(|s| s.bg(cx.theme().muted.opacity(0.15)))
                                         .child(Icon::new(IconName::Close).size(px(12.0)).text_color(cx.theme().muted_foreground))
                                         .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.filters.borrow_mut().retain(|f| !matches!(f, Filter::Pid(_)));
+                                            ViewState::mutate(&this.view_state, |s| {
+                                                s.filters.retain(|f| !matches!(f, Filter::Pid(_)));
+                                            });
                                             cx.notify();
                                         }))
                                 })
                                 .child({
-                                    let mode_label = match *self.pid_filter_mode.borrow() {
+                                    let mode_label = match self.view_state.borrow().pid_filter_mode {
                                         PidFilterMode::AllDescendants => "All",
                                         PidFilterMode::DirectChildren => "Direct",
                                     };
@@ -1137,8 +1292,9 @@ impl Render for ProcessesTab {
                                 })
                                 .children(pid_filters.iter().map(|(f, _label)| {
                                     if let Filter::Pid(pid) = f {
-                                        let chain = ancestor_chain(*pid, &snapshot.processes);
-                                        let child_count = count_descendants(*pid, &snapshot.processes);
+                                        let delegate = self.get_delegate();
+                                        let chain = delegate.ancestor_chain_of(*pid);
+                                        let child_count = delegate.count_descendants_of(*pid);
                                         let last_idx = chain.len().saturating_sub(1);
                                         let breadcrumb = Breadcrumb::new();
                                         let bc = chain.into_iter().enumerate().fold(breadcrumb, |bc, (i, proc)| {
@@ -1158,11 +1314,12 @@ impl Render for ProcessesTab {
                                                 BreadcrumbItem::new(label)
                                                     .disabled(is_last)
                                                     .on_click({
-                                                        let filters = self.filters.clone();
+                                                        let view_state = self.view_state.clone();
                                                         move |_, _, _| {
-                                                            let mut f = filters.borrow_mut();
-                                                            f.clear();
-                                                            f.push(Filter::Pid(pid));
+                                                            ViewState::mutate(&view_state, |s| {
+                                                                s.filters.clear();
+                                                                s.filters.push(Filter::Pid(pid));
+                                                            });
                                                         }
                                                     }),
                                             )

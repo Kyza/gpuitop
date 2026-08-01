@@ -3,14 +3,24 @@ use crate::model::*;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::ActiveTheme;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 pub struct SettingsTab {
 	config: Config,
+	refresh_ms: Arc<AtomicU64>,
 }
 
 impl SettingsTab {
-	pub fn new(config: Config, _cx: &mut Context<Self>) -> Self {
-		Self { config }
+	pub fn new(
+		config: Config,
+		refresh_ms: Arc<AtomicU64>,
+		_cx: &mut Context<Self>,
+	) -> Self {
+		Self {
+			config,
+			refresh_ms,
+		}
 	}
 
 	fn save(&self) {
@@ -99,6 +109,8 @@ impl SettingsTab {
 							cx,
 							move |this, cx| {
 								this.config.refresh_ms = ms;
+								this.refresh_ms
+									.store(ms, Ordering::SeqCst);
 								this.save();
 								cx.notify();
 							},
