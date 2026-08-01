@@ -6,7 +6,7 @@ A GPU-accelerated task manager for Linux built with [GPUI](https://www.gpui.rs/)
 
 ### Find Processes
 
-Fuzzy search the process table, or click **Pick** and switch to any window to jump to its process. Toggle filters to narrow the list: GUI apps, kernel threads, systemd, Electron apps, your user, process state (R/S/D/Z/T/I/X), parents, VRAM-consuming processes. Filters combine with AND/OR logic.
+Fuzzy search the process table, or click **Pick** and switch to any window to jump to its process. Toggle filters to narrow the list: GUI apps, kernel threads, Services, Electron apps, your user, process state (R/S/D/Z/T/I/X), parents, VRAM-consuming processes. Filters combine with AND/OR logic.
 
 The window picker uses the `zwlr_foreign_toplevel_manager_v1` Wayland protocol. It does not work under X11; the Pick button will time out in an X11 session.
 
@@ -68,7 +68,25 @@ cargo install --git https://github.com/Kyza/gpuitop.git
 
 ## Development
 
-The codebase is structured with platform abstraction (`src/platform/`) so the process collector, GPU queries, and window picker can be swapped per OS. Linux only at the moment. Help with Windows support is welcome.
+| Component | Status |
+|-----------|--------|
+| **Platform** | |
+| Linux Wayland | Supported, tested |
+| Linux X11 | Partial (no window picker), untested |
+| Windows | Unsupported |
+| macOS | Unsupported |
+| **GPU Backend** | |
+| NVIDIA (NVML) | Supported, tested |
+| AMD (rocm-smi) | Supported, untested |
+| **Init System** | |
+| systemd | Supported, tested |
+| OpenRC | Supported, untested |
+| runit | Supported, untested |
+| dinit | Supported, untested |
+| SysV init | Supported, untested |
+| Unknown | Heuristic fallback (ppid 1) |
+
+The codebase is structured with platform abstraction (`src/platform/`) so the process collector, GPU queries, and window picker can be swapped per OS. Help with Windows support is welcome.
 
 ### Profiling
 
@@ -78,7 +96,7 @@ Key functions are instrumented with [hotpath](https://crates.io/crates/hotpath).
 cargo run --features hotpath
 ```
 
-The profiler exposes a metrics server at `http://127.0.0.1:2501` and a live TUI via `hotpath console`.
+Run `hotpath console` in another terminal for a live TUI.
 
 Cargo features for finer granularity:
 

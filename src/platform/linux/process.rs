@@ -84,6 +84,9 @@ impl SystemCollector {
 				.unwrap_or(0)
 				* 1024;
 
+			let cgroup =
+				Self::read(&format!("{base}/cgroup")).unwrap_or_default();
+
 			// Command line — raw with \0 separators
 			let raw_cmdline =
 				Self::read(&format!("{base}/cmdline")).unwrap_or_default();
@@ -176,6 +179,7 @@ impl SystemCollector {
 					user,
 					state,
 					command: display_command,
+					cgroup,
 					cpu_percent,
 					mem_percent,
 					mem_rss: vmrss,

@@ -39,8 +39,8 @@ pub fn tag_color(tag: TagType, dark: bool) -> Hsla {
 		(TagType::User, false) => hsla(190.0 / 360.0, 0.65, 0.35, 1.0),
 		(TagType::System, true) => hsla(40.0 / 360.0, 0.80, 0.55, 1.0),
 		(TagType::System, false) => hsla(40.0 / 360.0, 0.75, 0.38, 1.0),
-		(TagType::Systemd, true) => hsla(140.0 / 360.0, 0.55, 0.50, 1.0),
-		(TagType::Systemd, false) => hsla(140.0 / 360.0, 0.50, 0.35, 1.0),
+		(TagType::Services, true) => hsla(140.0 / 360.0, 0.55, 0.50, 1.0),
+		(TagType::Services, false) => hsla(140.0 / 360.0, 0.50, 0.35, 1.0),
 		(TagType::Kernel, true) => hsla(0.0 / 360.0, 0.0, 0.55, 1.0),
 		(TagType::Kernel, false) => hsla(0.0 / 360.0, 0.0, 0.38, 1.0),
 		(TagType::Vram, true) => hsla(270.0 / 360.0, 0.60, 0.60, 1.0),
@@ -57,7 +57,7 @@ pub enum TagType {
 	Gui,
 	User,
 	System,
-	Systemd,
+	Services,
 	Kernel,
 	Vram,
 	Parent,
@@ -79,7 +79,7 @@ pub fn tag_icons(proc: &ProcessInfo, cx: &App) -> Vec<(IconName, Hsla)> {
 	if proc.ppid == 1 {
 		tags.push((
 			IconName::SquareTerminal,
-			tag_color(TagType::Systemd, dark),
+			tag_color(TagType::Services, dark),
 		));
 	}
 	if proc.is_kthread {
@@ -99,7 +99,7 @@ pub fn filter_icon(filter: &Filter) -> Option<IconName> {
 		Filter::Gui => Some(IconName::LayoutDashboard),
 		Filter::User => Some(IconName::User),
 		Filter::System => Some(IconName::Settings2),
-		Filter::Systemd => Some(IconName::SquareTerminal),
+		Filter::Services => Some(IconName::SquareTerminal),
 		Filter::Kernel => Some(IconName::Cpu),
 		Filter::Parent => Some(IconName::FolderOpen),
 		Filter::Vram => Some(IconName::Eye),
@@ -115,12 +115,12 @@ pub fn filter_color(filter: &Filter, cx: &App) -> Hsla {
 		Filter::Gui => tag_color(TagType::Gui, dark),
 		Filter::User => tag_color(TagType::User, dark),
 		Filter::System => tag_color(TagType::System, dark),
-		Filter::Systemd => tag_color(TagType::Systemd, dark),
+		Filter::Services => tag_color(TagType::Services, dark),
 		Filter::Kernel => tag_color(TagType::Kernel, dark),
 		Filter::Vram => tag_color(TagType::Vram, dark),
 		Filter::Parent => tag_color(TagType::Parent, dark),
 		Filter::Electron => tag_color(TagType::Electron, dark),
 		Filter::ProcessState(_) => tag_color(TagType::Gui, dark),
-		Filter::Pid(_) => tag_color(TagType::Systemd, dark),
+		Filter::Pid(_) => tag_color(TagType::Services, dark),
 	}
 }

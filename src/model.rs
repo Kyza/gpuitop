@@ -6,6 +6,7 @@ pub struct ProcessInfo {
 	pub user: String,
 	pub state: char,
 	pub command: String,
+	pub cgroup: String,
 	pub cpu_percent: f32,
 	pub mem_percent: f32,
 	pub mem_rss: u64,
@@ -298,7 +299,7 @@ pub enum Filter {
 	Gui,
 	User,
 	System,
-	Systemd,
+	Services,
 	Kernel,
 	Parent,
 	Vram,
@@ -328,7 +329,7 @@ impl Filter {
 			self,
 			Self::Gui
 				| Self::User | Self::System
-				| Self::Systemd
+				| Self::Services
 				| Self::Kernel
 				| Self::Parent
 				| Self::Vram | Self::Electron
@@ -341,7 +342,7 @@ impl Filter {
 			Self::Gui => "GUI".into(),
 			Self::User => "User".into(),
 			Self::System => "System".into(),
-			Self::Systemd => "Systemd".into(),
+			Self::Services => "Services".into(),
 			Self::Kernel => "Kernel".into(),
 			Self::Parent => "Parent".into(),
 			Self::Vram => "VRAM".into(),

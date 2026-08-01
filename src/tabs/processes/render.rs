@@ -24,7 +24,7 @@ impl ProcessesTab {
 			Filter::Gui,
 			Filter::User,
 			Filter::System,
-			Filter::Systemd,
+			Filter::Services,
 			Filter::Kernel,
 			Filter::Parent,
 			Filter::Vram,

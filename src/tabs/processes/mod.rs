@@ -10,6 +10,7 @@ pub mod theme;
 
 use crate::config::Config;
 use crate::model::*;
+use crate::platform::system::InitSystem;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{input::InputState, table::TableState};
@@ -41,12 +42,14 @@ pub struct ProcessesTab {
 	pub column_visibility: crate::config::ProcessesConfig,
 	pub is_picking: std::sync::Arc<std::sync::atomic::AtomicBool>,
 	pub pick_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+	pub init_system: InitSystem,
 }
 
 impl ProcessesTab {
 	pub fn new(
 		config: Config,
 		snapshot: Rc<SystemSnapshot>,
+		init_system: InitSystem,
 		_cx: &mut Context<Self>,
 	) -> Self {
 		let sort_col = config.processes.default_sort.column.to_col_index();
@@ -90,6 +93,7 @@ impl ProcessesTab {
 				std::sync::atomic::AtomicBool::new(false),
 			),
 			pick_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+			init_system,
 		}
 	}
 
@@ -155,6 +159,7 @@ impl ProcessesTab {
 			pid_index: self.pid_index.clone(),
 			view_state: self.view_state.clone(),
 			column_visibility: self.column_visibility.clone(),
+			init_system: self.init_system,
 		}
 	}
 }

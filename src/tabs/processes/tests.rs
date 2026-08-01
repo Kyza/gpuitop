@@ -16,6 +16,7 @@ fn make_process(
 		user: user.into(),
 		state,
 		command: command.into(),
+		cgroup: String::new(),
 		cpu_percent: 0.0,
 		mem_percent: 0.0,
 		mem_rss: 0,
@@ -64,7 +65,7 @@ fn proc_matches_standalone(
 				&& !proc.is_owned_by_current_user
 				&& proc.ppid != 1
 		}
-		Filter::Systemd => proc.ppid == 1,
+		Filter::Services => proc.ppid == 1,
 		Filter::Kernel => proc.is_kthread,
 		Filter::Parent => proc.has_children,
 		Filter::Vram => proc.vram_bytes.is_some(),
@@ -153,9 +154,9 @@ fn filter_system_excludes_kthread() {
 }
 
 #[test]
-fn filter_systemd() {
+fn filter_services() {
 	let p = make_process(100, 1, "sshd", "root", 'S', "sshd");
-	assert!(proc_matches_standalone(&p, &Filter::Systemd, &[]));
+	assert!(proc_matches_standalone(&p, &Filter::Services, &[]));
 }
 
 #[test]
@@ -234,7 +235,7 @@ fn filter_pid_descendant() {
 fn filter_mode_and_all_match() {
 	let mut p = make_process(10, 1, "app", "root", 'S', "app");
 	p.is_owned_by_current_user = true;
-	let filters = vec![Filter::Systemd, Filter::User];
+	let filters = vec![Filter::Services, Filter::User];
 	let all = filters.iter().all(|f| proc_matches_standalone(&p, f, &[]));
 	assert!(all);
 }
@@ -242,7 +243,7 @@ fn filter_mode_and_all_match() {
 #[test]
 fn filter_mode_and_one_fails() {
 	let p = make_process(10, 1, "app", "root", 'S', "app");
-	let filters = vec![Filter::Systemd, Filter::Kernel];
+	let filters = vec![Filter::Services, Filter::Kernel];
 	let all = filters.iter().all(|f| proc_matches_standalone(&p, f, &[]));
 	assert!(!all);
 }
@@ -250,7 +251,7 @@ fn filter_mode_and_one_fails() {
 #[test]
 fn filter_mode_or_any_match() {
 	let p = make_process(10, 1, "app", "root", 'S', "app");
-	let filters = vec![Filter::Systemd, Filter::Kernel];
+	let filters = vec![Filter::Services, Filter::Kernel];
 	let any = filters.iter().any(|f| proc_matches_standalone(&p, f, &[]));
 	assert!(any);
 }
@@ -258,7 +259,7 @@ fn filter_mode_or_any_match() {
 #[test]
 fn filter_mode_or_none_match() {
 	let p = make_process(10, 0, "app", "root", 'S', "app");
-	let filters = vec![Filter::Systemd, Filter::Kernel];
+	let filters = vec![Filter::Services, Filter::Kernel];
 	let any = filters.iter().any(|f| proc_matches_standalone(&p, f, &[]));
 	assert!(!any);
 }

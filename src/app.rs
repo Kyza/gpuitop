@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::model::{GpuBackend, SystemSnapshot, Theme};
-use crate::platform::{detect_gpu, SystemCollector};
+use crate::platform::system::InitSystem;
+use crate::platform::{detect_gpu, detect_init, SystemCollector};
 use crate::tabs::{PerformanceTab, ProcessesTab, SettingsTab};
 use gpui::prelude::*;
 use gpui::*;
@@ -18,6 +19,7 @@ pub struct App {
 	pub(crate) theme: Rc<Cell<Theme>>,
 	snapshot: Rc<SystemSnapshot>,
 	gpu_backend: GpuBackend,
+	init_system: InitSystem,
 	rx: mpsc::Receiver<SystemSnapshot>,
 	processes_tab: Entity<ProcessesTab>,
 	performance_tab: Entity<PerformanceTab>,
@@ -41,11 +43,17 @@ impl App {
 	pub fn new(cx: &mut Context<Self>) -> Self {
 		let config = Config::load();
 		let gpu_backend = detect_gpu();
+		let init_system = detect_init();
 
 		let initial_snapshot = Rc::new(SystemSnapshot::empty());
 
 		let processes_tab = cx.new(|cx| {
-			ProcessesTab::new(config.clone(), initial_snapshot.clone(), cx)
+			ProcessesTab::new(
+				config.clone(),
+				initial_snapshot.clone(),
+				init_system,
+				cx,
+			)
 		});
 		let performance_tab =
 			cx.new(|cx| PerformanceTab::new(initial_snapshot.clone(), cx));
@@ -82,6 +90,7 @@ impl App {
 			config,
 			snapshot: initial_snapshot,
 			gpu_backend,
+			init_system,
 			rx,
 			processes_tab,
 			performance_tab,
@@ -121,6 +130,7 @@ impl Render for App {
 				Theme::System => IconName::Palette,
 			};
 			let gpu = self.gpu_backend;
+			let init = self.init_system;
 
 			let tabs = labels
 				.iter()
@@ -197,25 +207,6 @@ impl Render for App {
 									.children(tabs),
 							)
 							.child(div().flex_grow(1.0))
-							.when(gpu != GpuBackend::None, |el| {
-								let label = match gpu {
-									GpuBackend::Nvidia => "NVIDIA",
-									GpuBackend::Amd => "ROCm",
-									_ => "",
-								};
-								el.child(
-									div()
-										.px(px(8.0))
-										.h(px(32.0))
-										.flex()
-										.items_center()
-										.text_size(px(11.0))
-										.text_color(
-											cx.theme().muted_foreground,
-										)
-										.child(label),
-								)
-							})
 							.child({
 								let theme = self.theme.clone();
 								let config = self.config.clone();
@@ -255,6 +246,25 @@ impl Render for App {
 					),
 				)
 				.child(div().flex_grow(1.0).size_full().child(content))
+				.child({
+					let gpu_label = match gpu {
+						GpuBackend::Nvidia => "NVIDIA",
+						GpuBackend::Amd => "ROCm",
+						_ => "None",
+					};
+					div()
+						.flex()
+						.flex_row()
+						.gap(px(12.0))
+						.px(px(8.0))
+						.py(px(2.0))
+						.text_size(px(11.0))
+						.text_color(cx.theme().muted_foreground)
+						.border_t_1()
+						.border_color(cx.theme().border)
+						.child(format!("GPU: {gpu_label}"))
+						.child(format!("Init: {init}"))
+				})
 		})
 	}
 }
