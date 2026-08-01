@@ -7,6 +7,40 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneralConfig {
+	pub refresh_ms: u64,
+	pub theme: Theme,
+}
+
+impl Default for GeneralConfig {
+	fn default() -> Self {
+		Self {
+			refresh_ms: 1500,
+			theme: Theme::System,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessesConfig {
+	pub vram_polling: VramPolling,
+	pub pid_filter_mode: PidFilterMode,
+	pub clear_search_on_pin: bool,
+	pub resource_view_mode: ResourceViewMode,
+}
+
+impl Default for ProcessesConfig {
+	fn default() -> Self {
+		Self {
+			vram_polling: VramPolling::Auto,
+			pid_filter_mode: PidFilterMode::DirectChildren,
+			clear_search_on_pin: true,
+			resource_view_mode: ResourceViewMode::SelfOnly,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnVisibility {
 	pub name: bool,
 	pub pid: bool,
@@ -29,10 +63,10 @@ impl Default for ColumnVisibility {
 			state: true,
 			cpu: true,
 			memory: true,
-			vram: false,
+			vram: true,
 			disk_read: true,
 			disk_write: true,
-			command: false,
+			command: true,
 		}
 	}
 }
@@ -54,33 +88,34 @@ impl Default for SortConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-	pub refresh_ms: u64,
+	#[serde(default)]
+	pub general: GeneralConfig,
+	#[serde(default)]
+	pub processes: ProcessesConfig,
+	#[serde(default)]
 	pub columns: ColumnVisibility,
+	#[serde(default)]
 	pub default_sort: SortConfig,
+	#[serde(default)]
 	pub default_grouping: ProcessGrouping,
-	pub vram_polling: VramPolling,
-	pub pid_filter_mode: PidFilterMode,
-	pub resource_view_mode: ResourceViewMode,
-	pub clear_search_on_pin: bool,
-	pub theme: Theme,
+	#[serde(default)]
 	pub disk_devices: Vec<String>,
+	#[serde(default)]
 	pub network_interfaces: Vec<String>,
+	#[serde(default)]
 	pub window_width: u32,
+	#[serde(default)]
 	pub window_height: u32,
 }
 
 impl Default for Config {
 	fn default() -> Self {
 		Self {
-			refresh_ms: 1500,
+			general: GeneralConfig::default(),
+			processes: ProcessesConfig::default(),
 			columns: ColumnVisibility::default(),
 			default_sort: SortConfig::default(),
 			default_grouping: ProcessGrouping::Auto,
-			vram_polling: VramPolling::Auto,
-			pid_filter_mode: PidFilterMode::DirectChildren,
-			resource_view_mode: ResourceViewMode::SelfOnly,
-			clear_search_on_pin: true,
-			theme: Theme::System,
 			disk_devices: Vec::new(),
 			network_interfaces: Vec::new(),
 			window_width: 1100,

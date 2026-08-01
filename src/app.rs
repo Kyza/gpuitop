@@ -45,8 +45,8 @@ impl App {
 		});
 		let performance_tab =
 			cx.new(|cx| PerformanceTab::new(initial_snapshot.clone(), cx));
-		let refresh_ms = Arc::new(AtomicU64::new(config.refresh_ms));
-		let theme_cell = Rc::new(Cell::new(config.theme));
+		let refresh_ms = Arc::new(AtomicU64::new(config.general.refresh_ms));
+		let theme_cell = Rc::new(Cell::new(config.general.theme));
 		let settings_tab = cx.new(|cx| {
 			SettingsTab::new(
 				config.clone(),
@@ -241,7 +241,7 @@ impl Render for App {
 											theme.set(new);
 											apply_theme(new, window, cx);
 											let mut config = config.clone();
-											config.theme = new;
+											config.general.theme = new;
 											let _ = config.save();
 										},
 									)

@@ -117,9 +117,10 @@ impl std::fmt::Display for ResourceViewMode {
 }
 
 #[derive(
-	Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+	Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
 )]
 pub enum ProcessGrouping {
+	#[default]
 	Auto,
 	ByUser,
 	ByState,

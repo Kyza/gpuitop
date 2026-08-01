@@ -20,8 +20,8 @@ pub fn general_page(
 	let view = view.clone();
 	let refresh_ms = refresh_ms.clone();
 	let theme_cell = theme_cell.clone();
-	let default_refresh = SharedString::from(default_config.refresh_ms.to_string());
-	let default_theme = SharedString::from(default_config.theme.to_string());
+	let default_refresh = SharedString::from(default_config.general.refresh_ms.to_string());
+	let default_theme = SharedString::from(default_config.general.theme.to_string());
 
 	SettingPage::new("General")
 		.default_open(true)
@@ -42,7 +42,7 @@ pub fn general_page(
 						let view = view.clone();
 						move |cx: &App| {
 							SharedString::from(
-								view.read(cx).config.refresh_ms.to_string(),
+								view.read(cx).config.general.refresh_ms.to_string(),
 							)
 						}
 					},
@@ -52,7 +52,7 @@ pub fn general_page(
 						move |val: SharedString, cx: &mut App| {
 							view.update(cx, |this, cx| {
 								if let Ok(ms) = val.parse::<u64>() {
-									this.config.refresh_ms = ms;
+									this.config.general.refresh_ms = ms;
 									refresh_ms.store(ms, Ordering::SeqCst);
 									this.save();
 									cx.notify();
@@ -80,7 +80,7 @@ pub fn general_page(
 						let view = view.clone();
 						move |cx: &App| {
 							SharedString::from(
-								view.read(cx).config.theme.to_string(),
+								view.read(cx).config.general.theme.to_string(),
 							)
 						}
 					},
@@ -102,7 +102,7 @@ pub fn general_page(
 							gpui_component::Theme::change(mode, None, cx);
 							theme_cell.set(new);
 							view.update(cx, |this, cx| {
-								this.config.theme = new;
+								this.config.general.theme = new;
 								this.save();
 								cx.notify();
 							});

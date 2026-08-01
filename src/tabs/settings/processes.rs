@@ -12,10 +12,10 @@ pub fn processes_page(
 	default_config: &Config,
 ) -> SettingPage {
 	let view = view.clone();
-	let default_vram = SharedString::from(default_config.vram_polling.to_string());
-	let default_filter = SharedString::from(default_config.pid_filter_mode.to_string());
-	let default_resource = SharedString::from(default_config.resource_view_mode.to_string());
-	let default_clear_search = default_config.clear_search_on_pin;
+	let default_vram = SharedString::from(default_config.processes.vram_polling.to_string());
+	let default_filter = SharedString::from(default_config.processes.pid_filter_mode.to_string());
+	let default_resource = SharedString::from(default_config.processes.resource_view_mode.to_string());
+	let default_clear_search = default_config.processes.clear_search_on_pin;
 
 	SettingPage::new("Processes")
 		.default_open(true)
@@ -33,7 +33,7 @@ pub fn processes_page(
 						let view = view.clone();
 						move |cx: &App| {
 							SharedString::from(
-								view.read(cx).config.vram_polling.to_string(),
+								view.read(cx).config.processes.vram_polling.to_string(),
 							)
 						}
 					},
@@ -41,7 +41,7 @@ pub fn processes_page(
 						let view = view.clone();
 						move |val: SharedString, cx: &mut App| {
 							view.update(cx, |this, cx| {
-								this.config.vram_polling = match val.as_str() {
+								this.config.processes.vram_polling = match val.as_str() {
 									"Auto" => VramPolling::Auto,
 									"On" => VramPolling::On,
 									_ => VramPolling::Off,
@@ -70,7 +70,7 @@ pub fn processes_page(
 						let view = view.clone();
 						move |cx: &App| {
 							SharedString::from(
-								view.read(cx).config.pid_filter_mode.to_string(),
+								view.read(cx).config.processes.pid_filter_mode.to_string(),
 							)
 						}
 					},
@@ -78,7 +78,7 @@ pub fn processes_page(
 						let view = view.clone();
 						move |val: SharedString, cx: &mut App| {
 							view.update(cx, |this, cx| {
-								this.config.pid_filter_mode = match val.as_str() {
+								this.config.processes.pid_filter_mode = match val.as_str() {
 									"Direct only" => PidFilterMode::DirectChildren,
 									_ => PidFilterMode::AllDescendants,
 								};
@@ -101,14 +101,14 @@ pub fn processes_page(
 					{
 						let view = view.clone();
 						move |cx: &App| {
-							view.read(cx).config.clear_search_on_pin
+							view.read(cx).config.processes.clear_search_on_pin
 						}
 					},
 					{
 						let view = view.clone();
 						move |val: bool, cx: &mut App| {
 							view.update(cx, |this, cx| {
-								this.config.clear_search_on_pin = val;
+								this.config.processes.clear_search_on_pin = val;
 								this.save();
 								cx.notify();
 							});
@@ -133,7 +133,7 @@ pub fn processes_page(
 						let view = view.clone();
 						move |cx: &App| {
 							SharedString::from(
-								view.read(cx).config.resource_view_mode.to_string(),
+								view.read(cx).config.processes.resource_view_mode.to_string(),
 							)
 						}
 					},
@@ -141,7 +141,7 @@ pub fn processes_page(
 						let view = view.clone();
 						move |val: SharedString, cx: &mut App| {
 							view.update(cx, |this, cx| {
-								this.config.resource_view_mode = match val.as_str() {
+								this.config.processes.resource_view_mode = match val.as_str() {
 									"Self" => ResourceViewMode::SelfOnly,
 									_ => ResourceViewMode::Cumulative,
 								};
