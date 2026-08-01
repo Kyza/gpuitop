@@ -72,13 +72,13 @@ The codebase is structured with platform abstraction (`src/platform/`) so the pr
 
 ### Profiling
 
-Key functions are instrumented with [hotpath](https://crates.io/crates/hotpath). Run with `--profile` to enable:
+Key functions are instrumented with [hotpath](https://crates.io/crates/hotpath). Build with the `hotpath` feature to enable profiling:
 
 ```bash
-gpuitop --profile
-# Metrics server: http://127.0.0.1:2501
-# Live TUI: hotpath console
+cargo run --features hotpath
 ```
+
+The profiler exposes a metrics server at `http://127.0.0.1:2501` and a live TUI via `hotpath console`.
 
 Cargo features for finer granularity:
 

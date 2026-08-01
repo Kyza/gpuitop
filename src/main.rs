@@ -13,16 +13,6 @@ pub const GPUITOP_APP_ID: &str = "com.github.kyza.gpuitop";
 
 #[hotpath::main]
 fn main() {
-	if std::env::args().any(|a| a == "--profile") {
-		std::env::set_var("HOTPATH_OUTPUT_FORMAT", "table");
-		eprintln!(
-			"[gpuitop] Profiling enabled. Run `hotpath console` in another \
-			 terminal for live TUI."
-		);
-		eprintln!(
-			"[gpuitop] Metrics server: http://127.0.0.1:2501 (default)"
-		);
-	}
 	let app = gpui_platform::application()
 		.with_assets(gpui_component_assets::Assets);
 	app.run(move |cx: &mut App| {
