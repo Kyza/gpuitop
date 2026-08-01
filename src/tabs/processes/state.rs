@@ -24,7 +24,10 @@ pub struct ViewState {
 }
 
 impl ViewState {
-	pub fn mutate(state: &Rc<RefCell<ViewState>>, f: impl FnOnce(&mut ViewState)) {
+	pub fn mutate(
+		state: &Rc<RefCell<ViewState>>,
+		f: impl FnOnce(&mut ViewState),
+	) {
 		let mut s = state.borrow_mut();
 		f(&mut s);
 		s.generation = s.generation.wrapping_add(1);

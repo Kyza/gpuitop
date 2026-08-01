@@ -20,15 +20,19 @@ pub fn general_page(
 	let view = view.clone();
 	let refresh_ms = refresh_ms.clone();
 	let theme_cell = theme_cell.clone();
-	let default_refresh = SharedString::from(default_config.general.refresh_ms.to_string());
-	let default_theme = SharedString::from(default_config.general.theme.to_string());
+	let default_refresh = SharedString::from(
+		default_config.general.interface.refresh_ms.to_string(),
+	);
+	let default_theme = SharedString::from(
+		default_config.general.interface.theme.to_string(),
+	);
 
 	SettingPage::new("General")
 		.default_open(true)
 		.icon(Icon::new(IconName::Settings2))
 		.groups(vec![SettingGroup::new().title("Interface").items(vec![
 			SettingItem::new(
-				"Refresh interval",
+				"Refresh Interval",
 				SettingField::dropdown(
 					vec![
 						("500".into(), "0.5s".into()),
@@ -42,7 +46,12 @@ pub fn general_page(
 						let view = view.clone();
 						move |cx: &App| {
 							SharedString::from(
-								view.read(cx).config.general.refresh_ms.to_string(),
+								view.read(cx)
+									.config
+									.general
+									.interface
+									.refresh_ms
+									.to_string(),
 							)
 						}
 					},
@@ -52,7 +61,10 @@ pub fn general_page(
 						move |val: SharedString, cx: &mut App| {
 							view.update(cx, |this, cx| {
 								if let Ok(ms) = val.parse::<u64>() {
-									this.config.general.refresh_ms = ms;
+									this.config
+										.general
+										.interface
+										.refresh_ms = ms;
 									refresh_ms.store(ms, Ordering::SeqCst);
 									this.save();
 									cx.notify();
@@ -64,8 +76,8 @@ pub fn general_page(
 				.default_value(default_refresh),
 			)
 			.description(
-				"How often system data and the process list refresh. \
-				 Lower values update more often but use more CPU.",
+				"How often system data and the process list refresh. Lower \
+				 values update more often but use more CPU.",
 			)
 			.keywords(["polling", "update", "interval"]),
 			SettingItem::new(
@@ -80,7 +92,12 @@ pub fn general_page(
 						let view = view.clone();
 						move |cx: &App| {
 							SharedString::from(
-								view.read(cx).config.general.theme.to_string(),
+								view.read(cx)
+									.config
+									.general
+									.interface
+									.theme
+									.to_string(),
 							)
 						}
 					},
@@ -95,14 +112,20 @@ pub fn general_page(
 								_ => return,
 							};
 							let mode = match new {
-								Theme::Dark => gpui_component::ThemeMode::Dark,
-								Theme::Light => gpui_component::ThemeMode::Light,
-								Theme::System => gpui_component::ThemeMode::Light,
+								Theme::Dark => {
+									gpui_component::ThemeMode::Dark
+								}
+								Theme::Light => {
+									gpui_component::ThemeMode::Light
+								}
+								Theme::System => {
+									gpui_component::ThemeMode::Light
+								}
 							};
 							gpui_component::Theme::change(mode, None, cx);
 							theme_cell.set(new);
 							view.update(cx, |this, cx| {
-								this.config.general.theme = new;
+								this.config.general.interface.theme = new;
 								this.save();
 								cx.notify();
 							});
@@ -111,7 +134,10 @@ pub fn general_page(
 				)
 				.default_value(default_theme),
 			)
-			.description("Change the appearance theme. System follows your desktop setting.")
+			.description(
+				"Change the appearance theme. System follows your desktop \
+				 setting.",
+			)
 			.keywords(["appearance", "mode", "dark", "light"]),
 		])])
 }

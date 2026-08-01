@@ -1,6 +1,6 @@
-use crate::platform::{detect_gpu, SystemCollector};
 use crate::config::Config;
 use crate::model::{GpuBackend, SystemSnapshot, Theme};
+use crate::platform::{detect_gpu, SystemCollector};
 use crate::tabs::{PerformanceTab, ProcessesTab, SettingsTab};
 use gpui::prelude::*;
 use gpui::*;
@@ -24,7 +24,11 @@ pub struct App {
 	settings_tab: Entity<SettingsTab>,
 }
 
-pub(crate) fn apply_theme(theme: Theme, window: &mut Window, app: &mut gpui::App) {
+pub(crate) fn apply_theme(
+	theme: Theme,
+	window: &mut Window,
+	app: &mut gpui::App,
+) {
 	let mode = match theme {
 		Theme::Dark => gpui_component::ThemeMode::Dark,
 		Theme::Light => gpui_component::ThemeMode::Light,
@@ -45,8 +49,9 @@ impl App {
 		});
 		let performance_tab =
 			cx.new(|cx| PerformanceTab::new(initial_snapshot.clone(), cx));
-		let refresh_ms = Arc::new(AtomicU64::new(config.general.refresh_ms));
-		let theme_cell = Rc::new(Cell::new(config.general.theme));
+		let refresh_ms =
+			Arc::new(AtomicU64::new(config.general.interface.refresh_ms));
+		let theme_cell = Rc::new(Cell::new(config.general.interface.theme));
 		let settings_tab = cx.new(|cx| {
 			SettingsTab::new(
 				config.clone(),
@@ -241,7 +246,8 @@ impl Render for App {
 											theme.set(new);
 											apply_theme(new, window, cx);
 											let mut config = config.clone();
-											config.general.theme = new;
+											config.general.interface.theme =
+												new;
 											let _ = config.save();
 										},
 									)

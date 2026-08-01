@@ -1,16 +1,12 @@
+use super::state::ViewState;
+use super::theme::{filter_color, filter_icon};
+use super::ProcessesTab;
 use crate::model::*;
 use gpui::prelude::*;
 use gpui::*;
-use gpui_component::{
-	menu::PopupMenuItem,
-	tag::Tag,
-	Icon, IconName,
-};
+use gpui_component::{menu::PopupMenuItem, tag::Tag, Icon, IconName};
 use std::cell::RefCell;
 use std::rc::Rc;
-use super::state::ViewState;
-use super::ProcessesTab;
-use super::theme::{filter_icon, filter_color};
 
 pub fn render_filter_chip(
 	filter: &Filter,

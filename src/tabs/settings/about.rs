@@ -1,8 +1,9 @@
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
+	button::{Button, ButtonVariants},
 	setting::{SettingGroup, SettingItem, SettingPage},
-	ActiveTheme, Icon, IconName,
+	ActiveTheme, Icon, IconName, Sizable,
 };
 
 pub fn about_page() -> SettingPage {
@@ -10,36 +11,52 @@ pub fn about_page() -> SettingPage {
 		.default_open(false)
 		.icon(Icon::new(IconName::Info))
 		.group(
-			SettingGroup::new().item(SettingItem::render(|_options, _, cx| {
-				gpui_component::v_flex()
-					.gap_3()
-					.w_full()
-					.items_center()
-					.justify_center()
-					.child(
-						Icon::new(IconName::Cpu)
-							.size(px(32.0))
+			SettingGroup::new().item(SettingItem::render(
+				|_options, _, cx| {
+					gpui_component::v_flex()
+						.gap_3()
+						.w_full()
+						.items_center()
+						.justify_center()
+						.child(
+							Icon::new(IconName::Cpu)
+								.size(px(32.0))
+								.text_color(cx.theme().muted_foreground),
+						)
+						.child(
+							gpui_component::label::Label::new("gpuitop v0.1.0")
+								.text_lg(),
+						)
+						.child(
+							gpui_component::label::Label::new(
+								"Linux-first process manager",
+							)
+							.text_sm()
 							.text_color(cx.theme().muted_foreground),
-					)
-					.child(
-						gpui_component::label::Label::new("gpuitop v0.1.0")
-							.text_lg(),
-					)
-					.child(
-						gpui_component::label::Label::new(
-							"Linux-first process manager",
 						)
-						.text_sm()
-						.text_color(cx.theme().muted_foreground),
-					)
-					.child(
-						gpui_component::label::Label::new(
-							"Built with GPUI & gpui-component",
+						.child(
+							gpui_component::label::Label::new(
+								"Built with GPUI & gpui-component",
+							)
+							.text_sm()
+							.text_color(cx.theme().muted_foreground),
 						)
-						.text_sm()
-						.text_color(cx.theme().muted_foreground),
-					)
-					.into_any()
-			})),
+						.child(
+							Button::new("github")
+								.ghost()
+								.label("GitHub")
+								.icon(
+									Icon::new(IconName::ExternalLink)
+										.size(px(14.0))
+										.text_color(cx.theme().muted_foreground),
+								)
+								.xsmall()
+								.on_click(|_, _, _| {
+									let _ = open::that("https://github.com/Kyza/gpuitop");
+								}),
+						)
+						.into_any()
+				},
+			)),
 		)
 }

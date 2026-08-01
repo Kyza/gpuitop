@@ -117,7 +117,14 @@ impl std::fmt::Display for ResourceViewMode {
 }
 
 #[derive(
-	Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Default,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub enum ProcessGrouping {
 	#[default]
@@ -166,6 +173,35 @@ impl SortColumn {
 			Self::DiskRead,
 			Self::DiskWrite,
 		]
+	}
+
+	pub fn to_col_index(self) -> usize {
+		match self {
+			Self::Name => 1,
+			Self::Pid => 2,
+			Self::User => 3,
+			Self::State => 4,
+			Self::Cpu => 5,
+			Self::Memory => 6,
+			Self::Vram => 7,
+			Self::DiskRead => 8,
+			Self::DiskWrite => 9,
+		}
+	}
+
+	pub fn from_col_index(ix: usize) -> Option<Self> {
+		match ix {
+			1 => Some(Self::Name),
+			2 => Some(Self::Pid),
+			3 => Some(Self::User),
+			4 => Some(Self::State),
+			5 => Some(Self::Cpu),
+			6 => Some(Self::Memory),
+			7 => Some(Self::Vram),
+			8 => Some(Self::DiskRead),
+			9 => Some(Self::DiskWrite),
+			_ => None,
+		}
 	}
 }
 

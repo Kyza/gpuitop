@@ -1,3 +1,6 @@
+use super::delegate::ProcessTableDelegate;
+use super::state::ViewState;
+use super::theme::{state_info, tag_icons, theme_dark_or_light};
 use bytesize::ByteSize;
 use gpui::prelude::*;
 use gpui::*;
@@ -6,9 +9,6 @@ use gpui_component::{
 	table::{Column, ColumnFixed, ColumnSort, TableDelegate, TableState},
 	ActiveTheme, Icon, IconName,
 };
-use super::delegate::ProcessTableDelegate;
-use super::state::ViewState;
-use super::theme::{state_info, tag_icons, theme_dark_or_light};
 
 impl TableDelegate for ProcessTableDelegate {
 	fn columns_count(&self, _: &App) -> usize {
@@ -20,6 +20,7 @@ impl TableDelegate for ProcessTableDelegate {
 	}
 
 	fn column(&self, col_ix: usize, _: &App) -> Column {
+		let hidden = self.is_col_hidden(col_ix);
 		let (key, name, width, sort) = match col_ix {
 			0 => ("tags", " ", 64.0, None),
 			1 => ("name", "Name", 260.0, Some(ColumnSort::Ascending)),
@@ -36,10 +37,10 @@ impl TableDelegate for ProcessTableDelegate {
 		Column {
 			key: key.into(),
 			name: name.into(),
-			width: px(width),
-			sort,
-			resizable: col_ix != 0,
-			movable: col_ix != 0,
+			width: if hidden { px(0.0) } else { px(width) },
+			sort: if hidden { None } else { sort },
+			resizable: !hidden && col_ix != 0,
+			movable: !hidden && col_ix != 0,
 			fixed: if col_ix == 0 {
 				Some(ColumnFixed::Left)
 			} else {
@@ -57,6 +58,9 @@ impl TableDelegate for ProcessTableDelegate {
 		_window: &mut Window,
 		cx: &mut Context<TableState<Self>>,
 	) -> impl IntoElement {
+		if self.is_col_hidden(col_ix) {
+			return div().into_any_element();
+		}
 		let icon = match col_ix {
 			1 => Some(IconName::File),
 			2 => Some(IconName::Dash),
@@ -83,6 +87,7 @@ impl TableDelegate for ProcessTableDelegate {
 				)
 			})
 			.child(name)
+			.into_any_element()
 	}
 
 	fn render_td(
@@ -92,6 +97,9 @@ impl TableDelegate for ProcessTableDelegate {
 		_: &mut Window,
 		cx: &mut Context<TableState<Self>>,
 	) -> impl IntoElement {
+		if self.is_col_hidden(col_ix) {
+			return div().into_any();
+		}
 		let rows = self.filtered_sorted_rows();
 		let Some(proc) = rows.get(row_ix) else {
 			return div().into_any();
@@ -276,6 +284,9 @@ impl TableDelegate for ProcessTableDelegate {
 		_: &mut Window,
 		cx: &mut Context<TableState<Self>>,
 	) {
+		if self.is_col_hidden(col_ix) {
+			return;
+		}
 		ViewState::mutate(&self.view_state, |s| {
 			s.sort_col = col_ix;
 			s.sort_dir = sort;

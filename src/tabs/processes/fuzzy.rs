@@ -1,6 +1,10 @@
 use crate::model::ProcessInfo;
 
-pub fn fuzzy_match(needle: &str, haystack: &str, matcher: &mut nucleo::Matcher) -> bool {
+pub fn fuzzy_match(
+	needle: &str,
+	haystack: &str,
+	matcher: &mut nucleo::Matcher,
+) -> bool {
 	nucleo_fuzzy_score(needle, haystack, matcher).is_some()
 }
 

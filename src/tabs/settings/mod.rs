@@ -1,14 +1,15 @@
+mod about;
 mod general;
 mod processes;
-mod columns;
-mod about;
 
 use crate::config::Config;
 use crate::model::*;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
+	button::{Button, ButtonVariants},
 	setting::{SettingPage, Settings},
+	Icon, IconName, Sizable, ActiveTheme,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -52,9 +53,13 @@ impl SettingsTab {
 		let default_config = Config::default();
 
 		vec![
-			general::general_page(&view, &refresh_ms, &theme_cell, &default_config),
+			general::general_page(
+				&view,
+				&refresh_ms,
+				&theme_cell,
+				&default_config,
+			),
 			processes::processes_page(&view, &default_config),
-			columns::columns_page(&view, &default_config),
 			about::about_page(),
 		]
 	}
@@ -66,6 +71,48 @@ impl Render for SettingsTab {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		Settings::new("gpuitop-settings").pages(self.setting_pages(window, cx))
+		div()
+			.size_full()
+			.flex()
+			.flex_col()
+			.child(
+				div()
+					.flex_grow(1.0)
+					.w_full()
+					.overflow_hidden()
+					.child(
+						Settings::new("gpuitop-settings")
+							.pages(self.setting_pages(window, cx)),
+					),
+			)
+			.child(
+				div()
+					.w_full()
+					.h(px(32.0))
+					.flex()
+					.flex_row()
+					.items_center()
+					.justify_end()
+					.px(px(8.0))
+					.border_t_1()
+					.border_color(cx.theme().border)
+					.bg(cx.theme().background)
+					.child(
+						Button::new("open-config")
+							.ghost()
+							.label("Open Config File")
+							.icon(
+								Icon::new(IconName::ExternalLink)
+									.size(px(12.0))
+									.text_color(cx.theme().muted_foreground),
+							)
+							.xsmall()
+							.on_click(|_, _, _| {
+								let path = crate::config::Config::config_path();
+								let _ = open::that(path);
+							}),
+					),
+			)
+			.into_any_element()
 	}
 }

@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneralConfig {
+pub struct InterfaceConfig {
 	pub refresh_ms: u64,
 	pub theme: Theme,
 }
 
-impl Default for GeneralConfig {
+impl Default for InterfaceConfig {
 	fn default() -> Self {
 		Self {
 			refresh_ms: 1500,
@@ -22,53 +22,23 @@ impl Default for GeneralConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessesConfig {
-	pub vram_polling: VramPolling,
-	pub pid_filter_mode: PidFilterMode,
-	pub clear_search_on_pin: bool,
-	pub resource_view_mode: ResourceViewMode,
+pub struct GeneralConfig {
+	#[serde(default)]
+	pub interface: InterfaceConfig,
 }
 
-impl Default for ProcessesConfig {
+impl Default for GeneralConfig {
 	fn default() -> Self {
 		Self {
-			vram_polling: VramPolling::Auto,
-			pid_filter_mode: PidFilterMode::DirectChildren,
-			clear_search_on_pin: true,
-			resource_view_mode: ResourceViewMode::SelfOnly,
+			interface: InterfaceConfig::default(),
 		}
 	}
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ColumnVisibility {
-	pub name: bool,
-	pub pid: bool,
-	pub user: bool,
-	pub state: bool,
-	pub cpu: bool,
-	pub memory: bool,
-	pub vram: bool,
-	pub disk_read: bool,
-	pub disk_write: bool,
-	pub command: bool,
-}
-
-impl Default for ColumnVisibility {
-	fn default() -> Self {
-		Self {
-			name: true,
-			pid: true,
-			user: true,
-			state: true,
-			cpu: true,
-			memory: true,
-			vram: true,
-			disk_read: true,
-			disk_write: true,
-			command: true,
-		}
-	}
+pub struct ColumnEntry {
+	pub column: SortColumn,
+	pub visible: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,16 +56,80 @@ impl Default for SortConfig {
 	}
 }
 
+impl Default for ColumnEntry {
+	fn default() -> Self {
+		Self {
+			column: SortColumn::Name,
+			visible: true,
+		}
+	}
+}
+
+fn default_column_layout() -> Vec<ColumnEntry> {
+	SortColumn::all()
+		.into_iter()
+		.map(|c| ColumnEntry {
+			column: c,
+			visible: true,
+		})
+		.collect()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BehaviourConfig {
+	pub vram_polling: VramPolling,
+	pub pid_filter_mode: PidFilterMode,
+	pub clear_search_on_pin: bool,
+	pub resource_view_mode: ResourceViewMode,
+}
+
+impl Default for BehaviourConfig {
+	fn default() -> Self {
+		Self {
+			vram_polling: VramPolling::Auto,
+			pid_filter_mode: PidFilterMode::DirectChildren,
+			clear_search_on_pin: true,
+			resource_view_mode: ResourceViewMode::SelfOnly,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProcessesConfig {
+	#[serde(default)]
+	pub behaviour: BehaviourConfig,
+	#[serde(default = "default_column_layout")]
+	pub columns: Vec<ColumnEntry>,
+	#[serde(default)]
+	pub default_sort: SortConfig,
+}
+
+impl Default for ProcessesConfig {
+	fn default() -> Self {
+		Self {
+			behaviour: BehaviourConfig::default(),
+			columns: default_column_layout(),
+			default_sort: SortConfig::default(),
+		}
+	}
+}
+
+impl ProcessesConfig {
+	pub fn is_col_visible(&self, col: SortColumn) -> bool {
+		self.columns
+			.iter()
+			.find(|e| e.column == col)
+			.map(|e| e.visible)
+			.unwrap_or(true)
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
 	#[serde(default)]
 	pub general: GeneralConfig,
 	#[serde(default)]
 	pub processes: ProcessesConfig,
-	#[serde(default)]
-	pub columns: ColumnVisibility,
-	#[serde(default)]
-	pub default_sort: SortConfig,
 	#[serde(default)]
 	pub default_grouping: ProcessGrouping,
 	#[serde(default)]
@@ -113,8 +147,6 @@ impl Default for Config {
 		Self {
 			general: GeneralConfig::default(),
 			processes: ProcessesConfig::default(),
-			columns: ColumnVisibility::default(),
-			default_sort: SortConfig::default(),
 			default_grouping: ProcessGrouping::Auto,
 			disk_devices: Vec::new(),
 			network_interfaces: Vec::new(),
@@ -125,11 +157,11 @@ impl Default for Config {
 }
 
 impl Config {
-	fn config_path() -> PathBuf {
+	pub(crate) fn config_path() -> PathBuf {
 		let base = dirs::config_dir()
 			.unwrap_or_else(|| PathBuf::from("."))
 			.join("gpuitop");
-		base.join("config.toml")
+		base.join("config.ron")
 	}
 
 	fn ensure_dir() -> Result<PathBuf> {
@@ -146,7 +178,7 @@ impl Config {
 		let path = Self::config_path();
 		if path.exists() {
 			match std::fs::read_to_string(&path) {
-				Ok(data) => match toml::from_str(&data) {
+				Ok(data) => match ron::from_str(&data) {
 					Ok(config) => return config,
 					Err(e) => eprintln!(
 						"Failed to parse config: {e}. Using defaults."
@@ -166,9 +198,12 @@ impl Config {
 
 	pub fn save(&self) -> Result<()> {
 		let base = Self::ensure_dir()?;
-		let path = base.join("config.toml");
-		let data = toml::to_string_pretty(self)
-			.with_context(|| "Failed to serialize config")?;
+		let path = base.join("config.ron");
+		let data = ron::ser::to_string_pretty(
+			self,
+			ron::ser::PrettyConfig::default(),
+		)
+		.with_context(|| "Failed to serialize config")?;
 		std::fs::write(&path, data).with_context(|| {
 			format!("Failed to write config to {:?}", path)
 		})?;

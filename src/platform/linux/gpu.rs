@@ -54,7 +54,8 @@ fn build_rocm_vram_map() -> HashMap<i32, u64> {
 	let mut map = HashMap::new();
 	for line in stdout.lines() {
 		let mut parts = line.split(',');
-		let pid: i32 = match parts.next().and_then(|s| s.trim().parse().ok()) {
+		let pid: i32 = match parts.next().and_then(|s| s.trim().parse().ok())
+		{
 			Some(p) => p,
 			None => continue,
 		};

@@ -1,14 +1,13 @@
 use std::collections::HashMap;
 
 use wayland_client::{
-	Connection, Dispatch, Proxy, QueueHandle,
 	backend::ObjectId,
 	globals::{registry_queue_init, GlobalListContents},
 	protocol::wl_registry,
+	Connection, Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols_wlr::foreign_toplevel::v1::client::{
-	zwlr_foreign_toplevel_handle_v1,
-	zwlr_foreign_toplevel_manager_v1,
+	zwlr_foreign_toplevel_handle_v1, zwlr_foreign_toplevel_manager_v1,
 };
 
 struct HandleInfo {
@@ -19,12 +18,16 @@ struct HandleInfo {
 
 struct AppData {
 	handles: HashMap<ObjectId, HandleInfo>,
-	_keep_alive: Vec<zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1>,
+	_keep_alive:
+		Vec<zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1>,
 }
 
 impl AppData {
 	fn new() -> Self {
-		Self { handles: HashMap::new(), _keep_alive: Vec::new() }
+		Self {
+			handles: HashMap::new(),
+			_keep_alive: Vec::new(),
+		}
 	}
 }
 
@@ -40,8 +43,11 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppData {
 	}
 }
 
-impl Dispatch<zwlr_foreign_toplevel_manager_v1::ZwlrForeignToplevelManagerV1, ()>
-	for AppData
+impl
+	Dispatch<
+		zwlr_foreign_toplevel_manager_v1::ZwlrForeignToplevelManagerV1,
+		(),
+	> for AppData
 {
 	fn event(
 		state: &mut Self,
@@ -51,15 +57,16 @@ impl Dispatch<zwlr_foreign_toplevel_manager_v1::ZwlrForeignToplevelManagerV1, ()
 		_conn: &Connection,
 		_qh: &QueueHandle<Self>,
 	) {
-		if let zwlr_foreign_toplevel_manager_v1::Event::Toplevel { toplevel } =
-			event
+		if let zwlr_foreign_toplevel_manager_v1::Event::Toplevel {
+			toplevel,
+		} = event
 		{
 			let id = toplevel.id();
-		state.handles.entry(id).or_insert(HandleInfo {
-			app_id: String::new(),
-			title: String::new(),
-			activated: false,
-		});
+			state.handles.entry(id).or_insert(HandleInfo {
+				app_id: String::new(),
+				title: String::new(),
+				activated: false,
+			});
 			state._keep_alive.push(toplevel);
 		}
 	}
@@ -82,10 +89,8 @@ impl Dispatch<zwlr_foreign_toplevel_manager_v1::ZwlrForeignToplevelManagerV1, ()
 }
 
 impl
-	Dispatch<
-		zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1,
-		(),
-	> for AppData
+	Dispatch<zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1, ()>
+	for AppData
 {
 	fn event(
 		state: &mut Self,
@@ -108,7 +113,9 @@ impl
 			zwlr_foreign_toplevel_handle_v1::Event::Title { title } => {
 				info.title = title;
 			}
-			zwlr_foreign_toplevel_handle_v1::Event::State { state: states } => {
+			zwlr_foreign_toplevel_handle_v1::Event::State {
+				state: states,
+			} => {
 				info.activated = states.iter().any(|s| {
 					*s == zwlr_foreign_toplevel_handle_v1::State::Activated
 						as u8
@@ -134,7 +141,9 @@ pub fn get_toplevels() -> Vec<(String, String)> {
 		return Vec::new();
 	};
 
-	let Some((globals, mut event_queue)) = registry_queue_init::<AppData>(&conn).ok() else {
+	let Some((globals, mut event_queue)) =
+		registry_queue_init::<AppData>(&conn).ok()
+	else {
 		return Vec::new();
 	};
 
@@ -185,8 +194,7 @@ pub fn get_focused_window_app_id() -> Option<String> {
 		.values()
 		.find(|info| info.activated)
 		.and_then(|info| {
-			if info.app_id.is_empty()
-				|| info.app_id == crate::GPUITOP_APP_ID
+			if info.app_id.is_empty() || info.app_id == crate::GPUITOP_APP_ID
 			{
 				None
 			} else {

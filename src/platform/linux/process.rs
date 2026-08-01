@@ -1,6 +1,6 @@
-use crate::model::*;
 use super::collector::SystemCollector;
 use super::gpu::build_vram_map;
+use crate::model::*;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::time::Instant;
@@ -127,7 +127,8 @@ impl SystemCollector {
 				has_display_var(pid)
 			};
 			let is_owned = uid == self.current_uid;
-			let user = self.user_cache
+			let user = self
+				.user_cache
 				.entry(uid)
 				.or_insert_with(|| get_user_name(uid))
 				.clone();

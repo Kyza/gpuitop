@@ -1,18 +1,31 @@
+use super::fuzzy::{best_fuzzy_score, fuzzy_match};
+use super::state::{CumulativeResources, ViewState};
+use crate::config::ProcessesConfig;
 use crate::model::*;
 use gpui_component::table::ColumnSort;
 use std::cell::RefCell;
 use std::rc::Rc;
-use super::state::{CumulativeResources, ViewState};
-use super::fuzzy::{fuzzy_match, best_fuzzy_score};
 
 pub struct ProcessTableDelegate {
 	pub snapshot_cell: Rc<RefCell<Rc<SystemSnapshot>>>,
-	pub cum_cache: Rc<RefCell<Option<std::collections::HashMap<i32, CumulativeResources>>>>,
+	pub cum_cache: Rc<
+		RefCell<Option<std::collections::HashMap<i32, CumulativeResources>>>,
+	>,
 	pub pid_index: Rc<RefCell<Option<std::collections::HashMap<i32, usize>>>>,
 	pub view_state: Rc<RefCell<ViewState>>,
+	pub column_visibility: ProcessesConfig,
 }
 
 impl ProcessTableDelegate {
+	pub fn is_col_hidden(&self, col_ix: usize) -> bool {
+		if col_ix == 0 {
+			return false;
+		}
+		SortColumn::from_col_index(col_ix)
+			.map(|col| !self.column_visibility.is_col_visible(col))
+			.unwrap_or(false)
+	}
+
 	pub fn is_descendant_of(&self, child_pid: i32, ancestor: i32) -> bool {
 		let procs = &self.snapshot_cell.borrow().processes;
 		if self.pid_index.borrow().is_none() {
@@ -206,19 +219,27 @@ impl ProcessTableDelegate {
 			.iter()
 			.filter(|p| {
 				if !search.is_empty() {
-					if !fuzzy_match(&search, &p.name.to_lowercase(), &mut matcher)
-						&& !p.pid.to_string().contains(&search)
-						&& !fuzzy_match(&search, &p.user.to_lowercase(), &mut matcher)
-						&& !fuzzy_match(&search, &p.command.to_lowercase(), &mut matcher)
+					if !fuzzy_match(
+						&search,
+						&p.name.to_lowercase(),
+						&mut matcher,
+					) && !p.pid.to_string().contains(&search)
 						&& !fuzzy_match(
 							&search,
-							&p.electron_app_name
-								.as_deref()
-								.unwrap_or_default()
-								.to_lowercase(),
+							&p.user.to_lowercase(),
 							&mut matcher,
-						)
-					{
+						) && !fuzzy_match(
+						&search,
+						&p.command.to_lowercase(),
+						&mut matcher,
+					) && !fuzzy_match(
+						&search,
+						&p.electron_app_name
+							.as_deref()
+							.unwrap_or_default()
+							.to_lowercase(),
+						&mut matcher,
+					) {
 						return false;
 					}
 				}
@@ -360,10 +381,14 @@ impl ProcessTableDelegate {
 	}
 
 	pub fn pinned_pid(&self) -> Option<i32> {
-		self.view_state.borrow().filters.iter().find_map(|f| match f {
-			Filter::Pid(pid) => Some(*pid),
-			_ => None,
-		})
+		self.view_state
+			.borrow()
+			.filters
+			.iter()
+			.find_map(|f| match f {
+				Filter::Pid(pid) => Some(*pid),
+				_ => None,
+			})
 	}
 
 	pub fn proc_matches(&self, proc: &ProcessInfo, filter: &Filter) -> bool {

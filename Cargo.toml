@@ -16,7 +16,7 @@ gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
 procfs = "0.16"
 nvml-wrapper = "0.10"
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+ron = "0.8"
 anyhow = "1"
 users = "0.11"
 libc = "0.2"
@@ -24,6 +24,7 @@ num_cpus = "1"
 bytesize = "1"
 hotpath = "0.22"
 nucleo = "0.5"
+open = "5"
 wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 
