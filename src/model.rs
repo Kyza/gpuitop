@@ -266,7 +266,23 @@ pub enum Filter {
 	Parent,
 	Vram,
 	Electron,
+	ProcessState(char),
 	Pid(i32),
+}
+
+/// Human-readable label for a Linux process state character.
+pub fn state_label(c: char) -> &'static str {
+	match c {
+		'R' => "Running",
+		'S' => "Sleeping",
+		'D' => "Disk Sleep",
+		'Z' => "Zombie",
+		'T' => "Stopped",
+		't' => "Stopped",
+		'I' => "Idle",
+		'X' => "Dead",
+		_ => "Other",
+	}
 }
 
 impl Filter {
@@ -279,6 +295,7 @@ impl Filter {
 				| Self::Kernel
 				| Self::Parent
 				| Self::Vram | Self::Electron
+				| Self::ProcessState(_)
 		)
 	}
 
@@ -292,6 +309,7 @@ impl Filter {
 			Self::Parent => "Parent".into(),
 			Self::Vram => "VRAM".into(),
 			Self::Electron => "Electron".into(),
+			Self::ProcessState(c) => state_label(*c).into(),
 			Self::Pid(pid) => {
 				let count = processes
 					.iter()

@@ -16,7 +16,7 @@ use gpui_component::{
 	breadcrumb::{Breadcrumb, BreadcrumbItem},
 	button::{Button, ButtonVariants},
 	input::{Input, InputEvent, InputState},
-	menu::PopupMenu,
+	menu::{DropdownMenu, PopupMenu, PopupMenuItem},
 	skeleton::Skeleton,
 	table::{
 		Column, ColumnFixed, ColumnSort, DataTable, TableDelegate,
@@ -518,6 +518,7 @@ impl ProcessTableDelegate {
 			Filter::Parent => proc.has_children,
 			Filter::Vram => proc.vram_bytes.is_some(),
 			Filter::Electron => proc.is_electron,
+			Filter::ProcessState(c) => proc.state == *c,
 			Filter::Pid(pid) => match self.pid_filter_mode() {
 				PidFilterMode::AllDescendants => {
 					proc.pid == *pid || self.is_descendant_of(proc.pid, *pid)
@@ -950,6 +951,7 @@ fn filter_icon(filter: &Filter) -> Option<IconName> {
 		Filter::Parent => Some(IconName::FolderOpen),
 		Filter::Vram => Some(IconName::Eye),
 		Filter::Electron => Some(IconName::Globe),
+		Filter::ProcessState(_) => Some(IconName::Heart),
 		Filter::Pid(_) => None,
 	}
 }
@@ -965,6 +967,7 @@ fn filter_color(filter: &Filter, cx: &App) -> Hsla {
 		Filter::Vram => tag_color(TagType::Vram, dark),
 		Filter::Parent => tag_color(TagType::Parent, dark),
 		Filter::Electron => tag_color(TagType::Electron, dark),
+		Filter::ProcessState(_) => tag_color(TagType::Gui, dark),
 		Filter::Pid(_) => tag_color(TagType::Systemd, dark),
 	}
 }
@@ -1061,6 +1064,36 @@ fn render_filter_chip(
 				),
 			)
 			.into_any_element()
+	}
+}
+
+fn get_state_item(
+	state: char,
+	active: &[char],
+	view_state: Rc<RefCell<ViewState>>,
+) -> PopupMenuItem {
+	let label = state_label(state).to_string();
+	let checked = active.contains(&state);
+	PopupMenuItem::Item {
+		icon: None,
+		label: label.into(),
+		disabled: false,
+		checked,
+		is_link: false,
+		action: None,
+		handler: Some(std::rc::Rc::new(move |_, _, _| {
+			ViewState::mutate(&view_state, |s| {
+				if let Some(pos) = s
+					.filters
+					.iter()
+					.position(|f| *f == Filter::ProcessState(state))
+				{
+					s.filters.remove(pos);
+				} else {
+					s.filters.push(Filter::ProcessState(state));
+				}
+			});
+		})),
 	}
 }
 
@@ -1236,6 +1269,47 @@ impl Render for ProcessesTab {
 											this.toggle_resource_view_mode(cx)
 										},
 									))
+							})
+							.child({
+								let view_state = self.view_state.clone();
+								Button::new("state-filter")
+									.ghost()
+									.label("State")
+									.small()
+									.dropdown_menu(move |menu, _window, _cx| {
+										let vs = view_state.borrow();
+										let active: Vec<char> = vs
+											.filters
+											.iter()
+											.filter_map(|f| match f {
+												Filter::ProcessState(c) => Some(*c),
+												_ => None,
+											})
+											.collect();
+										drop(vs);
+										let vs = view_state.clone();
+										menu.item(
+											PopupMenuItem::Label("Process State".into()),
+										)
+										.item(
+											get_state_item('R', &active, vs.clone()),
+										)
+										.item(
+											get_state_item('S', &active, vs.clone()),
+										)
+										.item(
+											get_state_item('D', &active, vs.clone()),
+										)
+										.item(
+											get_state_item('Z', &active, vs.clone()),
+										)
+										.item(
+											get_state_item('T', &active, vs.clone()),
+										)
+										.item(
+											get_state_item('I', &active, vs.clone()),
+										)
+									})
 							}),
 					)
 					.child(
@@ -1254,7 +1328,27 @@ impl Render for ProcessesTab {
 									true,
 									cx,
 								)
-							})),
+							}))
+							.children({
+								let active_states: Vec<_> = self
+									.view_state
+									.borrow()
+									.filters
+									.iter()
+									.filter(|f| matches!(f, Filter::ProcessState(_)))
+									.cloned()
+									.collect();
+								let chips: Vec<AnyElement> = active_states.iter().map(|f| {
+									render_filter_chip(
+										f,
+										&f.label(&[]),
+										true,
+										true,
+										cx,
+									)
+								}).collect();
+								chips
+							}),
 					)
                     .when(!pid_filters.is_empty(), |el| {
                         el.child(

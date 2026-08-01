@@ -46,6 +46,8 @@ fn main() {
 			},
 			|window, cx| {
 				let view = cx.new(|cx| app::App::new(cx));
+				let theme = view.read(cx).theme.get();
+				app::apply_theme(theme, window, cx);
 				cx.new(|cx| Root::new(view, window, cx))
 			},
 		)

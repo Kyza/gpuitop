@@ -352,18 +352,28 @@ impl SystemCollector {
 				.unwrap_or(0)
 				* 1024;
 
-			// Command line
-			let command = Self::read(&format!("{base}/cmdline"))
-				.unwrap_or_default()
-				.replace('\0', " ")
-				.trim()
-				.to_string();
+			// Command line — raw with \0 separators
+			let raw_cmdline =
+				Self::read(&format!("{base}/cmdline")).unwrap_or_default();
+
+			let cmdline_name = raw_cmdline
+				.split('\0')
+				.next()
+				.filter(|a| !a.is_empty())
+				.and_then(|argv0| std::path::Path::new(argv0).file_name())
+				.and_then(|n| n.to_str())
+				.map(|s| s.to_string());
+
+			let command = raw_cmdline.replace('\0', " ").trim().to_string();
 
 			let display_command = if command.is_empty() {
-				proc_name.clone()
+				cmdline_name.clone().unwrap_or_else(|| proc_name.clone())
 			} else {
 				command
 			};
+
+			let display_name =
+				cmdline_name.unwrap_or_else(|| proc_name.clone());
 
 			// I/O
 			let io_data =
@@ -429,7 +439,7 @@ impl SystemCollector {
 				ProcessInfo {
 					pid,
 					ppid,
-					name: proc_name,
+					name: display_name,
 					user,
 					state,
 					command: display_command,

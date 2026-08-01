@@ -15,7 +15,7 @@ use std::time::Duration;
 pub struct App {
 	active_tab: usize,
 	config: Config,
-	theme: Rc<Cell<Theme>>,
+	pub(crate) theme: Rc<Cell<Theme>>,
 	snapshot: Rc<SystemSnapshot>,
 	gpu_backend: GpuBackend,
 	rx: mpsc::Receiver<SystemSnapshot>,
@@ -24,7 +24,7 @@ pub struct App {
 	settings_tab: Entity<SettingsTab>,
 }
 
-fn apply_theme(theme: Theme, window: &mut Window, app: &mut gpui::App) {
+pub(crate) fn apply_theme(theme: Theme, window: &mut Window, app: &mut gpui::App) {
 	let mode = match theme {
 		Theme::Dark => gpui_component::ThemeMode::Dark,
 		Theme::Light => gpui_component::ThemeMode::Light,
