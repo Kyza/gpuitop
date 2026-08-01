@@ -1,29 +1,44 @@
 # gpuitop
 
-A Linux-first desktop system monitor and process manager with GPU VRAM tracking, built with the [GPUI](https://www.gpui.rs/) framework.
-
-![License](https://img.shields.io/badge/license-MIT-blue)
+A GPU-accelerated task manager for Linux built with [GPUI](https://www.gpui.rs/), the Rust UI framework behind the [Zed](https://zed.dev) editor. Fuzzy search, window picking, per-process GPU VRAM tracking (NVIDIA + AMD), and a right-click context menu for signals.
 
 ## Features
 
-- **Process table** with sortable columns: Name, PID, User, State, CPU%, Memory%, VRAM, Disk Read, Disk Write
-- **GPU VRAM tracking** for NVIDIA (NVML) and AMD (rocm-smi) — per-process memory usage across all GPUs
-- **Fuzzy search and filtering** — toggle filters for GUI apps, kernel threads, systemd, Electron apps, process state, and more
-- **Electron app detection** — shows actual app names (Discord, VS Code) instead of just "electron"
-- **Performance tab** — CPU utilization, per-core gauges, memory breakdown, disk I/O, and network throughput
-- **Hierarchical process view** — cumulative or self-only resource view with parent/child expansion
-- **Dark, light, and system themes** — toggle from the title bar
-- **Persistent configuration** saved as RON at `~/.config/gpuitop/config.ron`
+### Find Processes
 
-## Screenshot
+Fuzzy search the process table, or click **Pick** and switch to any window to jump to its process. Toggle filters to narrow the list: GUI apps, kernel threads, systemd, Electron apps, your user, process state (R/S/D/Z/T/I/X), parents, VRAM-consuming processes. Filters combine with AND/OR logic.
 
-<!-- TODO: add screenshot -->
+The window picker uses the `zwlr_foreign_toplevel_manager_v1` Wayland protocol. It does not work under X11; the Pick button will time out in an X11 session.
+
+### Manage Processes
+
+Right-click any row for a context menu:
+
+- **End Process** (SIGTERM)
+- **Force Kill** (SIGKILL)
+- **Pause** (SIGSTOP) or **Resume** (SIGCONT)
+- **Copy PID** to clipboard
+- Send arbitrary signals: SIGHUP, SIGINT, SIGQUIT, SIGUSR1, SIGUSR2
+
+Double-click a process to filter by it. Click column headers to sort by Name, PID, User, State, CPU%, Memory%, VRAM, Disk Read, or Disk Write.
+
+### GPU VRAM Tracking
+
+NVIDIA GPUs are queried through NVML. AMD GPUs use `rocm-smi`. Both backends aggregate across all GPUs and show per-process VRAM usage.
+
+### Electron Detection
+
+Discord, VS Code, and other Electron apps show their real name instead of "electron". The detector walks the process tree to find the root app name.
+
+### System Resources
+
+The Performance tab shows CPU (overall bar + per-core gauges), memory (total, used, available, cached, swap), disk I/O per device, and network throughput per interface.
 
 ## Prerequisites
 
-- **Rust** toolchain (install via [rustup](https://rustup.rs))
-- **Linux** with X11 or Wayland
-- Build dependencies for GPUI:
+- Rust toolchain: [rustup](https://rustup.rs)
+- Linux with X11 or Wayland
+- GPUI build dependencies:
 
 ```bash
 # Ubuntu/Debian
@@ -42,8 +57,8 @@ sudo pacman -S base-devel cmake pkgconf \
   wayland fontconfig vulkan-headers
 ```
 
-- For **NVIDIA VRAM tracking**: NVIDIA driver with NVML (installed with the driver)
-- For **AMD VRAM tracking**: `rocm-smi` from the ROCm stack
+- NVIDIA VRAM: NVIDIA driver (NVML bundled with the driver)
+- AMD VRAM: `rocm-smi` from the ROCm stack
 
 ## Install
 
@@ -51,25 +66,10 @@ sudo pacman -S base-devel cmake pkgconf \
 cargo install --git https://github.com/Kyza/gpuitop.git
 ```
 
-Then run:
+## Platform Support
 
-```bash
-gpuitop
-```
-
-## Usage
-
-| Action | Binding |
-|--------|---------|
-| Switch tabs | Click Processes / Performance / Settings |
-| Sort columns | Click column headers |
-| Search processes | Type in the search bar |
-| Toggle filters | Click filter buttons below the search bar |
-| Filter by process | Double-click a process row |
-| Pin a process | Right-click → Pin |
-| Change theme | Click the sun/moon icon in the title bar |
-| Edit config | Settings → About → Open Config File |
+Linux only. The codebase is structured with platform abstraction (`src/platform/`) so the process collector, GPU queries, and window picker can be swapped per OS. Help with Windows support is welcome.
 
 ## Config
 
-Configuration is stored at `$XDG_CONFIG_HOME/gpuitop/config.ron` (defaults to `~/.config/gpuitop/config.ron`). All settings can also be changed through the in-app Settings tab.
+Stored at `~/.config/gpuitop/config.ron` (respects `XDG_CONFIG_HOME`). Editable in-app under Settings, or directly in the RON file.
