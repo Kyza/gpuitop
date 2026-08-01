@@ -9,7 +9,7 @@ use gpui::*;
 use gpui_component::{
 	button::{Button, ButtonVariants},
 	setting::{SettingPage, Settings},
-	Icon, IconName, Sizable, ActiveTheme,
+	ActiveTheme, Icon, IconName, Sizable,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -76,14 +76,10 @@ impl Render for SettingsTab {
 			.flex()
 			.flex_col()
 			.child(
-				div()
-					.flex_grow(1.0)
-					.w_full()
-					.overflow_hidden()
-					.child(
-						Settings::new("gpuitop-settings")
-							.pages(self.setting_pages(window, cx)),
-					),
+				div().flex_grow(1.0).w_full().overflow_hidden().child(
+					Settings::new("gpuitop-settings")
+						.pages(self.setting_pages(window, cx)),
+				),
 			)
 			.child(
 				div()
@@ -108,7 +104,8 @@ impl Render for SettingsTab {
 							)
 							.xsmall()
 							.on_click(|_, _, _| {
-								let path = crate::config::Config::config_path();
+								let path =
+									crate::config::Config::config_path();
 								let _ = open::that(path);
 							}),
 					),

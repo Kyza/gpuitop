@@ -1,12 +1,14 @@
 use crate::config::Config;
-use crate::model::{PidFilterMode, ResourceViewMode, SortColumn, VramPolling};
+use crate::model::{
+	PidFilterMode, ResourceViewMode, SortColumn, VramPolling,
+};
 use crate::tabs::settings::SettingsTab;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
 	button::{Button, ButtonVariants},
 	setting::{SettingField, SettingGroup, SettingItem, SettingPage},
-	Icon, IconName, Sizable, ActiveTheme, Disableable,
+	ActiveTheme, Disableable, Icon, IconName, Sizable,
 };
 
 pub fn processes_page(
@@ -18,10 +20,18 @@ pub fn processes_page(
 		default_config.processes.behaviour.vram_polling.to_string(),
 	);
 	let default_filter = SharedString::from(
-		default_config.processes.behaviour.pid_filter_mode.to_string(),
+		default_config
+			.processes
+			.behaviour
+			.pid_filter_mode
+			.to_string(),
 	);
 	let default_resource = SharedString::from(
-		default_config.processes.behaviour.resource_view_mode.to_string(),
+		default_config
+			.processes
+			.behaviour
+			.resource_view_mode
+			.to_string(),
 	);
 	let default_clear_search =
 		default_config.processes.behaviour.clear_search_on_pin;
@@ -33,7 +43,10 @@ pub fn processes_page(
 	let sort_options: Vec<(SharedString, SharedString)> = SortColumn::all()
 		.into_iter()
 		.map(|sc| {
-			(SharedString::from(sc.to_string()), SharedString::from(sc.to_string()))
+			(
+				SharedString::from(sc.to_string()),
+				SharedString::from(sc.to_string()),
+			)
 		})
 		.collect();
 
@@ -67,7 +80,10 @@ pub fn processes_page(
 							move |cx: &App| {
 								SharedString::from(
 									view.read(cx)
-										.config.processes.behaviour.vram_polling
+										.config
+										.processes
+										.behaviour
+										.vram_polling
 										.to_string(),
 								)
 							}
@@ -76,12 +92,14 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: SharedString, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									this.config.processes.behaviour.vram_polling =
-										match val.as_str() {
-											"Auto" => VramPolling::Auto,
-											"On" => VramPolling::On,
-											_ => VramPolling::Off,
-										};
+									this.config
+										.processes
+										.behaviour
+										.vram_polling = match val.as_str() {
+										"Auto" => VramPolling::Auto,
+										"On" => VramPolling::On,
+										_ => VramPolling::Off,
+									};
 									this.save();
 									cx.notify();
 								});
@@ -92,7 +110,8 @@ pub fn processes_page(
 				)
 				.description(
 					"Auto detects the GPU at startup and tracks VRAM if \
-					 available. On forces polling. Off disables it completely.",
+					 available. On forces polling. Off disables it \
+					 completely.",
 				)
 				.keywords(["gpu", "memory", "video"]),
 				SettingItem::new(
@@ -100,14 +119,20 @@ pub fn processes_page(
 					SettingField::dropdown(
 						vec![
 							("Direct only".into(), "Direct only".into()),
-							("All descendants".into(), "All descendants".into()),
+							(
+								"All descendants".into(),
+								"All descendants".into(),
+							),
 						],
 						{
 							let view = view.clone();
 							move |cx: &App| {
 								SharedString::from(
 									view.read(cx)
-										.config.processes.behaviour.pid_filter_mode
+										.config
+										.processes
+										.behaviour
+										.pid_filter_mode
 										.to_string(),
 								)
 							}
@@ -116,12 +141,15 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: SharedString, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									this.config.processes.behaviour.pid_filter_mode =
-										match val.as_str() {
-											"Direct only" =>
-												PidFilterMode::DirectChildren,
-											_ => PidFilterMode::AllDescendants,
-										};
+									this.config
+										.processes
+										.behaviour
+										.pid_filter_mode = match val.as_str() {
+										"Direct only" => {
+											PidFilterMode::DirectChildren
+										}
+										_ => PidFilterMode::AllDescendants,
+									};
 									this.save();
 									cx.notify();
 								});
@@ -142,7 +170,10 @@ pub fn processes_page(
 							let view = view.clone();
 							move |cx: &App| {
 								view.read(cx)
-									.config.processes.behaviour.clear_search_on_pin
+									.config
+									.processes
+									.behaviour
+									.clear_search_on_pin
 							}
 						},
 						{
@@ -150,7 +181,8 @@ pub fn processes_page(
 							move |val: bool, cx: &mut App| {
 								view.update(cx, |this, cx| {
 									this.config
-										.processes.behaviour
+										.processes
+										.behaviour
 										.clear_search_on_pin = val;
 									this.save();
 									cx.notify();
@@ -177,7 +209,10 @@ pub fn processes_page(
 							move |cx: &App| {
 								SharedString::from(
 									view.read(cx)
-										.config.processes.behaviour.resource_view_mode
+										.config
+										.processes
+										.behaviour
+										.resource_view_mode
 										.to_string(),
 								)
 							}
@@ -187,11 +222,12 @@ pub fn processes_page(
 							move |val: SharedString, cx: &mut App| {
 								view.update(cx, |this, cx| {
 									this.config
-										.processes.behaviour.resource_view_mode =
-										match val.as_str() {
-											"Self" => ResourceViewMode::SelfOnly,
-											_ => ResourceViewMode::Cumulative,
-										};
+										.processes
+										.behaviour
+										.resource_view_mode = match val.as_str() {
+										"Self" => ResourceViewMode::SelfOnly,
+										_ => ResourceViewMode::Cumulative,
+									};
 									this.save();
 									cx.notify();
 								});
@@ -217,8 +253,11 @@ pub fn processes_page(
 						let has_up = idx > 0;
 						let has_down = idx < column_labels.len() - 1;
 						SettingItem::render(move |_options, _window, cx| {
-							let visible = view.read(cx)
-								.config.processes.columns
+							let visible = view
+								.read(cx)
+								.config
+								.processes
+								.columns
 								.iter()
 								.find(|e| e.column == col)
 								.map(|e| e.visible)
@@ -239,22 +278,35 @@ pub fn processes_page(
 								.child(
 									Button::new(format!("toggle-{idx}"))
 										.ghost()
-										.label(if visible { "✓" } else { "✗" })
+										.label(if visible {
+											"✓"
+										} else {
+											"✗"
+										})
 										.xsmall()
 										.on_click({
 											let view = view.clone();
 											move |_, _, cx| {
-												view.update(cx, |this, cx| {
-													if let Some(entry) = this
-														.config.processes.columns
-														.iter_mut()
-														.find(|e| e.column == col)
-													{
-														entry.visible = !entry.visible;
-													}
-													this.save();
-													cx.notify();
-												});
+												view.update(
+													cx,
+													|this, cx| {
+														if let Some(entry) =
+															this.config
+																.processes
+																.columns
+																.iter_mut()
+																.find(|e| {
+																	e.column
+																		== col
+																}) {
+															entry.visible =
+																!entry
+																	.visible;
+														}
+														this.save();
+														cx.notify();
+													},
+												);
 											}
 										}),
 								)
@@ -264,21 +316,33 @@ pub fn processes_page(
 										.icon(
 											Icon::new(IconName::ChevronUp)
 												.size(px(12.0))
-												.text_color(cx.theme().muted_foreground),
+												.text_color(
+													cx.theme()
+														.muted_foreground,
+												),
 										)
 										.xsmall()
 										.disabled(!has_up)
 										.on_click({
 											let view = view.clone();
 											move |_, _, cx| {
-												view.update(cx, |this, cx| {
-													let cols = &mut this.config.processes.columns;
-													if idx > 0 {
-														cols.swap(idx, idx - 1);
-														this.save();
-														cx.notify();
-													}
-												});
+												view.update(
+													cx,
+													|this, cx| {
+														let cols = &mut this
+															.config
+															.processes
+															.columns;
+														if idx > 0 {
+															cols.swap(
+																idx,
+																idx - 1,
+															);
+															this.save();
+															cx.notify();
+														}
+													},
+												);
 											}
 										}),
 								)
@@ -288,21 +352,35 @@ pub fn processes_page(
 										.icon(
 											Icon::new(IconName::ChevronDown)
 												.size(px(12.0))
-												.text_color(cx.theme().muted_foreground),
+												.text_color(
+													cx.theme()
+														.muted_foreground,
+												),
 										)
 										.xsmall()
 										.disabled(!has_down)
 										.on_click({
 											let view = view.clone();
 											move |_, _, cx| {
-												view.update(cx, |this, cx| {
-													let cols = &mut this.config.processes.columns;
-													if idx < cols.len() - 1 {
-														cols.swap(idx, idx + 1);
-														this.save();
-														cx.notify();
-													}
-												});
+												view.update(
+													cx,
+													|this, cx| {
+														let cols = &mut this
+															.config
+															.processes
+															.columns;
+														if idx
+															< cols.len() - 1
+														{
+															cols.swap(
+																idx,
+																idx + 1,
+															);
+															this.save();
+															cx.notify();
+														}
+													},
+												);
 											}
 										}),
 								)
@@ -321,7 +399,10 @@ pub fn processes_page(
 							move |cx: &App| {
 								SharedString::from(
 									view.read(cx)
-										.config.processes.default_sort.column
+										.config
+										.processes
+										.default_sort
+										.column
 										.to_string(),
 								)
 							}
@@ -330,19 +411,21 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: SharedString, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									this.config.processes.default_sort.column =
-										match val.as_str() {
-											"Name" => SortColumn::Name,
-											"PID" => SortColumn::Pid,
-											"User" => SortColumn::User,
-											"State" => SortColumn::State,
-											"CPU%" => SortColumn::Cpu,
-											"Memory%" => SortColumn::Memory,
-											"VRAM" => SortColumn::Vram,
-											"Disk R" => SortColumn::DiskRead,
-											"Disk W" => SortColumn::DiskWrite,
-											_ => return,
-										};
+									this.config
+										.processes
+										.default_sort
+										.column = match val.as_str() {
+										"Name" => SortColumn::Name,
+										"PID" => SortColumn::Pid,
+										"User" => SortColumn::User,
+										"State" => SortColumn::State,
+										"CPU%" => SortColumn::Cpu,
+										"Memory%" => SortColumn::Memory,
+										"VRAM" => SortColumn::Vram,
+										"Disk R" => SortColumn::DiskRead,
+										"Disk W" => SortColumn::DiskWrite,
+										_ => return,
+									};
 									this.save();
 									cx.notify();
 								});
@@ -360,14 +443,20 @@ pub fn processes_page(
 							let view = view.clone();
 							move |cx: &App| {
 								view.read(cx)
-									.config.processes.default_sort.descending
+									.config
+									.processes
+									.default_sort
+									.descending
 							}
 						},
 						{
 							let view = view.clone();
 							move |val: bool, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									this.config.processes.default_sort.descending = val;
+									this.config
+										.processes
+										.default_sort
+										.descending = val;
 									this.save();
 									cx.notify();
 								});
@@ -377,7 +466,8 @@ pub fn processes_page(
 					.default_value(default_sort_desc),
 				)
 				.description(
-					"Sort in descending order by default (largest values first).",
+					"Sort in descending order by default (largest values \
+					 first).",
 				)
 				.keywords(["reverse", "direction", "ascending"]),
 			]),
