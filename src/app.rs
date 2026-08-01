@@ -46,8 +46,14 @@ impl App {
 		let performance_tab =
 			cx.new(|cx| PerformanceTab::new(initial_snapshot.clone(), cx));
 		let refresh_ms = Arc::new(AtomicU64::new(config.refresh_ms));
+		let theme_cell = Rc::new(Cell::new(config.theme));
 		let settings_tab = cx.new(|cx| {
-			SettingsTab::new(config.clone(), refresh_ms.clone(), cx)
+			SettingsTab::new(
+				config.clone(),
+				refresh_ms.clone(),
+				theme_cell.clone(),
+				cx,
+			)
 		});
 
 		let (tx, rx) = mpsc::channel::<SystemSnapshot>();
@@ -67,7 +73,7 @@ impl App {
 
 		Self {
 			active_tab: 0,
-			theme: Rc::new(Cell::new(config.theme)),
+			theme: theme_cell,
 			config,
 			snapshot: initial_snapshot,
 			gpu_backend,

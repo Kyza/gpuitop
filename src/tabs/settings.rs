@@ -1,25 +1,33 @@
-use crate::config::Config;
+use crate::config::{ColumnVisibility, Config};
 use crate::model::*;
 use gpui::prelude::*;
 use gpui::*;
-use gpui_component::ActiveTheme;
+use gpui_component::{
+	ActiveTheme, Icon, IconName,
+	setting::{SettingField, SettingGroup, SettingItem, SettingPage, Settings},
+};
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub struct SettingsTab {
 	config: Config,
 	refresh_ms: Arc<AtomicU64>,
+	theme: Rc<Cell<Theme>>,
 }
 
 impl SettingsTab {
 	pub fn new(
 		config: Config,
 		refresh_ms: Arc<AtomicU64>,
+		theme: Rc<Cell<Theme>>,
 		_cx: &mut Context<Self>,
 	) -> Self {
 		Self {
 			config,
 			refresh_ms,
+			theme,
 		}
 	}
 
@@ -28,444 +36,392 @@ impl SettingsTab {
 			eprintln!("Failed to save config: {e}");
 		}
 	}
+
+	fn setting_pages(
+		&self,
+		_window: &mut Window,
+		cx: &mut Context<Self>,
+	) -> Vec<SettingPage> {
+		let view = cx.entity();
+		let refresh_ms = self.refresh_ms.clone();
+		let theme_cell = self.theme.clone();
+		let default_config = Config::default();
+
+		vec![
+			Self::general_page(&view, &refresh_ms, &theme_cell, &default_config),
+			Self::processes_page(&view, &default_config),
+			Self::columns_page(&view, &default_config),
+			Self::about_page(),
+		]
+	}
+
+	fn general_page(
+		view: &Entity<Self>,
+		refresh_ms: &Arc<AtomicU64>,
+		theme_cell: &Rc<Cell<Theme>>,
+		default_config: &Config,
+	) -> SettingPage {
+		let view = view.clone();
+		let refresh_ms = refresh_ms.clone();
+		let theme_cell = theme_cell.clone();
+		let default_refresh = SharedString::from(default_config.refresh_ms.to_string());
+		let default_theme = SharedString::from(default_config.theme.to_string());
+
+		SettingPage::new("General")
+			.default_open(true)
+			.icon(Icon::new(IconName::Settings2))
+			.groups(vec![SettingGroup::new().title("Interface").items(vec![
+				SettingItem::new(
+					"Refresh interval",
+					SettingField::dropdown(
+						vec![
+							("500".into(), "0.5s".into()),
+							("1000".into(), "1.0s".into()),
+							("1500".into(), "1.5s".into()),
+							("2000".into(), "2.0s".into()),
+							("3000".into(), "3.0s".into()),
+							("5000".into(), "5.0s".into()),
+						],
+						{
+							let view = view.clone();
+							move |cx: &App| {
+								SharedString::from(
+									view.read(cx).config.refresh_ms.to_string(),
+								)
+							}
+						},
+						{
+							let view = view.clone();
+							let refresh_ms = refresh_ms.clone();
+							move |val: SharedString, cx: &mut App| {
+								view.update(cx, |this, cx| {
+									if let Ok(ms) = val.parse::<u64>() {
+										this.config.refresh_ms = ms;
+										refresh_ms.store(ms, Ordering::SeqCst);
+										this.save();
+										cx.notify();
+									}
+								});
+							}
+						},
+					)
+					.default_value(default_refresh),
+				)
+				.description(
+					"How often system data and the process list refresh. \
+					 Lower values update more often but use more CPU.",
+				)
+				.keywords(["polling", "update", "interval"]),
+				SettingItem::new(
+					"Theme",
+					SettingField::dropdown(
+						vec![
+							("Dark".into(), "Dark".into()),
+							("Light".into(), "Light".into()),
+							("System".into(), "System".into()),
+						],
+						{
+							let view = view.clone();
+							move |cx: &App| {
+								SharedString::from(
+									view.read(cx).config.theme.to_string(),
+								)
+							}
+						},
+						{
+							let view = view.clone();
+							let theme_cell = theme_cell.clone();
+							move |val: SharedString, cx: &mut App| {
+								let new = match val.as_str() {
+									"Dark" => Theme::Dark,
+									"Light" => Theme::Light,
+									"System" => Theme::System,
+									_ => return,
+								};
+								let mode = match new {
+									Theme::Dark => gpui_component::ThemeMode::Dark,
+									Theme::Light => gpui_component::ThemeMode::Light,
+									Theme::System => gpui_component::ThemeMode::Light,
+								};
+								gpui_component::Theme::change(mode, None, cx);
+								theme_cell.set(new);
+								view.update(cx, |this, cx| {
+									this.config.theme = new;
+									this.save();
+									cx.notify();
+								});
+							}
+						},
+					)
+					.default_value(default_theme),
+				)
+				.description("Change the appearance theme. System follows your desktop setting.")
+				.keywords(["appearance", "mode", "dark", "light"]),
+			])])
+	}
+
+	fn processes_page(
+		view: &Entity<Self>,
+		default_config: &Config,
+	) -> SettingPage {
+		let view = view.clone();
+		let default_vram = SharedString::from(default_config.vram_polling.to_string());
+		let default_filter = SharedString::from(default_config.pid_filter_mode.to_string());
+		let default_resource = SharedString::from(default_config.resource_view_mode.to_string());
+		let default_clear_search = default_config.clear_search_on_pin;
+
+		SettingPage::new("Processes")
+			.default_open(true)
+			.icon(Icon::new(IconName::Cpu))
+			.groups(vec![SettingGroup::new().title("Behaviour").items(vec![
+				SettingItem::new(
+					"VRAM polling",
+					SettingField::dropdown(
+						vec![
+							("Auto".into(), "Auto".into()),
+							("On".into(), "On".into()),
+							("Off".into(), "Off".into()),
+						],
+						{
+							let view = view.clone();
+							move |cx: &App| {
+								SharedString::from(
+									view.read(cx).config.vram_polling.to_string(),
+								)
+							}
+						},
+						{
+							let view = view.clone();
+							move |val: SharedString, cx: &mut App| {
+								view.update(cx, |this, cx| {
+									this.config.vram_polling = match val.as_str() {
+										"Auto" => VramPolling::Auto,
+										"On" => VramPolling::On,
+										_ => VramPolling::Off,
+									};
+									this.save();
+									cx.notify();
+								});
+							}
+						},
+					)
+					.default_value(default_vram),
+				)
+				.description(
+					"Auto detects the GPU at startup and tracks VRAM if available. \
+					 On forces polling. Off disables it completely.",
+				)
+				.keywords(["gpu", "memory", "video"]),
+				SettingItem::new(
+					"Process tree filter",
+					SettingField::dropdown(
+						vec![
+							("Direct only".into(), "Direct only".into()),
+							("All descendants".into(), "All descendants".into()),
+						],
+						{
+							let view = view.clone();
+							move |cx: &App| {
+								SharedString::from(
+									view.read(cx).config.pid_filter_mode.to_string(),
+								)
+							}
+						},
+						{
+							let view = view.clone();
+							move |val: SharedString, cx: &mut App| {
+								view.update(cx, |this, cx| {
+									this.config.pid_filter_mode = match val.as_str() {
+										"Direct only" => PidFilterMode::DirectChildren,
+										_ => PidFilterMode::AllDescendants,
+									};
+									this.save();
+									cx.notify();
+								});
+							}
+						},
+					)
+					.default_value(default_filter),
+				)
+				.description(
+					"When filtering by a process, show only its direct children \
+					 or all descendants.",
+				)
+				.keywords(["children", "pid", "tree"]),
+				SettingItem::new(
+					"Clear search on pin",
+					SettingField::switch(
+						{
+							let view = view.clone();
+							move |cx: &App| {
+								view.read(cx).config.clear_search_on_pin
+							}
+						},
+						{
+							let view = view.clone();
+							move |val: bool, cx: &mut App| {
+								view.update(cx, |this, cx| {
+									this.config.clear_search_on_pin = val;
+									this.save();
+									cx.notify();
+								});
+							}
+						},
+					)
+					.default_value(default_clear_search),
+				)
+				.description(
+					"When double-clicking a process to filter by it, also clear \
+					 the search bar.",
+				)
+				.keywords(["double-click", "pin", "search"]),
+				SettingItem::new(
+					"Resource view",
+					SettingField::dropdown(
+						vec![
+							("Self".into(), "Self".into()),
+							("Cumulative".into(), "Cumulative".into()),
+						],
+						{
+							let view = view.clone();
+							move |cx: &App| {
+								SharedString::from(
+									view.read(cx).config.resource_view_mode.to_string(),
+								)
+							}
+						},
+						{
+							let view = view.clone();
+							move |val: SharedString, cx: &mut App| {
+								view.update(cx, |this, cx| {
+									this.config.resource_view_mode = match val.as_str() {
+										"Self" => ResourceViewMode::SelfOnly,
+										_ => ResourceViewMode::Cumulative,
+									};
+									this.save();
+									cx.notify();
+								});
+							}
+						},
+					)
+					.default_value(default_resource),
+				)
+				.description(
+					"Self shows each process's own usage. Cumulative shows the \
+					 process totalled with all its descendants.",
+				)
+				.keywords(["usage", "total", "cumulative"]),
+			])])
+	}
+
+	fn columns_page(
+		view: &Entity<Self>,
+		default_config: &Config,
+	) -> SettingPage {
+		let view = view.clone();
+		let default_cols = default_config.columns.clone();
+
+		let column_items: Vec<(&str, &str, fn(&ColumnVisibility) -> bool, fn(&mut ColumnVisibility, bool), &[&str])> = vec![
+			("Process ID", "The numeric process identifier.", |c| c.pid, |c, v| c.pid = v, &["pid", "id"]),
+			("User", "The username that owns the process.", |c| c.user, |c, v| c.user = v, &["username", "owner"]),
+			("State", "Process state (Running, Sleeping, Zombie, etc.).", |c| c.state, |c, v| c.state = v, &["status", "zombie"]),
+			("CPU usage", "Percentage of CPU used by the process.", |c| c.cpu, |c, v| c.cpu = v, &["processor", "cpu_usage"]),
+			("Memory usage", "Resident memory used by the process.", |c| c.memory, |c, v| c.memory = v, &["ram", "rss", "mem"]),
+			("VRAM usage", "Dedicated GPU memory used by the process.", |c| c.vram, |c, v| c.vram = v, &["gpu", "video", "graphics"]),
+			("Disk read", "Bytes read from disk.", |c| c.disk_read, |c, v| c.disk_read = v, &["io", "read_bytes"]),
+			("Disk write", "Bytes written to disk.", |c| c.disk_write, |c, v| c.disk_write = v, &["io", "write_bytes"]),
+			("Full command", "The complete command line of the process.", |c| c.command, |c, v| c.command = v, &["cmd", "cmdline", "args"]),
+		];
+
+		let items: Vec<SettingItem> = column_items
+			.into_iter()
+			.map(|(title, desc, getter, setter, keywords)| {
+				let view = view.clone();
+				let default_enabled = getter(&default_cols);
+				let keywords: Vec<&str> = keywords.iter().copied().collect();
+				SettingItem::new(
+					title,
+					SettingField::switch(
+						{
+							let view = view.clone();
+							move |cx: &App| {
+								getter(&view.read(cx).config.columns)
+							}
+						},
+						{
+							let view = view.clone();
+							move |val: bool, cx: &mut App| {
+								view.update(cx, |this, cx| {
+									setter(&mut this.config.columns, val);
+									this.save();
+									cx.notify();
+								});
+							}
+						},
+					)
+					.default_value(default_enabled),
+				)
+				.description(desc)
+				.keywords(keywords)
+			})
+			.collect();
+
+		SettingPage::new("Columns")
+			.default_open(false)
+			.icon(Icon::new(IconName::LayoutDashboard))
+			.group(
+				SettingGroup::new()
+					.title("Process Table Columns")
+					.items(items),
+			)
+	}
+
+	fn about_page() -> SettingPage {
+		SettingPage::new("About")
+			.default_open(false)
+			.icon(Icon::new(IconName::Info))
+			.group(
+				SettingGroup::new().item(SettingItem::render(|_options, _, cx| {
+					gpui_component::v_flex()
+						.gap_3()
+						.w_full()
+						.items_center()
+						.justify_center()
+						.child(
+							Icon::new(IconName::Cpu)
+								.size(px(32.0))
+								.text_color(cx.theme().muted_foreground),
+						)
+						.child(
+							gpui_component::label::Label::new("gpuitop v0.1.0")
+								.text_lg(),
+						)
+						.child(
+							gpui_component::label::Label::new(
+								"Linux-first process manager",
+							)
+							.text_sm()
+							.text_color(cx.theme().muted_foreground),
+						)
+						.child(
+							gpui_component::label::Label::new(
+								"Built with GPUI & gpui-component",
+							)
+							.text_sm()
+							.text_color(cx.theme().muted_foreground),
+						)
+						.into_any()
+				})),
+			)
+	}
 }
 
 impl Render for SettingsTab {
 	fn render(
 		&mut self,
-		_window: &mut Window,
+		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		div()
-			.size_full()
-			.bg(cx.theme().background)
-			.p(px(24.0))
-			.flex()
-			.flex_col()
-			.gap(px(14.0))
-			.id(ElementId::Name("settings-scroll".into()))
-			.overflow_scroll()
-			.child(section("General", cx))
-			.child(self.render_refresh_setting(cx))
-			.child(section("Processes", cx))
-			.child(self.render_vram_setting(cx))
-			.child(self.render_pid_filter_mode_setting(cx))
-			.child(self.render_clear_search_setting(cx))
-			.child(self.render_resource_view_setting(cx))
-			.child(section("Columns", cx))
-			.child(
-				div()
-					.text_size(px(11.0))
-					.text_color(cx.theme().muted_foreground)
-					.child(
-						"Choose which columns appear in the process table. \
-						 Name is always shown.",
-					),
-			)
-			.child(self.render_column_toggles(cx))
-			.child(section("About", cx))
-			.child(
-				div()
-					.text_size(px(12.0))
-					.text_color(cx.theme().muted_foreground)
-					.child(
-						"gpuitop v0.1.0 · Linux-first process manager · \
-						 Built with GPUI",
-					),
-			)
+		Settings::new("gpuitop-settings").pages(self.setting_pages(window, cx))
 	}
-}
-
-impl SettingsTab {
-	fn render_refresh_setting(
-		&self,
-		cx: &mut Context<Self>,
-	) -> impl IntoElement {
-		let intervals: Vec<(u64, &str)> = vec![
-			(500, "0.5s"),
-			(1000, "1.0s"),
-			(1500, "1.5s"),
-			(2000, "2.0s"),
-			(3000, "3.0s"),
-			(5000, "5.0s"),
-		];
-		setting_row(
-			self,
-			"Refresh interval",
-			Some(
-				"How often system data and the process list refresh. Lower \
-				 values update more often but use more CPU.",
-			),
-			cx,
-			move |this, cx| {
-				intervals
-					.iter()
-					.map(|(ms, label)| {
-						let is_selected = this.config.refresh_ms == *ms;
-						let ms = *ms;
-						toggle_button(
-							label,
-							is_selected,
-							cx,
-							move |this, cx| {
-								this.config.refresh_ms = ms;
-								this.refresh_ms
-									.store(ms, Ordering::SeqCst);
-								this.save();
-								cx.notify();
-							},
-						)
-					})
-					.collect()
-			},
-		)
-	}
-
-	fn render_vram_setting(
-		&self,
-		cx: &mut Context<Self>,
-	) -> impl IntoElement {
-		let options: Vec<(VramPolling, &str)> = vec![
-			(VramPolling::Auto, "Auto"),
-			(VramPolling::On, "On"),
-			(VramPolling::Off, "Off"),
-		];
-		setting_row(
-			self,
-			"VRAM polling",
-			Some(
-				"Auto detects the GPU at startup and tracks VRAM if \
-				 available. On forces polling. Off disables it completely.",
-			),
-			cx,
-			move |this, cx| {
-				options
-					.iter()
-					.map(|(v, label)| {
-						let is_selected = this.config.vram_polling == *v;
-						let v = *v;
-						toggle_button(
-							label,
-							is_selected,
-							cx,
-							move |this, cx| {
-								this.config.vram_polling = v;
-								this.save();
-								cx.notify();
-							},
-						)
-					})
-					.collect()
-			},
-		)
-	}
-
-	fn render_pid_filter_mode_setting(
-		&self,
-		cx: &mut Context<Self>,
-	) -> impl IntoElement {
-		let options: Vec<(PidFilterMode, &str)> = vec![
-			(PidFilterMode::DirectChildren, "Direct only"),
-			(PidFilterMode::AllDescendants, "All descendants"),
-		];
-		setting_row(
-			self,
-			"Process tree filter",
-			Some(
-				"When filtering by a process, show only its direct children \
-				 or all descendants.",
-			),
-			cx,
-			move |this, cx| {
-				options
-					.iter()
-					.map(|(m, label)| {
-						let is_selected = this.config.pid_filter_mode == *m;
-						let m = *m;
-						toggle_button(
-							label,
-							is_selected,
-							cx,
-							move |this, cx| {
-								this.config.pid_filter_mode = m;
-								this.save();
-								cx.notify();
-							},
-						)
-					})
-					.collect()
-			},
-		)
-	}
-
-	fn render_clear_search_setting(
-		&self,
-		cx: &mut Context<Self>,
-	) -> impl IntoElement {
-		let options: Vec<(bool, &str)> = vec![(true, "Yes"), (false, "No")];
-		setting_row(
-			self,
-			"Clear search on pin",
-			Some(
-				"When double-clicking a process to filter by it, also clear \
-				 the search bar.",
-			),
-			cx,
-			move |this, cx| {
-				options
-					.iter()
-					.map(|(v, label)| {
-						let is_selected =
-							this.config.clear_search_on_pin == *v;
-						let v = *v;
-						toggle_button(
-							label,
-							is_selected,
-							cx,
-							move |this, cx| {
-								this.config.clear_search_on_pin = v;
-								this.save();
-								cx.notify();
-							},
-						)
-					})
-					.collect()
-			},
-		)
-	}
-
-	fn render_resource_view_setting(
-		&self,
-		cx: &mut Context<Self>,
-	) -> impl IntoElement {
-		let options: Vec<(ResourceViewMode, &str)> = vec![
-			(ResourceViewMode::SelfOnly, "Self"),
-			(ResourceViewMode::Cumulative, "Cumulative"),
-		];
-		setting_row(
-			self,
-			"Resource view",
-			Some(
-				"Self shows each process's own usage. Cumulative shows the \
-				 process totalled with all its descendants.",
-			),
-			cx,
-			move |this, cx| {
-				options
-					.iter()
-					.map(|(m, label)| {
-						let is_selected =
-							this.config.resource_view_mode == *m;
-						let m = *m;
-						toggle_button(
-							label,
-							is_selected,
-							cx,
-							move |this, cx| {
-								this.config.resource_view_mode = m;
-								this.save();
-								cx.notify();
-							},
-						)
-					})
-					.collect()
-			},
-		)
-	}
-
-	fn render_column_toggles(
-		&self,
-		cx: &mut Context<Self>,
-	) -> impl IntoElement {
-		let columns: Vec<(&str, bool, bool)> = vec![
-			("Name", self.config.columns.name, true),
-			("Process ID", self.config.columns.pid, false),
-			("User", self.config.columns.user, false),
-			("State", self.config.columns.state, false),
-			("CPU usage", self.config.columns.cpu, false),
-			("Memory usage", self.config.columns.memory, false),
-			("VRAM usage", self.config.columns.vram, false),
-			("Disk read", self.config.columns.disk_read, false),
-			("Disk write", self.config.columns.disk_write, false),
-			("Full command", self.config.columns.command, false),
-		];
-
-		div().w_full().flex().flex_col().gap(px(2.0)).children(
-			columns.into_iter().map(|(name, visible, locked)| {
-				let name_owned = name.to_string();
-				div()
-					.w_full()
-					.flex()
-					.flex_row()
-					.items_center()
-					.justify_between()
-					.py(px(4.0))
-					.child(
-						div()
-							.text_size(px(12.0))
-							.text_color(cx.theme().foreground)
-							.child(name_owned.clone()),
-					)
-					.child(if locked {
-						div()
-							.text_size(px(10.0))
-							.text_color(
-								cx.theme().muted_foreground.opacity(0.5),
-							)
-							.child("required")
-							.into_any_element()
-					} else {
-						let enabled = visible;
-						let name_str = name_owned.clone();
-						div()
-							.id(ElementId::Name(
-								format!("col-{name_str}").into(),
-							))
-							.cursor(CursorStyle::PointingHand)
-							.child(
-								div()
-									.px(px(12.0))
-									.py(px(4.0))
-									.rounded(px(4.0))
-									.text_size(px(11.0))
-									.bg(if enabled {
-										cx.theme().primary
-									} else {
-										cx.theme().muted.opacity(0.12)
-									})
-									.text_color(if enabled {
-										cx.theme().foreground
-									} else {
-										cx.theme().muted_foreground
-									})
-									.child(if enabled {
-										"ON"
-									} else {
-										"OFF"
-									}),
-							)
-							.on_click(cx.listener(move |this, _, _, cx| {
-								let cols = &mut this.config.columns;
-								match name_str.as_str() {
-									"Process ID" => cols.pid = !cols.pid,
-									"User" => cols.user = !cols.user,
-									"State" => cols.state = !cols.state,
-									"CPU usage" => cols.cpu = !cols.cpu,
-									"Memory usage" => {
-										cols.memory = !cols.memory
-									}
-									"VRAM usage" => cols.vram = !cols.vram,
-									"Disk read" => {
-										cols.disk_read = !cols.disk_read
-									}
-									"Disk write" => {
-										cols.disk_write = !cols.disk_write
-									}
-									"Full command" => {
-										cols.command = !cols.command
-									}
-									_ => {}
-								}
-								this.save();
-								cx.notify();
-							}))
-							.into_any_element()
-					})
-			}),
-		)
-	}
-}
-
-fn section(title: &str, cx: &mut Context<SettingsTab>) -> impl IntoElement {
-	let t = title.to_string();
-	div()
-		.w_full()
-		.pt(px(8.0))
-		.pb(px(4.0))
-		.border_b_1()
-		.border_color(cx.theme().border)
-		.child(
-			div()
-				.text_size(px(13.0))
-				.font_weight(FontWeight::MEDIUM)
-				.text_color(cx.theme().primary)
-				.child(t),
-		)
-}
-
-fn setting_row(
-	this: &SettingsTab,
-	label: &str,
-	desc: Option<&str>,
-	cx: &mut Context<SettingsTab>,
-	buttons: impl FnOnce(
-		&SettingsTab,
-		&mut Context<SettingsTab>,
-	) -> Vec<AnyElement>,
-) -> impl IntoElement {
-	let label_owned = label.to_string();
-	let desc_owned = desc.map(|d| d.to_string());
-	div()
-		.w_full()
-		.flex()
-		.flex_col()
-		.gap(px(6.0))
-		.py(px(4.0))
-		.child(
-			div()
-				.flex()
-				.flex_col()
-				.gap(px(2.0))
-				.child(
-					div()
-						.text_size(px(12.0))
-						.text_color(cx.theme().foreground)
-						.child(label_owned),
-				)
-				.when(desc_owned.is_some(), |d| {
-					d.child(
-						div()
-							.text_size(px(11.0))
-							.text_color(cx.theme().muted_foreground)
-							.child(desc_owned.unwrap()),
-					)
-				}),
-		)
-		.child(
-			div()
-				.flex()
-				.flex_row()
-				.flex_wrap()
-				.gap(px(4.0))
-				.children(buttons(this, cx)),
-		)
-}
-
-fn toggle_button(
-	label: &str,
-	selected: bool,
-	cx: &mut Context<SettingsTab>,
-	on_click: impl Fn(&mut SettingsTab, &mut Context<SettingsTab>) + 'static,
-) -> AnyElement {
-	let label_str = label.to_string();
-	div()
-		.id(ElementId::Name(format!("btn-{label_str}").into()))
-		.px(px(10.0))
-		.py(px(5.0))
-		.text_size(px(12.0))
-		.rounded(px(4.0))
-		.bg(if selected {
-			cx.theme().primary
-		} else {
-			cx.theme().muted.opacity(0.12)
-		})
-		.text_color(if selected {
-			cx.theme().foreground
-		} else {
-			cx.theme().muted_foreground
-		})
-		.cursor(CursorStyle::PointingHand)
-		.child(label_str)
-		.on_click(cx.listener(move |this, _, _, cx| on_click(this, cx)))
-		.into_any_element()
 }
