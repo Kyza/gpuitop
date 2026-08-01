@@ -1,4 +1,5 @@
 use crate::model::{Filter, ProcessInfo};
+use crate::platform::system::InitSystem;
 use gpui::*;
 use gpui_component::{ActiveTheme, IconName};
 
@@ -64,7 +65,11 @@ pub enum TagType {
 	Electron,
 }
 
-pub fn tag_icons(proc: &ProcessInfo, cx: &App) -> Vec<(IconName, Hsla)> {
+pub fn tag_icons(
+	proc: &ProcessInfo,
+	init_system: InitSystem,
+	cx: &App,
+) -> Vec<(IconName, Hsla)> {
 	let dark = theme_dark_or_light(cx);
 	let mut tags = Vec::new();
 	if proc.is_gui {
@@ -76,7 +81,18 @@ pub fn tag_icons(proc: &ProcessInfo, cx: &App) -> Vec<(IconName, Hsla)> {
 	if !proc.is_kthread && !proc.is_owned_by_current_user && proc.ppid != 1 {
 		tags.push((IconName::Settings2, tag_color(TagType::System, dark)));
 	}
-	if proc.ppid == 1 {
+	let is_svc = match init_system {
+		InitSystem::Systemd => {
+			if proc.cgroup.is_empty() {
+				proc.ppid == 1
+			} else {
+				!proc.cgroup.contains("/user.slice/")
+					&& proc.cgroup.contains(".service")
+			}
+		}
+		_ => proc.ppid == 1,
+	};
+	if is_svc {
 		tags.push((
 			IconName::SquareTerminal,
 			tag_color(TagType::Services, dark),

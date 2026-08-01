@@ -114,7 +114,7 @@ impl TableDelegate for ProcessTableDelegate {
 
 		match col_ix {
 			0 => {
-				let tags = tag_icons(proc, cx);
+				let tags = tag_icons(proc, self.init_system, cx);
 				let is_pinned = self.pinned_pid() == Some(proc.pid);
 				div()
 					.flex()
