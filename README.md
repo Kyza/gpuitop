@@ -66,9 +66,25 @@ sudo pacman -S base-devel cmake pkgconf \
 cargo install --git https://github.com/Kyza/gpuitop.git
 ```
 
-## Platform Support
+## Development
 
-Linux only. The codebase is structured with platform abstraction (`src/platform/`) so the process collector, GPU queries, and window picker can be swapped per OS. Help with Windows support is welcome.
+The codebase is structured with platform abstraction (`src/platform/`) so the process collector, GPU queries, and window picker can be swapped per OS. Linux only at the moment. Help with Windows support is welcome.
+
+### Profiling
+
+Key functions are instrumented with [hotpath](https://crates.io/crates/hotpath). Run with `--profile` to enable:
+
+```bash
+gpuitop --profile
+# Metrics server: http://127.0.0.1:2501
+# Live TUI: hotpath console
+```
+
+Cargo features for finer granularity:
+
+```bash
+cargo run --features hotpath-cpu,hotpath-alloc
+```
 
 ## Config
 
