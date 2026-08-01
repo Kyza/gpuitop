@@ -316,7 +316,7 @@ pub fn state_label(c: char) -> &'static str {
 		'D' => "Disk Sleep",
 		'Z' => "Zombie",
 		'T' => "Stopped",
-		't' => "Stopped",
+		't' => "Tracing Stop",
 		'I' => "Idle",
 		'X' => "Dead",
 		_ => "Other",

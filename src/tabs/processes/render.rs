@@ -6,12 +6,13 @@ use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
 	breadcrumb::{Breadcrumb, BreadcrumbItem},
-	button::{Button, ButtonVariants},
+	button::{Button, ButtonGroup, ButtonVariants, Toggle, ToggleGroup},
 	input::{Input, InputEvent, InputState},
 	menu::{DropdownMenu, PopupMenuItem},
 	skeleton::Skeleton,
+	spinner::Spinner,
 	table::{DataTable, TableEvent, TableState},
-	ActiveTheme, Disableable, Icon, IconName, Sizable,
+	ActiveTheme, Icon, IconName, Sizable,
 };
 
 impl ProcessesTab {
@@ -62,90 +63,227 @@ impl ProcessesTab {
 					.flex_row()
 					.gap(px(8.0))
 					.items_center()
-					.child(
+					.child({
+						let pick_result = self.pick_result.clone();
+						let is_picking = self.is_picking.clone();
+						let picking = self
+							.is_picking
+							.load(std::sync::atomic::Ordering::Relaxed);
+						let has_text = self.view_state.borrow().search.len() > 0;
+						let input_state = self.input_state.as_ref().unwrap().clone();
+						let view_state = self.view_state.clone();
 						Input::new(self.input_state.as_ref().unwrap())
-							.small()
 							.w_full()
 							.prefix(
 								Icon::new(IconName::Search)
 									.size(px(12.0))
 									.text_color(cx.theme().muted_foreground),
 							)
-							.when(
-								self.view_state.borrow().search.len() > 0,
-								|input| {
-									let view_state = self.view_state.clone();
-									let input_state = self
-										.input_state
-										.as_ref()
-										.unwrap()
-										.clone();
-									input.suffix(
-										Button::new("clear-search")
-											.ghost()
-											.icon(
-												Icon::new(IconName::Close)
-													.size(px(14.0))
-													.text_color(
-														cx.theme()
-															.muted_foreground,
-													),
-											)
-											.small()
-											.on_click(cx.listener(
-												move |_, _, window, cx| {
-													ViewState::mutate(
-														&view_state,
-														|s| {
-															s.search.clear();
-														},
+							.suffix(
+								div()
+									.flex()
+									.flex_row()
+									.items_center()
+									.child({
+										let r = pick_result.clone();
+										let p = is_picking.clone();
+										if picking {
+											Spinner::new()
+												.xsmall()
+												.into_any_element()
+										} else {
+											Button::new("pick-window")
+												.ghost()
+												.icon(
+													Icon::new(IconName::Inspector)
+														.size(px(12.0))
+														.text_color(cx.theme().muted_foreground),
+												)
+												.small()
+												.tooltip("Click a window to find its process.")
+												.on_click(cx.listener(move |_, _, _, cx| {
+													p.store(
+														true,
+														std::sync::atomic::Ordering::Relaxed,
 													);
-													input_state.update(
-														cx,
-														|state, cx| {
-															state.set_value(
-																String::new(),
-																window,
-																cx,
+													let r2 = r.clone();
+													let p2 = p.clone();
+													std::thread::spawn(move || {
+														for _ in 0..50 {
+															std::thread::sleep(
+																std::time::Duration::from_millis(200),
 															);
-														},
-													);
+															if let Some(id) = crate::platform::get_focused_window_app_id() {
+																*r2.lock().unwrap() = Some(id);
+																break;
+															}
+														}
+														p2.store(
+															false,
+															std::sync::atomic::Ordering::Relaxed,
+														);
+													});
 													cx.notify();
-												},
-											)),
-									)
-								},
-							),
-					)
-					.child(
-						Button::new("and-or")
-							.ghost()
-							.label(mode.to_string())
-							.small()
-							.on_click(cx.listener(|this, _, _, cx| {
-								this.toggle_filter_mode(cx)
-							})),
-					)
+												}))
+												.into_any_element()
+										}
+									})
+									.when(has_text, |el| {
+										el.child(
+											Button::new("clear-search")
+												.ghost()
+												.icon(
+													Icon::new(IconName::Close)
+														.size(px(14.0))
+														.text_color(cx.theme().muted_foreground),
+												)
+												.small()
+												.on_click(cx.listener(move |_, _, window, cx| {
+													ViewState::mutate(&view_state, |s| {
+														s.search.clear();
+													});
+													input_state.update(cx, |state, cx| {
+														state.set_value(String::new(), window, cx);
+													});
+													cx.notify();
+												})),
+										)
+									}),
+							)
+					}),
+			)
+			.child(
+				div()
+					.flex()
+					.flex_row()
+					.flex_wrap()
+					.gap(px(4.0))
+					.items_center()
 					.child({
-						let view_label = self
+						let active: Vec<bool> = type_filters
+							.iter()
+							.map(|f| self.view_state.borrow().filters.contains(f))
+							.collect();
+						let mut group = ToggleGroup::new("type-filters")
+							.small();
+						for (i, f) in type_filters.iter().enumerate() {
+							let icon_name = super::theme::filter_icon(f);
+							let tooltip = match f {
+								Filter::Gui => "Processes with a graphical window.",
+								Filter::User => "Processes owned by you.",
+								Filter::System => "System processes not owned by any user.",
+								Filter::Services => "Processes managed by the init system.",
+								Filter::Kernel => "Kernel threads.",
+								Filter::Parent => "Processes that have child processes.",
+								Filter::Vram => "Processes using GPU video memory.",
+								Filter::Electron => "Electron-based desktop applications.",
+								_ => "",
+							};
+							let id = match f {
+								Filter::Gui => "gui",
+								Filter::User => "user",
+								Filter::System => "system",
+								Filter::Services => "services",
+								Filter::Kernel => "kernel",
+								Filter::Parent => "parent",
+								Filter::Vram => "vram",
+								Filter::Electron => "electron",
+								_ => "filter",
+							};
+							let color = super::theme::filter_color(f, cx);
+							let mut t = Toggle::new(id)
+								.checked(active[i])
+								.tooltip(tooltip);
+							if let Some(ic) = icon_name {
+								t = t.icon(
+									Icon::new(ic)
+										.size(px(12.0))
+										.text_color(color),
+								);
+							}
+							group = group.child(t);
+						}
+						group.on_click(cx.listener(move |this, checkeds: &Vec<bool>, _, cx| {
+							let prev = this.view_state.borrow().filters.clone();
+							ViewState::mutate(&this.view_state, |s| {
+								for (i, f) in type_filters.iter().enumerate() {
+									let now = checkeds.get(i).copied().unwrap_or(false);
+									let was = prev.iter().any(|pf| pf == f);
+									if now != was {
+										if now {
+											s.filters.push(f.clone());
+										} else {
+											s.filters.retain(|pf| pf != f);
+										}
+									}
+								}
+							});
+							cx.notify();
+						}))
+					})
+					.children({
+						let active_states: Vec<_> = self
 							.view_state
 							.borrow()
-							.resource_view_mode
-							.to_string();
-						Button::new("resource-view")
-							.ghost()
-							.label(view_label)
-							.small()
-							.on_click(cx.listener(|this, _, _, cx| {
-								this.toggle_resource_view_mode(cx)
-							}))
-					})
+							.filters
+							.iter()
+							.filter(|f| matches!(f, Filter::ProcessState(_)))
+							.cloned()
+							.collect();
+						let chips: Vec<AnyElement> = active_states
+							.iter()
+							.map(|f| {
+								render_filter_chip(
+									f,
+									&f.label(&[]),
+									true,
+									true,
+									cx,
+								)
+							})
+							.collect();
+						chips
+					}),
+			)
+			.child(
+				div()
+					.flex()
+					.flex_row()
+					.gap(px(4.0))
+					.child(
+						ButtonGroup::new("controls")
+							.outline()
+							.child(
+								Button::new("and-or")
+									.label(mode.to_string())
+									.small()
+									.tooltip("Toggle between AND and OR filter logic.")
+									.on_click(cx.listener(|this, _, _, cx| {
+										this.toggle_filter_mode(cx)
+									})),
+							)
+							.child({
+								let view_label = self
+									.view_state
+									.borrow()
+									.resource_view_mode
+									.to_string();
+								Button::new("resource-view")
+									.label(view_label)
+									.small()
+									.tooltip("Toggle between per-process and cumulative resource usage.")
+									.on_click(cx.listener(|this, _, _, cx| {
+										this.toggle_resource_view_mode(cx)
+									}))
+							}),
+					)
 					.child({
 						let view_state = self.view_state.clone();
 						Button::new("state-filter")
 							.ghost()
 							.label("State")
 							.small()
+							.tooltip("Filter processes by state.")
 							.dropdown_menu(move |menu, _window, _cx| {
 								let vs = view_state.borrow();
 								let active: Vec<char> = vs
@@ -187,94 +325,16 @@ impl ProcessesTab {
 									vs.clone(),
 								))
 								.item(get_state_item(
+									't',
+									&active,
+									vs.clone(),
+								))
+								.item(get_state_item(
 									'I',
 									&active,
 									vs.clone(),
 								))
 							})
-					})
-					.child({
-						let pick_result = self.pick_result.clone();
-						let is_picking = self.is_picking.clone();
-						let picking = self
-							.is_picking
-							.load(std::sync::atomic::Ordering::Relaxed);
-						Button::new("pick-window")
-							.ghost()
-							.label(if picking {
-								"Picking…"
-							} else {
-								"Pick"
-							})
-							.small()
-							.disabled(picking)
-							.on_click(cx.listener(move |_this, _, _, cx| {
-								is_picking.store(
-									true,
-									std::sync::atomic::Ordering::Relaxed,
-								);
-								let r = pick_result.clone();
-								let p = is_picking.clone();
-								std::thread::spawn(move || {
-									for _ in 0..50 {
-										std::thread::sleep(
-											std::time::Duration::from_millis(
-												200,
-											),
-										);
-										if let Some(id) = crate::platform::get_focused_window_app_id() {
-											*r.lock().unwrap() = Some(id);
-											break;
-										}
-									}
-									p.store(
-										false,
-										std::sync::atomic::Ordering::Relaxed,
-									);
-								});
-								cx.notify();
-							}))
-					}),
-			)
-			.child(
-				div()
-					.flex()
-					.flex_row()
-					.flex_wrap()
-					.gap(px(4.0))
-					.children(type_filters.iter().map(|f| {
-						let is_active =
-							self.view_state.borrow().filters.contains(f);
-						render_filter_chip(
-							f,
-							&f.label(&[]),
-							is_active,
-							true,
-							cx,
-						)
-					}))
-					.children({
-						let active_states: Vec<_> = self
-							.view_state
-							.borrow()
-							.filters
-							.iter()
-							.filter(|f| matches!(f, Filter::ProcessState(_)))
-							.cloned()
-							.collect();
-						let chips: Vec<AnyElement> = active_states
-							.iter()
-							.map(|f| {
-								render_filter_chip(
-									f,
-									&f.label(&[]),
-									true,
-									true,
-									cx,
-								)
-							})
-							.collect();
-						chips
 					}),
 			)
 			.when(!pid_filters.is_empty(), |el| {

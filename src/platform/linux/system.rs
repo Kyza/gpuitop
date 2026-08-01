@@ -91,7 +91,7 @@ pub fn pids_of_runsv(processes: &[ProcessInfo]) -> HashSet<i32> {
 		.collect()
 }
 
-fn pids_of_supervise_daemon(processes: &[ProcessInfo]) -> HashSet<i32> {
+pub(crate) fn pids_of_supervise_daemon(processes: &[ProcessInfo]) -> HashSet<i32> {
 	processes
 		.iter()
 		.filter(|p| p.name == "supervise-daemon")

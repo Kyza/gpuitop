@@ -15,19 +15,37 @@ pub fn render_filter_chip(
 	is_type: bool,
 	cx: &mut Context<ProcessesTab>,
 ) -> AnyElement {
+	let tooltip = match filter {
+		Filter::Gui => Some("Processes with a graphical window."),
+		Filter::User => Some("Processes owned by you."),
+		Filter::System => Some("System processes not owned by any user."),
+		Filter::Services => Some("Processes managed by the init system."),
+		Filter::Kernel => Some("Kernel threads."),
+		Filter::Parent => Some("Processes that have child processes."),
+		Filter::Vram => Some("Processes using GPU video memory."),
+		Filter::Electron => Some("Electron-based desktop applications."),
+		_ => None,
+	};
+
 	if is_active && is_type {
 		let f = filter.clone();
 		let icon = filter_icon(filter);
 		let icon_color = filter_color(filter, cx);
 		let label_str = label.to_string();
-		div()
+		let mut el = div()
 			.id(ElementId::Name(format!("filt-{label}").into()))
 			.cursor(CursorStyle::PointingHand)
 			.on_click(cx.listener(move |this, _, _, cx| {
 				this.toggle_filter(f.clone(), cx);
-			}))
-			.child(
-				Tag::info().child(
+			}));
+		if let Some(t) = tooltip {
+			el = el.tooltip(move |window, cx| {
+				gpui_component::tooltip::Tooltip::new(t)
+					.build(window, cx)
+			});
+		}
+		el.child(
+				Tag::info().outline().child(
 					div()
 						.flex()
 						.flex_row()
@@ -76,13 +94,19 @@ pub fn render_filter_chip(
 		let icon = filter_icon(filter);
 		let icon_color = filter_color(filter, cx);
 		let label_str = label.to_string();
-		div()
+		let mut el = div()
 			.id(ElementId::Name(format!("filt-{label}").into()))
 			.cursor(CursorStyle::PointingHand)
 			.on_click(cx.listener(move |this, _, _, cx| {
 				this.toggle_filter(f.clone(), cx);
-			}))
-			.child(
+			}));
+		if let Some(t) = tooltip {
+			el = el.tooltip(move |window, cx| {
+				gpui_component::tooltip::Tooltip::new(t)
+					.build(window, cx)
+			});
+		}
+		el.child(
 				Tag::new().child(
 					div()
 						.flex()

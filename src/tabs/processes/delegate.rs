@@ -2,10 +2,9 @@ use super::fuzzy::{best_fuzzy_score, fuzzy_match};
 use super::state::{CumulativeResources, ViewState};
 use crate::config::ProcessesConfig;
 use crate::model::*;
-use crate::platform::system::{is_service, pids_of_runsv, InitSystem};
+use crate::platform::system::{is_service, pids_of_runsv, pids_of_supervise_daemon, InitSystem};
 use gpui_component::table::ColumnSort;
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::rc::Rc;
 
 pub struct ProcessTableDelegate {
@@ -406,12 +405,7 @@ impl ProcessTableDelegate {
 			Filter::Services => {
 				let procs = self.snapshot_cell.borrow();
 				let runsv = pids_of_runsv(&procs.processes);
-				let supervise: HashSet<i32> = procs
-					.processes
-					.iter()
-					.filter(|p| p.name == "supervise-daemon")
-					.map(|p| p.pid)
-					.collect();
+				let supervise = pids_of_supervise_daemon(&procs.processes);
 				is_service(proc, self.init_system, &runsv, &supervise)
 			}
 			Filter::Kernel => proc.is_kthread,
