@@ -4,7 +4,10 @@ use crate::data::settings;
 use crate::ui::settings::SettingsTab;
 use gpui::*;
 use gpui_component::{
-	setting::{SettingField, SettingGroup, SettingItem, SettingPage},
+	setting::{
+		NumberFieldOptions, SettingField, SettingGroup, SettingItem,
+		SettingPage,
+	},
 	Icon, IconName,
 };
 use std::cell::Cell;
@@ -138,5 +141,67 @@ pub fn general_page(
 				 setting.",
 			)
 			.keywords(["appearance", "mode", "dark", "light"]),
+			SettingItem::new(
+				"Window Width",
+				SettingField::number_input(
+					NumberFieldOptions {
+						min: 640.0,
+						max: 7680.0,
+						step: 10.0,
+					},
+					{
+						let view = view.clone();
+						move |cx: &App| {
+							view.read(cx).config.window_size.0 as f64
+						}
+					},
+					{
+						let view = view.clone();
+						move |val: f64, cx: &mut App| {
+							view.update(cx, |this, cx| {
+								settings::set_window_width(
+									&mut this.config,
+									val,
+								);
+								this.save();
+								cx.notify();
+							});
+						}
+					},
+				)
+				.default_value(1100),
+			)
+			.keywords(["size", "width"]),
+			SettingItem::new(
+				"Window Height",
+				SettingField::number_input(
+					NumberFieldOptions {
+						min: 400.0,
+						max: 4320.0,
+						step: 10.0,
+					},
+					{
+						let view = view.clone();
+						move |cx: &App| {
+							view.read(cx).config.window_size.1 as f64
+						}
+					},
+					{
+						let view = view.clone();
+						move |val: f64, cx: &mut App| {
+							view.update(cx, |this, cx| {
+								settings::set_window_height(
+									&mut this.config,
+									val,
+								);
+								this.save();
+								cx.notify();
+							});
+						}
+					},
+				)
+				.default_value(700),
+			)
+			.keywords(["size", "height"]),
 		])])
 }

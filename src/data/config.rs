@@ -158,9 +158,7 @@ pub struct Config {
 	#[serde(default)]
 	pub network_interfaces: Vec<String>,
 	#[serde(default)]
-	pub window_width: u32,
-	#[serde(default)]
-	pub window_height: u32,
+	pub window_size: (u32, u32),
 }
 
 impl Default for Config {
@@ -171,8 +169,7 @@ impl Default for Config {
 			default_grouping: ProcessGrouping::Auto,
 			disk_devices: Vec::new(),
 			network_interfaces: Vec::new(),
-			window_width: 1100,
-			window_height: 700,
+			window_size: (1100, 700),
 		}
 	}
 }
@@ -351,8 +348,7 @@ mod tests {
 	#[test]
 	fn test_config_default() {
 		let cfg = Config::default();
-		assert_eq!(cfg.window_width, 1100);
-		assert_eq!(cfg.window_height, 700);
+		assert_eq!(cfg.window_size, (1100, 700));
 		assert_eq!(cfg.general, GeneralConfig::default());
 		assert_eq!(cfg.processes, ProcessesConfig::default());
 		assert!(cfg.disk_devices.is_empty());
@@ -489,8 +485,7 @@ mod tests {
 	fn test_config_roundtrip() {
 		roundtrip(&Config::default());
 		let mut cfg = Config::default();
-		cfg.window_width = 1920;
-		cfg.window_height = 1080;
+		cfg.window_size = (1920, 1080);
 		cfg.disk_devices = vec!["sda".into(), "nvme0n1".into()];
 		cfg.network_interfaces = vec!["eth0".into()];
 		roundtrip(&cfg);
@@ -525,20 +520,19 @@ mod tests {
 	fn test_apply_override_multiple_sections() {
 		let mut cfg = Config::default();
 		cfg.apply_override(
-			r#"(general: (interface: (refresh_ms: 500, theme: Dark)), window_width: 1920)"#,
+			r#"(general: (interface: (refresh_ms: 500, theme: Dark)), window_size: (1920, 1080))"#,
 		)
 		.unwrap();
 		assert_eq!(cfg.general.interface.refresh_ms, 500);
-		assert_eq!(cfg.window_width, 1920);
-		assert_eq!(cfg.window_height, 700);
+		assert_eq!(cfg.window_size, (1920, 1080));
 	}
 
 	#[test]
 	fn test_apply_override_last_wins() {
 		let mut cfg = Config::default();
-		cfg.apply_override("(window_width: 800)").unwrap();
-		cfg.apply_override("(window_width: 1024)").unwrap();
-		assert_eq!(cfg.window_width, 1024);
+		cfg.apply_override("(window_size: (800, 600))").unwrap();
+		cfg.apply_override("(window_size: (1024, 768))").unwrap();
+		assert_eq!(cfg.window_size, (1024, 768));
 	}
 
 	#[test]
@@ -550,7 +544,7 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(cfg.processes.behaviour.vram_polling, VramPolling::Off);
-		assert_eq!(cfg.window_width, 1100);
+		assert_eq!(cfg.window_size, (1100, 700));
 	}
 
 	#[test]

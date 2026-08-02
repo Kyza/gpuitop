@@ -99,6 +99,14 @@ pub fn swap_columns(config: &mut Config, a: usize, b: usize) {
 	}
 }
 
+pub fn set_window_width(config: &mut Config, val: f64) {
+	config.window_size.0 = val as u32;
+}
+
+pub fn set_window_height(config: &mut Config, val: f64) {
+	config.window_size.1 = val as u32;
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

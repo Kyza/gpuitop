@@ -33,8 +33,9 @@ fn main() {
 	let search = cli.search.clone();
 	let override_view = cli.override_view();
 
-	let win_width = config.window_width as f32;
-	let win_height = config.window_height as f32;
+	let (win_width, win_height) = config.window_size;
+	let win_width = win_width as f32;
+	let win_height = win_height as f32;
 
 	let app = gpui_platform::application().with_assets(
 		layered::LayeredAssets::new()
