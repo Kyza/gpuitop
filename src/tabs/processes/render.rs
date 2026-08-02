@@ -15,7 +15,7 @@ use gpui_component::{
 	skeleton::Skeleton,
 	spinner::Spinner,
 	table::{DataTable, TableEvent, TableState},
-	ActiveTheme, Icon, IconName, Sizable,
+	ActiveTheme, Disableable, Icon, IconName, Sizable,
 };
 
 impl ProcessesTab {
@@ -116,46 +116,46 @@ impl ProcessesTab {
 									.child({
 										let r = pick_result.clone();
 										let p = is_picking.clone();
-										if picking {
-											Spinner::new()
-												.xsmall()
-												.into_any_element()
-										} else {
-											Button::new("pick-window")
-												.ghost()
-												.icon(
+										Button::new("pick-window")
+											.ghost()
+											.when(picking, |this| {
+												this.icon(Spinner::new().xsmall())
+											})
+											.when(!picking, |this| {
+												this.icon(
 													Icon::new(IconName::Inspector)
 														.size(px(12.0))
 														.text_color(cx.theme().muted_foreground),
 												)
-												.small()
-												.tooltip("Click a window to find its process.")
-												.on_click(cx.listener(move |_, _, _, cx| {
-													p.store(
-														true,
+											})
+											.disabled(picking)
+											.small()
+											.tooltip("Click a window to find its process.")
+											.on_click(cx.listener(move |_, _, _, cx| {
+												p.store(
+													true,
+													std::sync::atomic::Ordering::Relaxed,
+												);
+												let r2 = r.clone();
+												let p2 = p.clone();
+												std::thread::spawn(move || {
+													for _ in 0..50 {
+														std::thread::sleep(
+															std::time::Duration::from_millis(200),
+														);
+														if let Some(id) = crate::platform::get_focused_window_app_id() {
+															*r2.lock().unwrap() = Some(id);
+															break;
+														}
+													}
+													p2.store(
+														false,
 														std::sync::atomic::Ordering::Relaxed,
 													);
-													let r2 = r.clone();
-													let p2 = p.clone();
-													std::thread::spawn(move || {
-														for _ in 0..50 {
-															std::thread::sleep(
-																std::time::Duration::from_millis(200),
-															);
-															if let Some(id) = crate::platform::get_focused_window_app_id() {
-																*r2.lock().unwrap() = Some(id);
-																break;
-															}
-														}
-														p2.store(
-															false,
-															std::sync::atomic::Ordering::Relaxed,
-														);
-													});
-													cx.notify();
-												}))
-												.into_any_element()
-										}
+												});
+												cx.notify();
+											}))
+											.into_any_element()
 									})
 									.when(has_text, |el| {
 										el.child(
