@@ -1,11 +1,8 @@
 #![recursion_limit = "512"]
-mod app;
-mod config;
-mod model;
-mod platform;
-mod tabs;
-mod widgets;
+mod data;
+mod ui;
 
+use crate::ui::app::app_view;
 use gpui::*;
 use gpui_component::Root;
 
@@ -39,9 +36,9 @@ fn main() {
 				..Default::default()
 			},
 			|window, cx| {
-				let view = cx.new(|cx| app::App::new(cx));
+				let view = cx.new(|cx| app_view::App::new(cx));
 				let theme = view.read(cx).theme.get();
-				app::apply_theme(theme, window, cx);
+				app_view::apply_theme(theme, window, cx);
 				cx.new(|cx| Root::new(view, window, cx))
 			},
 		)
