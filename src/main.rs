@@ -3,6 +3,7 @@ mod data;
 mod ui;
 
 use crate::ui::app::app_view;
+use crate::ui::assets::{layered, lucide};
 use gpui::*;
 use gpui_component::Root;
 
@@ -10,8 +11,11 @@ pub const GPUITOP_APP_ID: &str = "com.github.kyza.gpuitop";
 
 #[hotpath::main]
 fn main() {
-	let app = gpui_platform::application()
-		.with_assets(gpui_component_assets::Assets);
+	let app = gpui_platform::application().with_assets(
+		layered::LayeredAssets::new()
+			.with(gpui_component_assets::Assets)
+			.with(lucide::LucideAssets),
+	);
 	app.run(move |cx: &mut App| {
 		gpui_component::init(cx);
 		gpui_component::Theme::change(

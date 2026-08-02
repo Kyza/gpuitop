@@ -1,5 +1,6 @@
 use crate::data::model::*;
 use crate::data::state::ViewState;
+use crate::ui::assets::lucide::LucideIcon;
 use crate::ui::processes::ProcessesTab;
 use gpui::prelude::*;
 use gpui::*;
@@ -43,11 +44,10 @@ impl ProcessesTab {
 					.rounded(px(2.0))
 					.hover(|s| s.bg(cx.theme().muted.opacity(0.15)))
 					.child(
-						gpui_component::Icon::new(
-							gpui_component::IconName::Close,
-						)
-						.size(px(12.0))
-						.text_color(cx.theme().muted_foreground),
+						LucideIcon::Close
+							.icon()
+							.size(px(12.0))
+							.text_color(cx.theme().muted_foreground),
 					)
 					.on_click(cx.listener(move |this, _, _, cx| {
 						ViewState::mutate(&this.view_state, |s| {

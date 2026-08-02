@@ -1,5 +1,6 @@
 use crate::data::model::*;
 use crate::data::state::ViewState;
+use crate::ui::assets::lucide::LucideIcon;
 use crate::ui::processes::ProcessesTab;
 use gpui::prelude::*;
 use gpui::*;
@@ -70,11 +71,12 @@ impl ProcessesTab {
 							.outline()
 							.checked(self.show_filters)
 							.icon(
-								gpui_component::Icon::new(
-									gpui_component::IconName::Menu,
-								)
-								.size(px(12.0))
-								.text_color(cx.theme().muted_foreground),
+								LucideIcon::Menu.icon()
+									.size(px(16.0))
+									.text_color(
+										cx.theme()
+											.muted_foreground,
+									),
 							)
 							.tooltip(if self.show_filters {
 								"Hide filter bar."
@@ -104,11 +106,12 @@ impl ProcessesTab {
 						)
 						.w_full()
 						.prefix(
-							gpui_component::Icon::new(
-								gpui_component::IconName::Search,
-							)
-							.size(px(12.0))
-							.text_color(cx.theme().muted_foreground),
+							LucideIcon::Search
+								.icon()
+								.size(px(12.0))
+								.text_color(
+									cx.theme().muted_foreground,
+								),
 						)
 						.suffix(
 							div()
@@ -126,9 +129,12 @@ impl ProcessesTab {
 									})
 									.when(!picking, |this| {
 										this.icon(
-												gpui_component::Icon::new(gpui_component::IconName::Inspector)
+												LucideIcon::Crosshair.icon()
 													.size(px(12.0))
-													.text_color(cx.theme().muted_foreground),
+													.text_color(
+														cx.theme()
+															.muted_foreground,
+													),
 											)
 									})
 									.disabled(picking)
@@ -169,9 +175,12 @@ impl ProcessesTab {
 										gpui_component::button::Button::new("clear-search")
 											.ghost()
 											.icon(
-												gpui_component::Icon::new(gpui_component::IconName::Close)
+												LucideIcon::Close.icon()
 													.size(px(14.0))
-													.text_color(cx.theme().muted_foreground),
+													.text_color(
+														cx.theme()
+															.muted_foreground,
+													),
 											)
 											.small()
 											.on_click(cx.listener(move |_, _, window, cx| {
@@ -272,7 +281,7 @@ impl ProcessesTab {
 										.gap_1();
 								if let Some(ic) = icon_name {
 									t = t.icon(
-										gpui_component::Icon::new(ic)
+										ic.icon()
 											.size(px(12.0))
 											.text_color(color),
 									);
@@ -337,24 +346,13 @@ impl ProcessesTab {
 					.outline();
 					for (i, u) in usernames.iter().enumerate() {
 						let uname = u.clone();
-						let mut t = gpui_component::button::Toggle::new(
+						let t = gpui_component::button::Toggle::new(
 							format!("username-{uname}"),
 						)
 						.checked(active[i])
 						.tooltip(format!("Processes owned by {uname}."))
-						.gap_1();
-						let color = crate::ui::theme::filter_color(
-							&Filter::Username(uname.clone()),
-							cx,
-						);
-						t = t.icon(
-							gpui_component::Icon::new(
-								gpui_component::IconName::User,
-							)
-							.size(px(12.0))
-							.text_color(color),
-						);
-						t = t.label(uname.clone());
+						.gap_1()
+						.label(uname.clone());
 						group = group.child(t);
 					}
 					let group = group.on_click(cx.listener(

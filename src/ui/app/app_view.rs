@@ -2,12 +2,13 @@ use crate::data::config::Config;
 use crate::data::model::{GpuBackend, SystemSnapshot, Theme};
 use crate::data::platform::system::InitSystem;
 use crate::data::platform::{detect_gpu, detect_init, SystemCollector};
+use crate::ui::assets::lucide::LucideIcon;
 use crate::ui::performance::PerformanceTab;
 use crate::ui::processes::ProcessesTab;
 use crate::ui::settings::SettingsTab;
 use gpui::prelude::*;
 use gpui::*;
-use gpui_component::{ActiveTheme, Icon, IconName, TitleBar};
+use gpui_component::{ActiveTheme, TitleBar};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -122,14 +123,17 @@ impl Render for App {
 
 			let active = self.active_tab;
 			let labels = ["Processes", "Performance", "Settings"];
-			let icons =
-				[IconName::Cpu, IconName::ChartPie, IconName::Settings];
+			let icons = [
+				LucideIcon::List,
+				LucideIcon::ChartPie,
+				LucideIcon::Settings2,
+			];
 
 			let current_theme = self.theme.get();
 			let theme_icon = match current_theme {
-				Theme::Dark => IconName::Moon,
-				Theme::Light => IconName::Sun,
-				Theme::System => IconName::Palette,
+				Theme::Dark => LucideIcon::Moon,
+				Theme::Light => LucideIcon::Sun,
+				Theme::System => LucideIcon::Palette,
 			};
 			let gpu = self.gpu_backend;
 			let init = self.init_system;
@@ -163,8 +167,10 @@ impl Render for App {
 						.border_b_2()
 						.border_color(border)
 						.child(
-							Icon::new(icons[i].clone())
-								.size(px(14.0))
+							icons[i]
+								.icon()
+								.w(px(14.0))
+								.h(px(14.0))
 								.text_color(fg),
 						)
 						.child(*label)
@@ -221,8 +227,10 @@ impl Render for App {
 									.justify_center()
 									.cursor(CursorStyle::PointingHand)
 									.child(
-										Icon::new(theme_icon)
-											.size(px(14.0))
+										theme_icon
+											.icon()
+											.w(px(14.0))
+											.h(px(14.0))
 											.text_color(
 												cx.theme().muted_foreground,
 											),

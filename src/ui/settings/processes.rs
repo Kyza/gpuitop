@@ -1,6 +1,7 @@
 use crate::data::config::Config;
 use crate::data::model::SortColumn;
 use crate::data::settings;
+use crate::ui::assets::lucide::LucideIcon;
 use crate::ui::settings::SettingsTab;
 use gpui::prelude::*;
 use gpui::*;
@@ -293,7 +294,8 @@ pub fn processes_page(
 									Button::new(format!("move-up-{idx}"))
 										.ghost()
 										.icon(
-											Icon::new(IconName::ChevronUp)
+											LucideIcon::ChevronUp
+												.icon()
 												.size(px(12.0))
 												.text_color(
 													cx.theme()
@@ -326,7 +328,8 @@ pub fn processes_page(
 									Button::new(format!("move-down-{idx}"))
 										.ghost()
 										.icon(
-											Icon::new(IconName::ChevronDown)
+											LucideIcon::ChevronDown
+												.icon()
 												.size(px(12.0))
 												.text_color(
 													cx.theme()

@@ -25,6 +25,7 @@ bytesize = "1"
 hotpath = "0.22"
 nucleo = "0.5"
 open = "5"
+rust-embed = "8"
 wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 

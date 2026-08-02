@@ -1,5 +1,6 @@
 use crate::data::processes::delegate::ProcessTableDelegate;
 use crate::data::state::ViewState;
+use crate::ui::assets::lucide::LucideIcon;
 use crate::ui::theme::{state_info, tag_icons, theme_dark_or_light};
 use bytesize::ByteSize;
 use gpui::prelude::*;
@@ -7,7 +8,7 @@ use gpui::*;
 use gpui_component::{
 	menu::PopupMenu,
 	table::{Column, ColumnFixed, ColumnSort, TableDelegate, TableState},
-	ActiveTheme, Icon, IconName,
+	ActiveTheme,
 };
 
 impl TableDelegate for ProcessTableDelegate {
@@ -62,15 +63,15 @@ impl TableDelegate for ProcessTableDelegate {
 			return div().into_any_element();
 		}
 		let icon = match col_ix {
-			1 => Some(IconName::File),
-			2 => Some(IconName::Dash),
-			3 => Some(IconName::User),
-			4 => Some(IconName::CircleCheck),
-			5 => Some(IconName::Cpu),
-			6 => Some(IconName::MemoryStick),
-			7 => Some(IconName::Eye),
-			8 => Some(IconName::HardDrive),
-			9 => Some(IconName::HardDrive),
+			1 => Some(LucideIcon::File),
+			2 => Some(LucideIcon::Hash),
+			3 => Some(LucideIcon::User),
+			4 => Some(LucideIcon::Activity),
+			5 => Some(LucideIcon::Cpu),
+			6 => Some(LucideIcon::MemoryStick),
+			7 => Some(LucideIcon::Gpu),
+			8 => Some(LucideIcon::HardDriveDownload),
+			9 => Some(LucideIcon::HardDriveUpload),
 			_ => None,
 		};
 		let name = self.column(col_ix, cx).name.clone();
@@ -81,7 +82,8 @@ impl TableDelegate for ProcessTableDelegate {
 			.gap(px(4.0))
 			.when(icon.is_some(), |el| {
 				el.child(
-					Icon::new(icon.unwrap())
+					icon.unwrap()
+						.icon()
 						.size(px(12.0))
 						.text_color(cx.theme().muted_foreground),
 				)
@@ -123,14 +125,17 @@ impl TableDelegate for ProcessTableDelegate {
 					.items_center()
 					.when(is_pinned, |el| {
 						el.child(
-							Icon::new(IconName::Star)
-								.size(px(12.0))
+							LucideIcon::Pin
+								.icon()
+								.w(px(12.0))
+								.h(px(12.0))
 								.text_color(cx.theme().primary),
 						)
 					})
 					.children(tags.into_iter().map(|(icon, color)| {
-						Icon::new(icon)
-							.size(px(12.0))
+						icon.icon()
+							.w(px(12.0))
+							.h(px(12.0))
 							.text_color(color)
 							.into_any_element()
 					}))

@@ -1,7 +1,8 @@
 use crate::data::model::{Filter, ProcessInfo};
 use crate::data::platform::system::{is_service, InitSystem};
+use crate::ui::assets::lucide::LucideIcon;
 use gpui::*;
-use gpui_component::{ActiveTheme, IconName};
+use gpui_component::ActiveTheme;
 use std::collections::HashSet;
 
 pub fn theme_dark_or_light(cx: &App) -> bool {
@@ -70,50 +71,53 @@ pub fn tag_icons(
 	proc: &ProcessInfo,
 	init_system: InitSystem,
 	cx: &App,
-) -> Vec<(IconName, Hsla)> {
+) -> Vec<(LucideIcon, Hsla)> {
 	let dark = theme_dark_or_light(cx);
 	let mut tags = Vec::new();
 	if proc.is_gui {
-		tags.push((IconName::LayoutDashboard, tag_color(TagType::Gui, dark)));
+		tags.push((
+			LucideIcon::LayoutDashboard,
+			tag_color(TagType::Gui, dark),
+		));
 	}
 	if proc.is_owned_by_current_user && !proc.is_gui {
-		tags.push((IconName::User, tag_color(TagType::User, dark)));
+		tags.push((LucideIcon::User, tag_color(TagType::User, dark)));
 	}
 	if !proc.is_kthread && !proc.is_owned_by_current_user && proc.ppid != 1 {
-		tags.push((IconName::Settings2, tag_color(TagType::System, dark)));
+		tags.push((LucideIcon::Settings, tag_color(TagType::System, dark)));
 	}
 	let is_svc =
 		is_service(proc, init_system, &HashSet::new(), &HashSet::new());
 	if is_svc {
 		tags.push((
-			IconName::SquareTerminal,
+			LucideIcon::SquareTerminal,
 			tag_color(TagType::Services, dark),
 		));
 	}
 	if proc.is_kthread {
-		tags.push((IconName::Cpu, tag_color(TagType::Kernel, dark)));
+		tags.push((LucideIcon::Cpu, tag_color(TagType::Kernel, dark)));
 	}
 	if proc.vram_bytes.is_some() {
-		tags.push((IconName::Eye, tag_color(TagType::Vram, dark)));
+		tags.push((LucideIcon::Gpu, tag_color(TagType::Vram, dark)));
 	}
 	if proc.is_electron {
-		tags.push((IconName::Globe, tag_color(TagType::Electron, dark)));
+		tags.push((LucideIcon::Atom, tag_color(TagType::Electron, dark)));
 	}
 	tags
 }
 
-pub fn filter_icon(filter: &Filter) -> Option<IconName> {
+pub fn filter_icon(filter: &Filter) -> Option<LucideIcon> {
 	match filter {
-		Filter::Gui => Some(IconName::LayoutDashboard),
-		Filter::User => Some(IconName::User),
-		Filter::System => Some(IconName::Settings2),
-		Filter::Services => Some(IconName::SquareTerminal),
-		Filter::Kernel => Some(IconName::Cpu),
-		Filter::Parent => Some(IconName::FolderOpen),
-		Filter::Vram => Some(IconName::Eye),
-		Filter::Electron => Some(IconName::Globe),
-		Filter::ProcessState(_) => Some(IconName::Heart),
-		Filter::Username(_) => Some(IconName::User),
+		Filter::Gui => Some(LucideIcon::LayoutDashboard),
+		Filter::User => Some(LucideIcon::User),
+		Filter::System => Some(LucideIcon::Settings),
+		Filter::Services => Some(LucideIcon::SquareTerminal),
+		Filter::Kernel => Some(LucideIcon::Cpu),
+		Filter::Parent => Some(LucideIcon::FolderTree),
+		Filter::Vram => Some(LucideIcon::Gpu),
+		Filter::Electron => Some(LucideIcon::Atom),
+		Filter::ProcessState(_) => Some(LucideIcon::Activity),
+		Filter::Username(_) => Some(LucideIcon::User),
 		Filter::Pid(_) => None,
 	}
 }

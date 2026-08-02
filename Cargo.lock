@@ -2741,6 +2741,7 @@ dependencies = [
  "open",
  "procfs",
  "ron",
+ "rust-embed",
  "serde",
  "users",
  "wayland-client",

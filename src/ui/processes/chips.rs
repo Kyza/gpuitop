@@ -1,10 +1,11 @@
 use crate::data::model::*;
 use crate::data::state::ViewState;
+use crate::ui::assets::lucide::LucideIcon;
 use crate::ui::processes::ProcessesTab;
 use crate::ui::theme::{filter_color, filter_icon};
 use gpui::prelude::*;
 use gpui::*;
-use gpui_component::{menu::PopupMenuItem, tag::Tag, Icon, IconName};
+use gpui_component::{menu::PopupMenuItem, tag::Tag};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -52,7 +53,8 @@ pub fn render_filter_chip(
 					.gap(px(4.0))
 					.when(icon.is_some(), |el| {
 						el.child(
-							Icon::new(icon.unwrap())
+							icon.unwrap()
+								.icon()
 								.size(px(12.0))
 								.text_color(icon_color),
 						)
@@ -83,7 +85,7 @@ pub fn render_filter_chip(
 								});
 								cx.notify();
 							}))
-							.child(Icon::new(IconName::Close).size(px(10.0))),
+							.child(LucideIcon::Close.icon().size(px(10.0))),
 					),
 			)
 			.into_any_element()
@@ -112,7 +114,8 @@ pub fn render_filter_chip(
 					.gap(px(4.0))
 					.when(icon.is_some(), |el| {
 						el.child(
-							Icon::new(icon.unwrap())
+							icon.unwrap()
+								.icon()
 								.size(px(12.0))
 								.text_color(icon_color),
 						)

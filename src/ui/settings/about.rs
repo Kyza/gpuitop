@@ -1,3 +1,4 @@
+use crate::ui::assets::lucide::LucideIcon;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
@@ -18,7 +19,8 @@ pub fn about_page() -> SettingPage {
 					.items_center()
 					.justify_center()
 					.child(
-						Icon::new(IconName::Cpu)
+						LucideIcon::Info
+							.icon()
 							.size(px(32.0))
 							.text_color(cx.theme().muted_foreground),
 					)
@@ -45,7 +47,8 @@ pub fn about_page() -> SettingPage {
 							.ghost()
 							.label("GitHub")
 							.icon(
-								Icon::new(IconName::ExternalLink)
+								LucideIcon::ExternalLink
+									.icon()
 									.size(px(14.0))
 									.text_color(cx.theme().muted_foreground),
 							)

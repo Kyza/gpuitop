@@ -1,11 +1,12 @@
 use crate::data::config::Config;
 use crate::data::model::*;
+use crate::ui::assets::lucide::LucideIcon;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
 	button::{Button, ButtonVariants},
 	setting::{SettingPage, Settings},
-	ActiveTheme, Icon, IconName, Sizable,
+	ActiveTheme, Sizable,
 };
 use std::cell::Cell;
 use std::rc::Rc;
@@ -94,7 +95,8 @@ impl Render for SettingsTab {
 							.ghost()
 							.label("Open Config File")
 							.icon(
-								Icon::new(IconName::ExternalLink)
+								LucideIcon::ExternalLink
+									.icon()
 									.size(px(12.0))
 									.text_color(cx.theme().muted_foreground),
 							)

@@ -1,13 +1,13 @@
 use crate::data::model::*;
 use crate::data::state::ViewState;
+use crate::ui::assets::lucide::LucideIcon;
 use crate::ui::processes::context_menu;
 use crate::ui::processes::ProcessesTab;
 use crate::ui::theme;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
-	list::ListItem, scroll::ScrollableElement, tree::tree, ActiveTheme, Icon,
-	IconName,
+	list::ListItem, scroll::ScrollableElement, tree::tree, ActiveTheme,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -94,11 +94,12 @@ impl ProcessesTab {
 												AnyElement,
 											> = if is_folder {
 												let caret = if is_expanded {
-													IconName::ChevronDown
+													LucideIcon::ChevronDown
 												} else {
-													IconName::ChevronRight
+													LucideIcon::ChevronRight
 												};
-												vec![Icon::new(caret)
+												vec![caret
+													.icon()
 													.size(px(12.0))
 													.text_color(
 														cx.theme()
@@ -113,8 +114,9 @@ impl ProcessesTab {
 											children.extend(
 												tags.into_iter().map(
 													|(icon, color)| {
-														Icon::new(icon)
-															.size(px(12.0))
+														icon.icon()
+															.w(px(12.0))
+															.h(px(12.0))
 															.text_color(color)
 															.into_any_element(
 															)

@@ -1,7 +1,7 @@
 use crate::data::model::ProcessInfo;
+use crate::ui::assets::lucide::LucideIcon;
 use gpui::*;
 use gpui_component::menu::PopupMenuItem;
-use gpui_component::IconName;
 use std::rc::Rc;
 
 fn send_signal(pid: i32, signal: i32) {
@@ -12,11 +12,15 @@ fn send_signal(pid: i32, signal: i32) {
 
 fn menu_item(
 	label: impl Into<SharedString>,
-	icon: Option<IconName>,
+	icon: Option<LucideIcon>,
 	handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> PopupMenuItem {
 	PopupMenuItem::Item {
-		icon: icon.map(|i| gpui_component::Icon::new(i).into()),
+		icon: icon.map(|i| {
+			gpui_component::Icon::empty()
+				.path(LucideIcon::path(i))
+				.into()
+		}),
 		label: label.into(),
 		disabled: false,
 		checked: false,
@@ -31,10 +35,12 @@ pub fn build_process_menu(proc: &ProcessInfo) -> Vec<PopupMenuItem> {
 	let is_stopped = proc.state == 'T' || proc.state == 't';
 
 	let mut items = vec![
-		menu_item("End Process", Some(IconName::Close), move |_, _, _| {
-			send_signal(pid, libc::SIGTERM)
-		}),
-		menu_item("Force Kill", Some(IconName::CircleX), move |_, _, _| {
+		menu_item(
+			"End Process",
+			Some(LucideIcon::CircleOff),
+			move |_, _, _| send_signal(pid, libc::SIGTERM),
+		),
+		menu_item("Force Kill", Some(LucideIcon::CircleX), move |_, _, _| {
 			send_signal(pid, libc::SIGKILL)
 		}),
 	];
@@ -42,13 +48,13 @@ pub fn build_process_menu(proc: &ProcessInfo) -> Vec<PopupMenuItem> {
 	if is_stopped {
 		items.push(menu_item(
 			"Resume",
-			Some(IconName::Play),
+			Some(LucideIcon::Play),
 			move |_, _, _| send_signal(pid, libc::SIGCONT),
 		));
 	} else {
 		items.push(menu_item(
 			"Pause",
-			Some(IconName::Pause),
+			Some(LucideIcon::Pause),
 			move |_, _, _| send_signal(pid, libc::SIGSTOP),
 		));
 	}
@@ -87,7 +93,7 @@ pub fn build_process_menu(proc: &ProcessInfo) -> Vec<PopupMenuItem> {
 	items.push(PopupMenuItem::separator());
 	items.push(menu_item(
 		"Copy PID",
-		Some(IconName::Copy),
+		Some(LucideIcon::Copy),
 		move |_, _, cx| {
 			cx.write_to_clipboard(ClipboardItem::new_string(pid.to_string()));
 		},
@@ -99,7 +105,7 @@ pub fn build_process_menu(proc: &ProcessInfo) -> Vec<PopupMenuItem> {
 	))));
 	items.push(menu_item(
 		"Properties",
-		Some(IconName::Info),
+		Some(LucideIcon::Info),
 		move |_, _, _| {},
 	));
 
