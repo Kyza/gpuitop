@@ -24,7 +24,7 @@ fn main() {
 
 	for ov in &cli.overrides {
 		if let Err(e) = config.apply_override(ov) {
-			eprintln!("Warning: {e}");
+			eprintln!("--override error: {e}");
 		}
 	}
 
@@ -33,7 +33,13 @@ fn main() {
 	let search = cli.search.clone();
 	let override_view = cli.override_view();
 
-	let (win_width, win_height) = config.window_size;
+	let (mut win_width, mut win_height) = config.window_size;
+	if win_width < 640 {
+		win_width = 640;
+	}
+	if win_height < 400 {
+		win_height = 400;
+	}
 	let win_width = win_width as f32;
 	let win_height = win_height as f32;
 
@@ -81,6 +87,6 @@ fn main() {
 				cx.new(|cx| Root::new(view, window, cx))
 			},
 		)
-		.unwrap();
+		.expect("Failed to open GPUI window");
 	});
 }

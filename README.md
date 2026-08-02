@@ -10,6 +10,10 @@ Fuzzy search the process table, or click **Pick** and switch to any window to ju
 
 The window picker uses the `zwlr_foreign_toplevel_manager_v1` Wayland protocol. It does not work under X11; the Pick button will time out in an X11 session.
 
+### Tree View
+
+Switch between flat list and hierarchical tree view from the toolbar. The tree preserves parent-child relationships and can aggregate resource usage across process subtrees when cumulative mode is on.
+
 ### Manage Processes
 
 Right-click any row for a context menu:
@@ -33,6 +37,25 @@ Discord, VS Code, and other Electron apps show their real name instead of "elect
 ### System Resources
 
 The Performance tab shows CPU (overall bar + per-core gauges), memory (total, used, available, cached, swap), disk I/O per device, and network throughput per interface.
+
+## CLI
+
+Run `gpuitop -h` for the full usage text.
+
+| Flag | Description |
+|------|-------------|
+| `-c`, `--config <PATH>` | Load config from file instead of default |
+| `--override <RON>` | Partial [RON](https://github.com/ron-rs/ron) merged over loaded config (repeatable) |
+| `-p`, `--page <PATH>` | Start on a specific tab: `processes`, `processes.tree`, `processes.list`, `performance`, `settings`, `settings.general`, `settings.processes`, `settings.about` |
+| `-s`, `--search <TEXT>` | Pre-fill the process search bar |
+| `-v`, `--version` | Print version and exit |
+| `-h`, `--help` | Print help and exit |
+
+```
+gpuitop --page settings.about
+gpuitop --config ~/gaming.ron --override '(general: (interface: (refresh_ms: 500)))'
+gpuitop -p processes.tree -s firefox
+```
 
 ## Prerequisites
 
@@ -66,6 +89,45 @@ sudo pacman -S base-devel cmake pkgconf \
 cargo install --git https://github.com/Kyza/gpuitop.git
 ```
 
+## Config
+
+Stored at `~/.config/gpuitop/config.ron` (respects `XDG_CONFIG_HOME`). Edit from Settings > General and Settings > Processes in the app, or write the RON file directly.
+
+### Available Settings
+
+| Setting | Type | Default |
+|---------|------|---------|
+| Refresh Rate | u64 | 1500 (ms) |
+| Theme | Theme | System (Dark, Light) |
+| Window Width | u32 | 1100 |
+| Window Height | u32 | 700 |
+| VRAM Polling | VramPolling | Auto (On, Off) |
+| PID Filter Mode | PidFilterMode | DirectChildren (AllDescendants) |
+| Clear Search on Pin | bool | true |
+| Resource View | ResourceViewMode | SelfOnly (Cumulative) |
+| Default View | DefaultViewMode | List (Tree) |
+| Sort Column | SortColumn | Cpu |
+| Sort Descending | bool | true |
+
+The 9 process table columns can be reordered and toggled on/off from Settings > Processes.
+
+### [RON](https://github.com/ron-rs/ron) Override
+
+`--override` takes a partial RON struct and deep-merges it into the loaded config. Only the keys you specify change; everything else stays as-is.
+
+```bash
+# Change refresh rate and theme
+gpuitop --override '(general: (interface: (refresh_ms: 500, theme: Dark)))'
+
+# Set window size
+gpuitop --override '(window_size: (1920, 1080))'
+
+# Switch to tree view with cumulative resources
+gpuitop --override '(processes: (behaviour: (default_view_mode: Tree, resource_view_mode: Cumulative)))'
+```
+
+Multiple `--override` flags stack and later values win for overlapping keys.
+
 ## Development
 
 | Component | Status |
@@ -86,24 +148,18 @@ cargo install --git https://github.com/Kyza/gpuitop.git
 | SysV init | Supported, untested |
 | Unknown | Heuristic fallback (ppid 1) |
 
-The codebase is structured with platform abstraction (`src/platform/`) so the process collector, GPU queries, and window picker can be swapped per OS. Help with Windows support is welcome.
+The codebase uses platform abstraction (`src/data/platform/`) so the process collector, GPU queries, and window picker can be swapped per OS.
 
 ### Profiling
 
-Key functions are instrumented with [hotpath](https://crates.io/crates/hotpath). Build with the `hotpath` feature to enable profiling:
+Key functions are instrumented with [hotpath](https://crates.io/crates/hotpath). Build with the `hotpath` feature:
 
 ```bash
 cargo run --features hotpath
 ```
 
-Run `hotpath console` in another terminal for a live TUI.
-
-Cargo features for finer granularity:
+Run `hotpath console` in another terminal for a live TUI. Sub-features for finer granularity:
 
 ```bash
 cargo run --features hotpath-cpu,hotpath-alloc
 ```
-
-## Config
-
-Stored at `~/.config/gpuitop/config.ron` (respects `XDG_CONFIG_HOME`). Editable in-app under Settings, or directly in the RON file.

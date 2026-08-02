@@ -144,11 +144,7 @@ pub fn general_page(
 			SettingItem::new(
 				"Window Width",
 				SettingField::number_input(
-					NumberFieldOptions {
-						min: 640.0,
-						max: 7680.0,
-						step: 10.0,
-					},
+					NumberFieldOptions::default(),
 					{
 						let view = view.clone();
 						move |cx: &App| {
@@ -175,11 +171,7 @@ pub fn general_page(
 			SettingItem::new(
 				"Window Height",
 				SettingField::number_input(
-					NumberFieldOptions {
-						min: 400.0,
-						max: 4320.0,
-						step: 10.0,
-					},
+					NumberFieldOptions::default(),
 					{
 						let view = view.clone();
 						move |cx: &App| {

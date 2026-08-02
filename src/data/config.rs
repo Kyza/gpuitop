@@ -196,20 +196,15 @@ impl Config {
 			match std::fs::read_to_string(path) {
 				Ok(data) => match ron::from_str(&data) {
 					Ok(config) => return config,
-					Err(e) => {
-						eprintln!(
-							"Failed to parse config '{}': {e}. Using \
-							 defaults.",
-							path.display()
-						);
-					}
-				},
-				Err(e) => {
-					eprintln!(
-						"Failed to read config '{}': {e}. Using defaults.",
+					Err(e) => eprintln!(
+						"Failed to parse config '{}': {e}. Using defaults.",
 						path.display()
-					);
-				}
+					),
+				},
+				Err(e) => eprintln!(
+					"Failed to read config '{}': {e}. Using defaults.",
+					path.display()
+				),
 			}
 			return Self::default();
 		}
@@ -240,12 +235,14 @@ impl Config {
 				Ok(data) => match ron::from_str(&data) {
 					Ok(config) => return config,
 					Err(e) => eprintln!(
-						"Failed to parse config: {e}. Using defaults."
+						"Failed to parse config '{}': {e}. Using defaults.",
+						path.display()
 					),
 				},
-				Err(e) => {
-					eprintln!("Failed to read config: {e}. Using defaults.")
-				}
+				Err(e) => eprintln!(
+					"Failed to read config '{}': {e}. Using defaults.",
+					path.display()
+				),
 			}
 		}
 		let config = Self::default();
