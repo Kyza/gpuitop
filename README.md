@@ -2,6 +2,16 @@
 
 A GPU-accelerated task manager for Linux built with [GPUI](https://www.gpui.rs/), the Rust UI framework behind the [Zed](https://zed.dev) editor. Fuzzy search, window picking, per-process GPU VRAM tracking (NVIDIA + AMD), and a right-click context menu for signals.
 
+## Screenshots
+
+| Dark | Light |
+|------|-------|
+| ![List view — dark theme, searching "vesktop"](screenshots/list-view-dark.png) | ![List view — light theme, searching "vesktop"](screenshots/list-view-light.png) |
+| ![Tree view — dark theme, searching "vesktop"](screenshots/tree-view-dark.png) | ![Tree view — light theme, searching "vesktop"](screenshots/tree-view-light.png) |
+| ![Settings about — dark theme](screenshots/settings-about-dark.png) | ![Settings about — light theme](screenshots/settings-about-light.png) |
+
+> Regenerate with `./screenshots/generate.sh` (requires [driftwm](https://github.com/malbiruk/driftwm)).
+
 ## Features
 
 ### Find Processes
@@ -37,16 +47,6 @@ Discord, VS Code, and other Electron apps show their real name instead of "elect
 ### System Resources
 
 The Performance tab shows CPU (overall bar + per-core gauges), memory (total, used, available, cached, swap), disk I/O per device, and network throughput per interface.
-
-## Screenshots
-
-| Dark | Light |
-|------|-------|
-| ![List view — dark theme, searching "vesktop"](screenshots/list-view-dark.png) | ![List view — light theme, searching "vesktop"](screenshots/list-view-light.png) |
-| ![Tree view — dark theme, searching "vesktop"](screenshots/tree-view-dark.png) | ![Tree view — light theme, searching "vesktop"](screenshots/tree-view-light.png) |
-| ![Settings about — dark theme](screenshots/settings-about-dark.png) | ![Settings about — light theme](screenshots/settings-about-light.png) |
-
-> Regenerate with `./screenshots/generate.sh` (requires [driftwm](https://github.com/malbiruk/driftwm)).
 
 ## CLI
 
