@@ -1,6 +1,7 @@
 use crate::data::model::ProcessInfo;
 use std::collections::{HashMap, HashSet};
 
+#[hotpath::measure]
 pub fn with_ancestors(
 	matched: &HashSet<i32>,
 	pid_to_ppid: &HashMap<i32, i32>,
@@ -20,6 +21,7 @@ pub fn with_ancestors(
 	display
 }
 
+#[hotpath::measure]
 pub fn ancestors_to_expand(
 	matched: &HashSet<i32>,
 	pid_lookup: &HashMap<i32, ProcessInfo>,

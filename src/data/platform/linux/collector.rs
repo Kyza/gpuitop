@@ -203,6 +203,7 @@ impl SystemCollector {
 	}
 
 	// ---- Disk ----
+	#[hotpath::measure]
 	fn collect_disks(&mut self, now: Instant) -> Vec<DiskInfo> {
 		let data = Self::read("/proc/diskstats").unwrap_or_default();
 		let mut cur: HashMap<String, (u64, u64)> = HashMap::new();
@@ -239,6 +240,7 @@ impl SystemCollector {
 	}
 
 	// ---- Network ----
+	#[hotpath::measure]
 	fn collect_networks(&mut self, now: Instant) -> Vec<NetInfo> {
 		let data = Self::read("/proc/net/dev").unwrap_or_default();
 		let mut cur: HashMap<String, (u64, u64)> = HashMap::new();

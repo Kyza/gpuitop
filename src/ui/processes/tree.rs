@@ -50,6 +50,7 @@ impl TreeData {
 }
 
 impl ProcessTableDelegate {
+	#[hotpath::measure]
 	pub fn build_tree(&self) -> TreeData {
 		let snapshot = self.snapshot_cell.borrow();
 		let processes = &snapshot.processes;
@@ -301,6 +302,7 @@ impl ProcessTableDelegate {
 	}
 }
 
+#[hotpath::measure]
 fn count_descendants(
 	children_by_ppid: &HashMap<i32, Vec<&ProcessInfo>>,
 ) -> HashMap<i32, usize> {

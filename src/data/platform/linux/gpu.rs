@@ -10,6 +10,7 @@ pub fn build_vram_map(gpu_backend: GpuBackend) -> HashMap<i32, u64> {
 	}
 }
 
+#[hotpath::measure]
 fn build_nvidia_vram_map() -> HashMap<i32, u64> {
 	let nvml = match nvml_wrapper::Nvml::init() {
 		Ok(n) => n,
@@ -39,6 +40,7 @@ fn build_nvidia_vram_map() -> HashMap<i32, u64> {
 	map
 }
 
+#[hotpath::measure]
 fn build_rocm_vram_map() -> HashMap<i32, u64> {
 	let output = match std::process::Command::new("rocm-smi")
 		.args(["--showpids", "--csv"])

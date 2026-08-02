@@ -204,94 +204,81 @@ impl SystemCollector {
 			}
 		}
 
-		// Electron detection: mark processes in electron trees
-		hotpath::measure_block!("electron_detect", {
-			// Pass 1: find processes with --type= in cmdline (electron subprocesses)
-			let electron_subs: HashSet<i32> = pid_to_proc
-				.iter()
-				.filter(|(_, p)| p.command.contains("--type="))
-				.map(|(pid, _)| *pid)
-				.collect();
-
-			if !electron_subs.is_empty() {
-				// Pass 2: walk up ppid chain from each electron subprocess,
-				// marking ancestors as electron, recording root pid
-				let mut electron_pids: HashSet<i32> = electron_subs.clone();
-				let mut root_map: HashMap<i32, i32> = HashMap::new(); // child -> root pid
-
-				for &sub_pid in &electron_subs {
-					let root = find_electron_root(
-						sub_pid,
-						&electron_subs,
-						&pid_to_proc,
-					);
-					root_map.insert(sub_pid, root);
-
-					// Mark all ancestors up to root
-					let mut cur = sub_pid;
-					while let Some(proc) = pid_to_proc.get(&cur) {
-						electron_pids.insert(cur);
-						if cur == root || proc.ppid == 0 || proc.ppid == cur {
-							break;
-						}
-						cur = proc.ppid;
-					}
-				}
-
-				// Only mark as Electron if the root binary is actually
-				// electron, not a plain Chromium browser using --type=.
-				// Flatpak bundles rename the binary so also check for
-				// .asar (Electron packaging) in any subprocess cmdline.
-				let is_electron_root = |pid: i32| -> bool {
-					let exe = std::fs::read_link(format!("/proc/{pid}/exe"))
-						.unwrap_or_default();
-					if exe.to_string_lossy().contains("electron") {
-						return true;
-					}
-					electron_subs.iter().any(|sub| {
-						root_map.get(sub) == Some(&pid)
-							&& pid_to_proc
-								.get(sub)
-								.map(|p| p.command.contains(".asar"))
-								.unwrap_or(false)
-					})
-				};
-				let roots: HashSet<i32> =
-					root_map.values().copied().collect();
-				let real_electron_roots: HashSet<i32> = roots
-					.iter()
-					.filter(|r| is_electron_root(**r))
-					.copied()
-					.collect();
-
-				for pid in &electron_pids {
-					let root = root_map.get(pid).unwrap_or(pid);
-					if real_electron_roots.contains(root) {
-						if let Some(proc) = pid_to_proc.get_mut(pid) {
-							proc.is_electron = true;
-						}
-					}
-				}
-
-				// Set electron_app_name on root processes
-				for (_sub_pid, root_pid) in &root_map {
-					if let Some(proc) = pid_to_proc.get_mut(root_pid) {
-						if proc.electron_app_name.is_none() {
-							let app_name = extract_electron_app_name(
-								&proc.command,
-								&proc.name,
-							);
-							proc.electron_app_name = Some(app_name);
-						}
-					}
-				}
-			}
-		});
+		detect_electron_processes(&mut pid_to_proc);
 
 		self.prev_proc = cur_proc_data;
 		self.prev_proc_time = Some(now);
 
 		pid_to_proc.into_values().collect()
+	}
+}
+
+#[hotpath::measure]
+fn detect_electron_processes(pid_to_proc: &mut HashMap<i32, ProcessInfo>) {
+	let electron_subs: HashSet<i32> = pid_to_proc
+		.iter()
+		.filter(|(_, p)| p.command.contains("--type="))
+		.map(|(pid, _)| *pid)
+		.collect();
+
+	if electron_subs.is_empty() {
+		return;
+	}
+
+	let mut electron_pids: HashSet<i32> = electron_subs.clone();
+	let mut root_map: HashMap<i32, i32> = HashMap::new();
+
+	for &sub_pid in &electron_subs {
+		let root = find_electron_root(sub_pid, &electron_subs, pid_to_proc);
+		root_map.insert(sub_pid, root);
+
+		let mut cur = sub_pid;
+		while let Some(proc) = pid_to_proc.get(&cur) {
+			electron_pids.insert(cur);
+			if cur == root || proc.ppid == 0 || proc.ppid == cur {
+				break;
+			}
+			cur = proc.ppid;
+		}
+	}
+
+	let roots: HashSet<i32> = root_map.values().copied().collect();
+	let real_electron_roots: HashSet<i32> = roots
+		.iter()
+		.filter(|r| {
+			let exe = std::fs::read_link(format!("/proc/{r}/exe"))
+				.unwrap_or_default();
+			if exe.to_string_lossy().contains("electron") {
+				return true;
+			}
+			electron_subs.iter().any(|sub| {
+				root_map.get(sub) == Some(r)
+					&& pid_to_proc
+						.get(sub)
+						.map(|p| p.command.contains(".asar"))
+						.unwrap_or(false)
+			})
+		})
+		.copied()
+		.collect();
+
+	for pid in &electron_pids {
+		let root = root_map.get(pid).unwrap_or(pid);
+		if real_electron_roots.contains(root) {
+			if let Some(proc) = pid_to_proc.get_mut(pid) {
+				proc.is_electron = true;
+			}
+		}
+	}
+
+	for (_sub_pid, root_pid) in &root_map {
+		if let Some(proc) = pid_to_proc.get_mut(root_pid) {
+			if proc.electron_app_name.is_none() {
+				let app_name =
+					extract_electron_app_name(&proc.command, &proc.name);
+				proc.electron_app_name = Some(app_name);
+			}
+		}
 	}
 }
 

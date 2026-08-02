@@ -60,6 +60,7 @@ impl ProcessTableDelegate {
 		false
 	}
 
+	#[hotpath::measure]
 	pub fn count_descendants_of(&self, pid: i32) -> usize {
 		self.snapshot_cell
 			.borrow()
