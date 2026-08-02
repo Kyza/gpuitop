@@ -127,6 +127,31 @@ impl std::fmt::Display for ResourceViewMode {
 	serde::Serialize,
 	serde::Deserialize,
 )]
+pub enum DefaultViewMode {
+	#[default]
+	List,
+	Tree,
+}
+
+impl std::fmt::Display for DefaultViewMode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::List => write!(f, "List"),
+			Self::Tree => write!(f, "Tree"),
+		}
+	}
+}
+
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Default,
+	serde::Serialize,
+	serde::Deserialize,
+)]
 pub enum ProcessGrouping {
 	#[default]
 	Auto,

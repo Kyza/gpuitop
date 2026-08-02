@@ -66,30 +66,58 @@ impl ProcessesTab {
 					.flex_row()
 					.gap(px(8.0))
 					.items_center()
-					.child(
-						gpui_component::button::Toggle::new("toggle-filters")
-							.outline()
-							.checked(self.show_filters)
-							.icon(
-								LucideIcon::Menu.icon()
-									.size(px(16.0))
-									.text_color(
-										cx.theme()
-											.muted_foreground,
-									),
-							)
-							.tooltip(if self.show_filters {
-								"Hide filter bar."
+				.child(
+					gpui_component::button::Toggle::new("toggle-filters")
+						.outline()
+						.checked(self.show_filters)
+						.icon(
+							LucideIcon::Menu.icon()
+								.size(px(16.0))
+								.text_color(
+									cx.theme()
+										.muted_foreground,
+								),
+						)
+						.tooltip(if self.show_filters {
+							"Hide filter bar."
+						} else {
+							"Show filter bar."
+						})
+						.on_click(cx.listener(
+							move |this, checked: &bool, _, cx| {
+								this.show_filters = *checked;
+								cx.notify();
+							},
+						)),
+				)
+				.child({
+					let show_tree = self.show_tree_view;
+					gpui_component::button::Button::new("toggle-view-mode")
+						.outline()
+						.icon(
+							if show_tree {
+								LucideIcon::ListTree.icon()
 							} else {
-								"Show filter bar."
-							})
-							.on_click(cx.listener(
-								move |this, checked: &bool, _, cx| {
-									this.show_filters = *checked;
-									cx.notify();
-								},
-							)),
-					)
+								LucideIcon::Rows3.icon()
+							}
+							.size(px(16.0))
+							.text_color(
+								cx.theme().muted_foreground,
+							),
+						)
+						.tooltip(if show_tree {
+							"Switch to list view."
+						} else {
+							"Switch to tree view."
+						})
+						.on_click(cx.listener(
+							|this, _, _, cx| {
+								this.show_tree_view =
+									!this.show_tree_view;
+								cx.notify();
+							},
+						))
+				})
 					.child({
 						let pick_result = self.pick_result.clone();
 						let is_picking = self.is_picking.clone();
@@ -410,48 +438,28 @@ impl ProcessesTab {
 										},
 									)),
 							)
-							.when(!self.show_tree_view, |group| {
-								group.child({
-									let view_label = self
-										.view_state
-										.borrow()
-										.resource_view_mode
-										.to_string();
-									gpui_component::button::Button::new(
-										"resource-view",
-									)
-									.label(view_label)
-									.small()
-									.tooltip(
-										"Toggle between per-process and \
-										 cumulative resource usage.",
-									)
-									.on_click(cx.listener(
-										|this, _, _, cx| {
-											this.toggle_resource_view_mode(cx)
-										},
-									))
-								})
-							})
-							.child({
-								let mode_label = if self.show_tree_view {
-									"Tree"
-								} else {
-									"List"
-								};
-								gpui_component::button::Button::new(
-									"view-mode",
-								)
-								.label(mode_label)
-								.small()
-								.tooltip("Toggle between list and tree view.")
-								.on_click(cx.listener(
-									|this, _, _, cx| {
-										this.toggle_view_mode(cx)
-									},
-								))
-							}),
-						)
+						.child({
+							let view_label = self
+								.view_state
+								.borrow()
+								.resource_view_mode
+								.to_string();
+							gpui_component::button::Button::new(
+								"resource-view",
+							)
+							.label(view_label)
+							.small()
+							.tooltip(
+								"Toggle between per-process and \
+								 cumulative resource usage.",
+							)
+							.on_click(cx.listener(
+								|this, _, _, cx| {
+									this.toggle_resource_view_mode(cx)
+								},
+							))
+						}),
+					)
 						.child(
 							div()
 								.flex()

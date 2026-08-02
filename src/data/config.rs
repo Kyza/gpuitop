@@ -1,6 +1,6 @@
 use crate::data::model::{
-	PidFilterMode, ProcessGrouping, ResourceViewMode, SortColumn, Theme,
-	VramPolling,
+	DefaultViewMode, PidFilterMode, ProcessGrouping, ResourceViewMode,
+	SortColumn, Theme, VramPolling,
 };
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -81,6 +81,7 @@ pub struct BehaviourConfig {
 	pub pid_filter_mode: PidFilterMode,
 	pub clear_search_on_pin: bool,
 	pub resource_view_mode: ResourceViewMode,
+	pub default_view_mode: DefaultViewMode,
 }
 
 impl Default for BehaviourConfig {
@@ -90,6 +91,7 @@ impl Default for BehaviourConfig {
 			pid_filter_mode: PidFilterMode::DirectChildren,
 			clear_search_on_pin: true,
 			resource_view_mode: ResourceViewMode::SelfOnly,
+			default_view_mode: DefaultViewMode::List,
 		}
 	}
 }

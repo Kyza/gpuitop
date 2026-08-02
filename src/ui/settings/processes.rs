@@ -8,7 +8,7 @@ use gpui::*;
 use gpui_component::{
 	button::{Button, ButtonVariants},
 	setting::{SettingField, SettingGroup, SettingItem, SettingPage},
-	ActiveTheme, Disableable, Icon, IconName, Sizable,
+	ActiveTheme, Disableable, Sizable,
 };
 
 pub fn processes_page(
@@ -35,6 +35,13 @@ pub fn processes_page(
 	);
 	let default_clear_search =
 		default_config.processes.behaviour.clear_search_on_pin;
+	let default_view = SharedString::from(
+		default_config
+			.processes
+			.behaviour
+			.default_view_mode
+			.to_string(),
+	);
 	let default_sort_col = SharedString::from(
 		default_config.processes.default_sort.column.to_string(),
 	);
@@ -64,7 +71,7 @@ pub fn processes_page(
 
 	SettingPage::new("Processes")
 		.default_open(true)
-		.icon(Icon::new(IconName::Cpu))
+		.icon(LucideIcon::List.icon())
 		.groups(vec![
 			SettingGroup::new().title("Behaviour").items(vec![
 				SettingItem::new(
@@ -229,6 +236,47 @@ pub fn processes_page(
 					 the process totalled with all its descendants.",
 				)
 				.keywords(["usage", "total", "cumulative"]),
+				SettingItem::new(
+					"Default View",
+					SettingField::dropdown(
+						vec![
+							("List".into(), "List".into()),
+							("Tree".into(), "Tree".into()),
+						],
+						{
+							let view = view.clone();
+							move |cx: &App| {
+								SharedString::from(
+									view.read(cx)
+										.config
+										.processes
+										.behaviour
+										.default_view_mode
+										.to_string(),
+								)
+							}
+						},
+						{
+							let view = view.clone();
+							move |val: SharedString, cx: &mut App| {
+								view.update(cx, |this, cx| {
+									settings::set_default_view_mode(
+										&mut this.config,
+										&val,
+									);
+									this.save();
+									cx.notify();
+								});
+							}
+						},
+					)
+					.default_value(default_view),
+				)
+				.description(
+					"Choose whether the processes tab starts in list or \
+					 tree view.",
+				)
+				.keywords(["tree", "list", "view", "default"]),
 			]),
 			SettingGroup::new().title("Columns").items({
 				column_labels

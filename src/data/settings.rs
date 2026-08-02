@@ -1,6 +1,7 @@
 use crate::data::config::Config;
 use crate::data::model::{
-	PidFilterMode, ResourceViewMode, SortColumn, Theme, VramPolling,
+	DefaultViewMode, PidFilterMode, ResourceViewMode, SortColumn, Theme,
+	VramPolling,
 };
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -51,6 +52,13 @@ pub fn set_resource_view_mode(config: &mut Config, val: &str) {
 	config.processes.behaviour.resource_view_mode = match val {
 		"Self" => ResourceViewMode::SelfOnly,
 		_ => ResourceViewMode::Cumulative,
+	};
+}
+
+pub fn set_default_view_mode(config: &mut Config, val: &str) {
+	config.processes.behaviour.default_view_mode = match val {
+		"Tree" => DefaultViewMode::Tree,
+		_ => DefaultViewMode::List,
 	};
 }
 

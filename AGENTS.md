@@ -73,13 +73,16 @@ src/
 
 ## Gotchas
 
-- **`TreeState.entries` is private.** No public API to get current expanded/collapsed state. Track toggles by subscribing to `TreeEvent::Expanded`/`TreeEvent::Collapsed`.
-- **`TreeEvent` subscription must persist** across renders (store in a `Vec<Subscription>`). Create once on first render, never re-create per frame.
-- **`TreeItem.id`, `.label`, `.children` are pub fields**, not methods.
-- **`set_items()` wipes expand state.** Creates fresh `TreeItem` objects per call. Track expanded PIDs externally in `HashSet<i32>` and re-apply via `.expanded(true)` in `build_tree()`.
+- **`set_items()` wipes expand state.** Creates fresh `TreeItem` objects per call. Preserve expand state externally via `TreeData::preserve_expand_from` — walks old cached items by PID-based ID and re-applies `.expanded(true)` on new items before `set_items()`.
 - **Collector runs on background thread.** `SystemCollector::tick()` looped via `mpsc::channel`. Snapshots drained in `App::render` each frame. UI never reads /proc directly.
 - **Cumulative cache** (`cum_cache`) computed once per snapshot, reused by filtering and rendering. Invalidate by setting to `None` on new snapshot.
 - **`[profile.dev.package."*"]` opt-level = 2** — dependencies optimized even in debug. Startup fast, incremental `cargo check` still fast.
+
+## Committing
+
+- **NEVER commit or push without explicit permission.** Do not stage files, create commits, or push branches unless the user explicitly tells you to.
+- **NEVER amend commits.**
+- **NEVER force-push** unless the user explicitly tells you to.
 
 ## Style
 

@@ -4,16 +4,16 @@ use crate::data::model::*;
 use crate::data::platform::system::InitSystem;
 use crate::data::processes::delegate::ProcessTableDelegate;
 use crate::data::state::ViewState;
+use crate::ui::processes::tree::TreeData;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
 	input::{InputEvent, InputState},
 	table::{TableEvent, TableState},
-	tree::{TreeEvent, TreeState},
+	tree::TreeState,
 	ActiveTheme,
 };
-use std::cell::RefCell;
-use std::collections::HashSet;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -34,7 +34,7 @@ pub struct ProcessesTab {
 	pub table_state: Option<Entity<TableState<ProcessTableDelegate>>>,
 	pub input_state: Option<Entity<InputState>>,
 	pub clear_search_on_pin: bool,
-	pub needs_clear_input: bool,
+	pub needs_clear_input: Rc<Cell<bool>>,
 	pub needs_set_input: Option<String>,
 	pub needs_focus_input: bool,
 	pub _events: Option<Subscription>,
@@ -48,7 +48,7 @@ pub struct ProcessesTab {
 	pub show_tree_view: bool,
 	pub tree_state: Entity<TreeState>,
 	pub tree_double_click: Rc<RefCell<Option<(Instant, String)>>>,
-	pub expanded_pids: HashSet<i32>,
+	pub cached_tree_data: Option<((std::time::Instant, u64), Rc<TreeData>)>,
 }
 
 impl ProcessesTab {
@@ -88,7 +88,7 @@ impl ProcessesTab {
 				.processes
 				.behaviour
 				.clear_search_on_pin,
-			needs_clear_input: false,
+			needs_clear_input: Rc::new(Cell::new(false)),
 			needs_set_input: None,
 			needs_focus_input: false,
 			_events: None,
@@ -101,10 +101,11 @@ impl ProcessesTab {
 			pick_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
 			init_system,
 			show_filters: true,
-			show_tree_view: false,
+			show_tree_view: config.processes.behaviour.default_view_mode
+				== DefaultViewMode::Tree,
 			tree_state: cx.new(|cx| TreeState::new(cx)),
 			tree_double_click: Rc::new(RefCell::new(None)),
-			expanded_pids: HashSet::new(),
+			cached_tree_data: None,
 		}
 	}
 
@@ -163,11 +164,6 @@ impl ProcessesTab {
 		cx.notify();
 	}
 
-	pub fn toggle_view_mode(&mut self, cx: &mut Context<Self>) {
-		self.show_tree_view = !self.show_tree_view;
-		cx.notify();
-	}
-
 	pub fn get_delegate(&self) -> ProcessTableDelegate {
 		ProcessTableDelegate {
 			snapshot_cell: self.snapshot_cell.clone(),
@@ -178,11 +174,6 @@ impl ProcessesTab {
 			init_system: self.init_system,
 		}
 	}
-}
-
-fn extract_pid(id: &gpui::SharedString) -> Option<i32> {
-	let s = id.as_ref();
-	s.strip_prefix("pid-")?.split(':').next()?.parse().ok()
 }
 
 impl Render for ProcessesTab {
@@ -225,7 +216,7 @@ impl Render for ProcessesTab {
 								ViewState::mutate(&this.view_state, |s| {
 									s.search.clear();
 								});
-								this.needs_clear_input = true;
+								this.needs_clear_input.set(true);
 							}
 							cx.notify();
 						}
@@ -260,38 +251,17 @@ impl Render for ProcessesTab {
 				},
 			)];
 
-			let tree_state = self.tree_state.clone();
-			let view = cx.entity();
-			subs.push(cx.subscribe_in(
-				&tree_state,
-				window,
-				move |_, _, ev: &TreeEvent, _, cx| {
-					view.update(cx, |this, _cx| match ev {
-						TreeEvent::Expanded(id) => {
-							if let Some(pid) = extract_pid(id) {
-								this.expanded_pids.insert(pid);
-							}
-						}
-						TreeEvent::Collapsed(id) => {
-							if let Some(pid) = extract_pid(id) {
-								this.expanded_pids.remove(&pid);
-							}
-						}
-					});
-				},
-			));
-
 			self._subscriptions = subs;
 			self.input_state = Some(input_state);
 		}
 
-		if self.needs_clear_input {
+		if self.needs_clear_input.get() {
 			if let Some(ref is) = self.input_state {
 				is.update(cx, |state, cx| {
 					state.set_value(String::new(), window, cx);
 				});
 			}
-			self.needs_clear_input = false;
+			self.needs_clear_input.set(false);
 		}
 
 		if let Some(value) = self.needs_set_input.take() {

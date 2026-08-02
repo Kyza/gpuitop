@@ -7,13 +7,50 @@ use std::collections::{HashMap, HashSet};
 pub struct TreeData {
 	pub items: Vec<TreeItem>,
 	pub process_lookup: HashMap<i32, ProcessInfo>,
-	pub matched_pids: HashSet<i32>,
-	pub root_proc: Option<ProcessInfo>,
 	pub descendant_counts: HashMap<i32, usize>,
 }
 
+impl TreeData {
+	pub fn preserve_expand_from(&mut self, old: &TreeData) {
+		let old_state = Self::collect_expand_state(&old.items);
+		self.items = Self::apply_expand_state(
+			std::mem::take(&mut self.items),
+			&old_state,
+		);
+	}
+
+	fn collect_expand_state(items: &[TreeItem]) -> HashMap<String, bool> {
+		let mut state = HashMap::new();
+		for item in items {
+			state.insert(item.id.to_string(), item.is_expanded());
+			state.extend(Self::collect_expand_state(&item.children));
+		}
+		state
+	}
+
+	fn apply_expand_state(
+		items: Vec<TreeItem>,
+		old_state: &HashMap<String, bool>,
+	) -> Vec<TreeItem> {
+		items
+			.into_iter()
+			.map(|mut item| {
+				let id = item.id.to_string();
+				item.children = Self::apply_expand_state(
+					std::mem::take(&mut item.children),
+					old_state,
+				);
+				if let Some(&was_expanded) = old_state.get(&id) {
+					item = item.expanded(was_expanded);
+				}
+				item
+			})
+			.collect()
+	}
+}
+
 impl ProcessTableDelegate {
-	pub fn build_tree(&self, expanded_pids: HashSet<i32>) -> TreeData {
+	pub fn build_tree(&self) -> TreeData {
 		let snapshot = self.snapshot_cell.borrow();
 		let processes = &snapshot.processes;
 		let vs = self.view_state.borrow();
@@ -100,7 +137,6 @@ impl ProcessTableDelegate {
 		let pid_to_ppid = self.pid_to_ppid_map();
 
 		let mut matched_pids: HashSet<i32> = HashSet::new();
-		let mut display_pids: HashSet<i32> = HashSet::new();
 
 		for proc in processes {
 			if let Some(ref scope) = scoped_pids {
@@ -108,19 +144,16 @@ impl ProcessTableDelegate {
 					continue;
 				}
 			}
-			if proc_matches(proc) {
-				matched_pids.insert(proc.pid);
-				display_pids.insert(proc.pid);
-				let mut current = proc.ppid;
-				while let Some(&ppid) = pid_to_ppid.get(&current) {
-					if ppid == 0 || ppid == current {
-						break;
-					}
-					display_pids.insert(current);
-					current = ppid;
-				}
+			if !proc_matches(proc) {
+				continue;
 			}
+			matched_pids.insert(proc.pid);
 		}
+
+		let display_pids = crate::data::processes::tree::with_ancestors(
+			&matched_pids,
+			&pid_to_ppid,
+		);
 
 		let mut pid_lookup: HashMap<i32, ProcessInfo> = HashMap::new();
 		let mut children_by_ppid: HashMap<i32, Vec<&ProcessInfo>> =
@@ -138,19 +171,10 @@ impl ProcessTableDelegate {
 			children.sort_by_key(|p| p.pid);
 		}
 
-		let mut expand_pids: HashSet<i32> = HashSet::new();
-		for &mpid in &matched_pids {
-			let mut current =
-				pid_lookup.get(&mpid).map(|p| p.ppid).unwrap_or(0);
-			while let Some(proc) = pid_lookup.get(&current) {
-				expand_pids.insert(current);
-				let ppid = proc.ppid;
-				if ppid == 0 || ppid == current {
-					break;
-				}
-				current = ppid;
-			}
-		}
+		let expand_pids = crate::data::processes::tree::ancestors_to_expand(
+			&matched_pids,
+			&pid_lookup,
+		);
 
 		let root_proc = if !pid_filters.is_empty() {
 			pid_filters.first().and_then(|p| pid_lookup.get(p).cloned())
@@ -186,7 +210,6 @@ impl ProcessTableDelegate {
 			expand_pids: &HashSet<i32>,
 			fuzzy_scores: &HashMap<i32, u32>,
 			use_fuzzy_sort: bool,
-			expanded_by_user: &HashSet<i32>,
 		) -> Vec<TreeItem> {
 			let mut sorted_pids = pids.to_vec();
 			if use_fuzzy_sort {
@@ -209,8 +232,6 @@ impl ProcessTableDelegate {
 					let status = if is_match { "match" } else { "ancestor" };
 					let id = format!("pid-{pid}:{status}");
 					let label = proc.name.clone();
-					let should_expand = expanded_by_user.contains(pid)
-						|| expand_pids.contains(pid);
 
 					let mut item = TreeItem::new(
 						SharedString::from(id),
@@ -230,11 +251,11 @@ impl ProcessTableDelegate {
 							expand_pids,
 							fuzzy_scores,
 							use_fuzzy_sort,
-							expanded_by_user,
 						);
 						item = item.children(subtree);
 					}
 
+					let should_expand = expand_pids.contains(pid);
 					if should_expand {
 						item = item.expanded(true);
 					}
@@ -270,14 +291,11 @@ impl ProcessTableDelegate {
 			&expand_pids,
 			&fuzzy_scores,
 			use_fuzzy_sort,
-			&expanded_pids,
 		);
 
 		TreeData {
 			items,
 			process_lookup: pid_lookup,
-			matched_pids,
-			root_proc,
 			descendant_counts: count_descendants(&children_by_ppid),
 		}
 	}
