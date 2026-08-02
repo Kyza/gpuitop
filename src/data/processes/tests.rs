@@ -56,6 +56,7 @@ fn proc_matches_standalone(
 	proc: &ProcessInfo,
 	filter: &Filter,
 	processes: &[ProcessInfo],
+	pid_filter_mode: PidFilterMode,
 ) -> bool {
 	match filter {
 		Filter::Gui => proc.is_gui,
@@ -65,6 +66,8 @@ fn proc_matches_standalone(
 				&& !proc.is_owned_by_current_user
 				&& proc.ppid != 1
 		}
+		// Test-only simplification — real impl in delegate.rs
+		// uses is_service() with init-system detection.
 		Filter::Services => proc.ppid == 1,
 		Filter::Kernel => proc.is_kthread,
 		Filter::Parent => proc.has_children,
@@ -72,11 +75,15 @@ fn proc_matches_standalone(
 		Filter::Electron => proc.is_electron,
 		Filter::ProcessState(c) => proc.state == *c,
 		Filter::Username(s) => proc.user == *s,
-		Filter::Pid(pid) => {
-			proc.pid == *pid
-				|| is_descendant_of(proc.pid, *pid, processes)
-				|| proc.ppid == *pid
-		}
+		Filter::Pid(pid) => match pid_filter_mode {
+			PidFilterMode::AllDescendants => {
+				proc.pid == *pid
+					|| is_descendant_of(proc.pid, *pid, processes)
+			}
+			PidFilterMode::DirectChildren => {
+				proc.pid == *pid || proc.ppid == *pid
+			}
+		},
 	}
 }
 
@@ -122,15 +129,30 @@ fn filter_gui() {
 	let p = make_process(1, 0, "app", "alice", 'S', "app");
 	let mut pg = p.clone();
 	pg.is_gui = true;
-	assert!(!proc_matches_standalone(&p, &Filter::Gui, &[]));
-	assert!(proc_matches_standalone(&pg, &Filter::Gui, &[]));
+	assert!(!proc_matches_standalone(
+		&p,
+		&Filter::Gui,
+		&[],
+		PidFilterMode::AllDescendants
+	));
+	assert!(proc_matches_standalone(
+		&pg,
+		&Filter::Gui,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 }
 
 #[test]
 fn filter_user() {
 	let mut p = make_process(1, 0, "app", "alice", 'S', "app");
 	p.is_owned_by_current_user = true;
-	assert!(proc_matches_standalone(&p, &Filter::User, &[]));
+	assert!(proc_matches_standalone(
+		&p,
+		&Filter::User,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 }
 
 #[test]
@@ -138,44 +160,74 @@ fn filter_user_excludes_gui() {
 	let mut p = make_process(1, 0, "app", "alice", 'S', "app");
 	p.is_owned_by_current_user = true;
 	p.is_gui = true;
-	assert!(!proc_matches_standalone(&p, &Filter::User, &[]));
+	assert!(!proc_matches_standalone(
+		&p,
+		&Filter::User,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 }
 
 #[test]
 fn filter_system() {
 	let p = make_process(2, 100, "sshd", "root", 'S', "sshd");
-	assert!(proc_matches_standalone(&p, &Filter::System, &[]));
+	assert!(proc_matches_standalone(
+		&p,
+		&Filter::System,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 }
-
 #[test]
 fn filter_system_excludes_kthread() {
 	let mut p = make_process(2, 100, "kworker", "root", 'S', "kworker");
 	p.is_kthread = true;
-	assert!(!proc_matches_standalone(&p, &Filter::System, &[]));
+	assert!(!proc_matches_standalone(
+		&p,
+		&Filter::System,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 }
 
 #[test]
 fn filter_services() {
 	let p = make_process(100, 1, "sshd", "root", 'S', "sshd");
-	assert!(proc_matches_standalone(&p, &Filter::Services, &[]));
+	assert!(proc_matches_standalone(
+		&p,
+		&Filter::Services,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 }
 
 #[test]
 fn filter_kernel() {
 	let mut p = make_process(2, 0, "kthreadd", "root", 'S', "kthreadd");
 	p.is_kthread = true;
-	assert!(proc_matches_standalone(&p, &Filter::Kernel, &[]));
+	assert!(proc_matches_standalone(
+		&p,
+		&Filter::Kernel,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 }
 
 #[test]
 fn filter_parent() {
 	let mut p = make_process(1, 0, "systemd", "root", 'S', "systemd");
 	p.has_children = true;
-	assert!(proc_matches_standalone(&p, &Filter::Parent, &[]));
+	assert!(proc_matches_standalone(
+		&p,
+		&Filter::Parent,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 	assert!(!proc_matches_standalone(
 		&make_process(2, 1, "child", "root", 'S', "child"),
 		&Filter::Parent,
 		&[],
+		PidFilterMode::AllDescendants,
 	));
 }
 
@@ -183,11 +235,17 @@ fn filter_parent() {
 fn filter_vram() {
 	let mut p = make_process(1, 0, "gpu_app", "alice", 'S', "gpu_app");
 	p.vram_bytes = Some(1024 * 1024);
-	assert!(proc_matches_standalone(&p, &Filter::Vram, &[]));
+	assert!(proc_matches_standalone(
+		&p,
+		&Filter::Vram,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 	assert!(!proc_matches_standalone(
 		&make_process(2, 0, "no_gpu", "alice", 'S', "no_gpu"),
 		&Filter::Vram,
 		&[],
+		PidFilterMode::AllDescendants,
 	));
 }
 
@@ -195,7 +253,12 @@ fn filter_vram() {
 fn filter_electron() {
 	let mut p = make_process(1, 0, "electron", "alice", 'S', "electron");
 	p.is_electron = true;
-	assert!(proc_matches_standalone(&p, &Filter::Electron, &[]));
+	assert!(proc_matches_standalone(
+		&p,
+		&Filter::Electron,
+		&[],
+		PidFilterMode::AllDescendants
+	));
 }
 
 #[test]
@@ -206,18 +269,66 @@ fn filter_state() {
 		&running,
 		&Filter::ProcessState('R'),
 		&[],
+		PidFilterMode::AllDescendants,
 	));
 	assert!(!proc_matches_standalone(
 		&sleeping,
 		&Filter::ProcessState('R'),
 		&[],
+		PidFilterMode::AllDescendants,
 	));
 }
 
 #[test]
 fn filter_pid_direct_child() {
 	let child = make_process(200, 100, "child", "root", 'S', "child");
-	assert!(proc_matches_standalone(&child, &Filter::Pid(100), &[],));
+	assert!(proc_matches_standalone(
+		&child,
+		&Filter::Pid(100),
+		&[],
+		PidFilterMode::DirectChildren,
+	));
+}
+
+#[test]
+fn filter_pid_all_descendants_grandchild() {
+	let grandparent = make_process(10, 1, "grand", "root", 'S', "grand");
+	let parent = make_process(20, 10, "parent", "root", 'S', "parent");
+	let child = make_process(30, 20, "child", "root", 'S', "child");
+	let procs = vec![grandparent, parent, child.clone()];
+	assert!(proc_matches_standalone(
+		&child,
+		&Filter::Pid(10),
+		&procs,
+		PidFilterMode::AllDescendants,
+	));
+}
+
+#[test]
+fn filter_pid_direct_children_grandchild() {
+	let grandparent = make_process(10, 1, "grand", "root", 'S', "grand");
+	let parent = make_process(20, 10, "parent", "root", 'S', "parent");
+	let child = make_process(30, 20, "child", "root", 'S', "child");
+	let procs = vec![grandparent, parent, child.clone()];
+	assert!(!proc_matches_standalone(
+		&child,
+		&Filter::Pid(10),
+		&procs,
+		PidFilterMode::DirectChildren,
+	));
+}
+
+#[test]
+fn filter_pid_direct_child_all_descendants() {
+	let parent = make_process(100, 1, "parent", "root", 'S', "parent");
+	let child = make_process(200, 100, "child", "root", 'S', "child");
+	let procs = vec![parent, child.clone()];
+	assert!(proc_matches_standalone(
+		&child,
+		&Filter::Pid(100),
+		&procs,
+		PidFilterMode::AllDescendants,
+	));
 }
 
 #[test]
@@ -237,7 +348,9 @@ fn filter_mode_and_all_match() {
 	let mut p = make_process(10, 1, "app", "root", 'S', "app");
 	p.is_owned_by_current_user = true;
 	let filters = vec![Filter::Services, Filter::User];
-	let all = filters.iter().all(|f| proc_matches_standalone(&p, f, &[]));
+	let all = filters.iter().all(|f| {
+		proc_matches_standalone(&p, f, &[], PidFilterMode::AllDescendants)
+	});
 	assert!(all);
 }
 
@@ -245,7 +358,9 @@ fn filter_mode_and_all_match() {
 fn filter_mode_and_one_fails() {
 	let p = make_process(10, 1, "app", "root", 'S', "app");
 	let filters = vec![Filter::Services, Filter::Kernel];
-	let all = filters.iter().all(|f| proc_matches_standalone(&p, f, &[]));
+	let all = filters.iter().all(|f| {
+		proc_matches_standalone(&p, f, &[], PidFilterMode::AllDescendants)
+	});
 	assert!(!all);
 }
 
@@ -253,7 +368,9 @@ fn filter_mode_and_one_fails() {
 fn filter_mode_or_any_match() {
 	let p = make_process(10, 1, "app", "root", 'S', "app");
 	let filters = vec![Filter::Services, Filter::Kernel];
-	let any = filters.iter().any(|f| proc_matches_standalone(&p, f, &[]));
+	let any = filters.iter().any(|f| {
+		proc_matches_standalone(&p, f, &[], PidFilterMode::AllDescendants)
+	});
 	assert!(any);
 }
 
@@ -261,7 +378,9 @@ fn filter_mode_or_any_match() {
 fn filter_mode_or_none_match() {
 	let p = make_process(10, 0, "app", "root", 'S', "app");
 	let filters = vec![Filter::Services, Filter::Kernel];
-	let any = filters.iter().any(|f| proc_matches_standalone(&p, f, &[]));
+	let any = filters.iter().any(|f| {
+		proc_matches_standalone(&p, f, &[], PidFilterMode::AllDescendants)
+	});
 	assert!(!any);
 }
 
@@ -269,8 +388,12 @@ fn filter_mode_or_none_match() {
 fn empty_filters_pass_all() {
 	let p = make_process(1, 0, "app", "root", 'S', "app");
 	let filters: Vec<Filter> = vec![];
-	let all = filters.iter().all(|f| proc_matches_standalone(&p, f, &[]));
+	let all = filters.iter().all(|f| {
+		proc_matches_standalone(&p, f, &[], PidFilterMode::AllDescendants)
+	});
 	assert!(all);
-	let any = filters.iter().any(|f| proc_matches_standalone(&p, f, &[]));
+	let any = filters.iter().any(|f| {
+		proc_matches_standalone(&p, f, &[], PidFilterMode::AllDescendants)
+	});
 	assert!(!any);
 }

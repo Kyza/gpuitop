@@ -832,4 +832,158 @@ mod tests {
 		let d = make_delegate(vec![]);
 		assert!(d.pid_to_ppid_map().is_empty());
 	}
+
+	// ── proc_matches ────────────────────────────────────────────
+
+	#[test]
+	fn proc_matches_gui() {
+		let d = make_delegate(vec![]);
+		let mut p = make_proc(1, 0);
+		assert!(!d.proc_matches(&p, &Filter::Gui));
+		p.is_gui = true;
+		assert!(d.proc_matches(&p, &Filter::Gui));
+	}
+
+	#[test]
+	fn proc_matches_user() {
+		let d = make_delegate(vec![]);
+		let mut p = make_proc(1, 0);
+		p.is_owned_by_current_user = true;
+		assert!(d.proc_matches(&p, &Filter::User));
+		p.is_gui = true;
+		assert!(!d.proc_matches(&p, &Filter::User));
+	}
+
+	#[test]
+	fn proc_matches_system() {
+		let d = make_delegate(vec![]);
+		let p = make_proc(2, 100);
+		assert!(d.proc_matches(&p, &Filter::System));
+	}
+
+	#[test]
+	fn proc_matches_system_excludes_kthread() {
+		let d = make_delegate(vec![]);
+		let mut p = make_proc(2, 100);
+		p.is_kthread = true;
+		assert!(!d.proc_matches(&p, &Filter::System));
+	}
+
+	#[test]
+	fn proc_matches_kernel() {
+		let d = make_delegate(vec![]);
+		let mut p = make_proc(2, 0);
+		p.is_kthread = true;
+		assert!(d.proc_matches(&p, &Filter::Kernel));
+	}
+
+	#[test]
+	fn proc_matches_parent() {
+		let d = make_delegate(vec![]);
+		let mut p = make_proc(1, 0);
+		assert!(!d.proc_matches(&p, &Filter::Parent));
+		p.has_children = true;
+		assert!(d.proc_matches(&p, &Filter::Parent));
+	}
+
+	#[test]
+	fn proc_matches_vram_self_only() {
+		let d = make_delegate(vec![]);
+		let mut p = make_proc(1, 0);
+		assert!(!d.proc_matches(&p, &Filter::Vram));
+		p.vram_bytes = Some(4096);
+		assert!(d.proc_matches(&p, &Filter::Vram));
+	}
+
+	#[test]
+	fn proc_matches_vram_cumulative() {
+		let mut parent = make_proc(1, 0);
+		parent.vram_bytes = Some(4096);
+		let mut child = make_proc(10, 1);
+		child.vram_bytes = Some(2048);
+		let d = make_delegate(vec![parent, child.clone()]);
+		d.view_state.borrow_mut().resource_view_mode =
+			ResourceViewMode::Cumulative;
+		assert!(d.proc_matches(&child, &Filter::Vram));
+		assert!(d.proc_matches(&make_proc(1, 0), &Filter::Vram));
+	}
+
+	#[test]
+	fn proc_matches_electron() {
+		let d = make_delegate(vec![]);
+		let mut p = make_proc(1, 0);
+		assert!(!d.proc_matches(&p, &Filter::Electron));
+		p.is_electron = true;
+		assert!(d.proc_matches(&p, &Filter::Electron));
+	}
+
+	#[test]
+	fn proc_matches_process_state() {
+		let d = make_delegate(vec![]);
+		let p = make_proc(1, 0);
+		assert!(d.proc_matches(&p, &Filter::ProcessState('S')));
+		assert!(!d.proc_matches(&p, &Filter::ProcessState('R')));
+	}
+
+	#[test]
+	fn proc_matches_username() {
+		let d = make_delegate(vec![]);
+		let p = make_proc(1, 0);
+		assert!(d.proc_matches(&p, &Filter::Username("root".into())));
+		assert!(!d.proc_matches(&p, &Filter::Username("alice".into())));
+	}
+
+	#[test]
+	fn proc_matches_pid_all_descendants_direct_child() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let child = make_proc(10, 1);
+		assert!(d.proc_matches(&child, &Filter::Pid(1)));
+	}
+
+	#[test]
+	fn proc_matches_pid_all_descendants_grandchild() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(100, 10),
+		]);
+		let grandchild = make_proc(100, 10);
+		assert!(d.proc_matches(&grandchild, &Filter::Pid(1)));
+	}
+
+	#[test]
+	fn proc_matches_pid_direct_children_direct_child() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		d.view_state.borrow_mut().pid_filter_mode =
+			PidFilterMode::DirectChildren;
+		let child = make_proc(10, 1);
+		assert!(d.proc_matches(&child, &Filter::Pid(1)));
+	}
+
+	#[test]
+	fn proc_matches_pid_direct_children_grandchild() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(100, 10),
+		]);
+		d.view_state.borrow_mut().pid_filter_mode =
+			PidFilterMode::DirectChildren;
+		let grandchild = make_proc(100, 10);
+		assert!(!d.proc_matches(&grandchild, &Filter::Pid(1)));
+	}
+
+	#[test]
+	fn proc_matches_services_ppid_1() {
+		let d = make_delegate(vec![]);
+		let p = make_proc(10, 1);
+		assert!(d.proc_matches(&p, &Filter::Services));
+	}
+
+	#[test]
+	fn proc_matches_services_ppid_not_1() {
+		let d = make_delegate(vec![]);
+		let p = make_proc(20, 100);
+		assert!(!d.proc_matches(&p, &Filter::Services));
+	}
 }

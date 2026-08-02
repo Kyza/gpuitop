@@ -388,6 +388,9 @@ fn is_descendant_of_flat(
 	ancestor: i32,
 	all: &[ProcessInfo],
 ) -> bool {
+	if child_pid == ancestor {
+		return false;
+	}
 	let mut current = child_pid;
 	for _ in 0..100 {
 		if current == ancestor {
@@ -568,7 +571,7 @@ mod tests {
 			make_proc(999, 1),
 		];
 		let label = Filter::Pid(42).label(&procs);
-		assert_eq!(label, "parentish (+4 children)");
+		assert_eq!(label, "parentish (+3 children)");
 	}
 
 	#[test]
@@ -580,7 +583,7 @@ mod tests {
 			..make_proc(7, 1)
 		}];
 		let label = Filter::Pid(7).label(&procs);
-		assert_eq!(label, "lonely (+1 children)");
+		assert_eq!(label, "lonely (+0 children)");
 	}
 
 	#[test]
@@ -620,6 +623,12 @@ mod tests {
 	fn is_descendant_of_flat_not_found() {
 		let procs = vec![make_proc(1, 0)];
 		assert!(!is_descendant_of_flat(999, 1, &procs));
+	}
+
+	#[test]
+	fn is_descendant_of_flat_self_is_not_descendant() {
+		let procs = vec![make_proc(1, 0), make_proc(2, 1)];
+		assert!(!is_descendant_of_flat(1, 1, &procs));
 	}
 
 	#[test]
