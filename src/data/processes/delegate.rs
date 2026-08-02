@@ -103,6 +103,9 @@ impl ProcessTableDelegate {
 	}
 
 	pub fn count_descendants_of(&self, pid: i32) -> usize {
+		if let Some(ref cached) = *self.descendant_counts.borrow() {
+			return cached.get(&pid).copied().unwrap_or(0);
+		}
 		self.compute_descendant_counts()
 			.get(&pid)
 			.copied()
