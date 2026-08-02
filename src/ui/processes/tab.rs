@@ -30,6 +30,8 @@ pub struct ProcessesTab {
 		>,
 	>,
 	pub pid_index: Rc<RefCell<Option<std::collections::HashMap<i32, usize>>>>,
+	pub descendant_counts:
+		Rc<RefCell<Option<std::collections::HashMap<i32, usize>>>>,
 	pub view_state: Rc<RefCell<ViewState>>,
 	pub table_state: Option<Entity<TableState<ProcessTableDelegate>>>,
 	pub input_state: Option<Entity<InputState>>,
@@ -68,6 +70,7 @@ impl ProcessesTab {
 			snapshot_cell: Rc::new(RefCell::new(snapshot)),
 			cum_cache: Rc::new(RefCell::new(None)),
 			pid_index: Rc::new(RefCell::new(None)),
+			descendant_counts: Rc::new(RefCell::new(None)),
 			view_state: Rc::new(RefCell::new(ViewState {
 				generation: 0,
 				filters: Vec::new(),
@@ -113,6 +116,7 @@ impl ProcessesTab {
 		*self.snapshot_cell.borrow_mut() = snapshot;
 		*self.cum_cache.borrow_mut() = None;
 		*self.pid_index.borrow_mut() = None;
+		*self.descendant_counts.borrow_mut() = None;
 	}
 
 	pub fn toggle_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
@@ -169,6 +173,7 @@ impl ProcessesTab {
 			snapshot_cell: self.snapshot_cell.clone(),
 			cum_cache: self.cum_cache.clone(),
 			pid_index: self.pid_index.clone(),
+			descendant_counts: self.descendant_counts.clone(),
 			view_state: self.view_state.clone(),
 			column_visibility: self.column_visibility.clone(),
 			init_system: self.init_system,

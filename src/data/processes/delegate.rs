@@ -16,6 +16,7 @@ pub struct ProcessTableDelegate {
 	pub view_state: Rc<RefCell<ViewState>>,
 	pub column_visibility: ProcessesConfig,
 	pub init_system: InitSystem,
+	pub descendant_counts: Rc<RefCell<Option<HashMap<i32, usize>>>>,
 }
 
 impl ProcessTableDelegate {
@@ -61,13 +62,51 @@ impl ProcessTableDelegate {
 	}
 
 	#[hotpath::measure]
+	pub fn compute_descendant_counts(&self) -> HashMap<i32, usize> {
+		if let Some(ref cached) = *self.descendant_counts.borrow() {
+			return cached.clone();
+		}
+		let procs = &self.snapshot_cell.borrow().processes;
+		if self.pid_index.borrow().is_none() {
+			let mut map = HashMap::with_capacity(procs.len());
+			for (i, p) in procs.iter().enumerate() {
+				map.insert(p.pid, i);
+			}
+			*self.pid_index.borrow_mut() = Some(map);
+		}
+		let idx_map = self.pid_index.borrow();
+		let idx_map = idx_map.as_ref().unwrap();
+
+		let mut counts: HashMap<i32, usize> =
+			HashMap::with_capacity(procs.len());
+		for p in procs {
+			let mut cur = p.ppid;
+			loop {
+				if cur == 0 {
+					break;
+				}
+				if let Some(&idx) = idx_map.get(&cur) {
+					let parent = &procs[idx];
+					*counts.entry(cur).or_insert(0) += 1;
+					if parent.ppid == 0 || parent.ppid == cur {
+						break;
+					}
+					cur = parent.ppid;
+				} else {
+					break;
+				}
+			}
+		}
+
+		*self.descendant_counts.borrow_mut() = Some(counts.clone());
+		counts
+	}
+
 	pub fn count_descendants_of(&self, pid: i32) -> usize {
-		self.snapshot_cell
-			.borrow()
-			.processes
-			.iter()
-			.filter(|p| self.is_descendant_of(p.pid, pid))
-			.count()
+		self.compute_descendant_counts()
+			.get(&pid)
+			.copied()
+			.unwrap_or(0)
 	}
 
 	pub fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessInfo> {
@@ -511,6 +550,7 @@ mod tests {
 			snapshot_cell: make_snapshot(procs),
 			cum_cache: Rc::new(RefCell::new(None)),
 			pid_index: Rc::new(RefCell::new(None)),
+			descendant_counts: Rc::new(RefCell::new(None)),
 			view_state: Rc::new(RefCell::new(ViewState {
 				generation: 0,
 				filters: vec![],
