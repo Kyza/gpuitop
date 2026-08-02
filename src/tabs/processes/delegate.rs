@@ -408,7 +408,17 @@ impl ProcessTableDelegate {
 			}
 			Filter::Kernel => proc.is_kthread,
 			Filter::Parent => proc.has_children,
-			Filter::Vram => proc.vram_bytes.is_some(),
+			Filter::Vram => {
+				let vs = self.view_state.borrow();
+				if vs.resource_view_mode == ResourceViewMode::Cumulative {
+					self.compute_aggregate_cumulative_map()
+						.get(&proc.pid)
+						.and_then(|c| c.vram)
+						.is_some()
+				} else {
+					proc.vram_bytes.is_some()
+				}
+			}
 			Filter::Electron => proc.is_electron,
 			Filter::ProcessState(c) => proc.state == *c,
 			Filter::Username(s) => proc.user == *s,
