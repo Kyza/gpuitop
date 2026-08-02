@@ -5,7 +5,7 @@ use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
 	button::{Button, ButtonVariants},
-	setting::{SettingPage, Settings},
+	setting::{SelectIndex, SettingPage, Settings},
 	ActiveTheme, Sizable,
 };
 use std::cell::Cell;
@@ -17,6 +17,7 @@ pub struct SettingsTab {
 	pub config: Config,
 	refresh_ms: Arc<AtomicU64>,
 	theme: Rc<Cell<Theme>>,
+	initial_page_index: Option<usize>,
 }
 
 impl SettingsTab {
@@ -24,12 +25,14 @@ impl SettingsTab {
 		config: Config,
 		refresh_ms: Arc<AtomicU64>,
 		theme: Rc<Cell<Theme>>,
+		initial_page_index: Option<usize>,
 		_cx: &mut Context<Self>,
 	) -> Self {
 		Self {
 			config,
 			refresh_ms,
 			theme,
+			initial_page_index,
 		}
 	}
 
@@ -72,12 +75,17 @@ impl Render for SettingsTab {
 			.size_full()
 			.flex()
 			.flex_col()
-			.child(
-				div().flex_grow(1.0).w_full().overflow_hidden().child(
-					Settings::new("gpuitop-settings")
-						.pages(self.setting_pages(window, cx)),
-				),
-			)
+			.child(div().flex_grow(1.0).w_full().overflow_hidden().child({
+				let mut settings = Settings::new("gpuitop-settings")
+					.pages(self.setting_pages(window, cx));
+				if let Some(ix) = self.initial_page_index {
+					settings = settings.default_selected_index(SelectIndex {
+						page_ix: ix,
+						group_ix: None,
+					});
+				}
+				settings
+			}))
 			.child(
 				div()
 					.w_full()

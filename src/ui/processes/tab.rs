@@ -58,6 +58,8 @@ impl ProcessesTab {
 		config: Config,
 		snapshot: Rc<SystemSnapshot>,
 		init_system: InitSystem,
+		override_view: Option<bool>,
+		search: Option<String>,
 		cx: &mut Context<Self>,
 	) -> Self {
 		let sort_col = config.processes.default_sort.column.to_col_index();
@@ -66,6 +68,10 @@ impl ProcessesTab {
 		} else {
 			crate::data::model::SortDirection::Ascending
 		};
+		let show_tree = override_view.unwrap_or(
+			config.processes.behaviour.default_view_mode
+				== DefaultViewMode::Tree,
+		);
 		Self {
 			snapshot_cell: Rc::new(RefCell::new(snapshot)),
 			cum_cache: Rc::new(RefCell::new(None)),
@@ -92,7 +98,7 @@ impl ProcessesTab {
 				.behaviour
 				.clear_search_on_pin,
 			needs_clear_input: Rc::new(Cell::new(false)),
-			needs_set_input: None,
+			needs_set_input: search,
 			needs_focus_input: false,
 			_events: None,
 			_subscriptions: Vec::new(),
@@ -104,8 +110,7 @@ impl ProcessesTab {
 			pick_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
 			init_system,
 			show_filters: true,
-			show_tree_view: config.processes.behaviour.default_view_mode
-				== DefaultViewMode::Tree,
+			show_tree_view: show_tree,
 			tree_state: cx.new(|cx| TreeState::new(cx)),
 			tree_double_click: Rc::new(RefCell::new(None)),
 			cached_tree_data: None,
@@ -242,7 +247,7 @@ impl Render for ProcessesTab {
 			});
 			let view_state = self.view_state.clone();
 			let is_clone = input_state.clone();
-			let mut subs: Vec<Subscription> = vec![cx.subscribe_in(
+			let subs: Vec<Subscription> = vec![cx.subscribe_in(
 				&input_state,
 				window,
 				move |_, _, ev: &InputEvent, _, cx| match ev {

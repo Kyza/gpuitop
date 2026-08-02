@@ -6,9 +6,19 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+fn default_true() -> bool {
+	true
+}
+
+fn default_sort_column() -> SortColumn {
+	SortColumn::Cpu
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InterfaceConfig {
+	#[serde(default)]
 	pub refresh_ms: u64,
+	#[serde(default)]
 	pub theme: Theme,
 }
 
@@ -37,13 +47,17 @@ impl Default for GeneralConfig {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColumnEntry {
+	#[serde(default)]
 	pub column: SortColumn,
+	#[serde(default = "default_true")]
 	pub visible: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SortConfig {
+	#[serde(default = "default_sort_column")]
 	pub column: SortColumn,
+	#[serde(default = "default_true")]
 	pub descending: bool,
 }
 
@@ -77,10 +91,15 @@ fn default_column_layout() -> Vec<ColumnEntry> {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BehaviourConfig {
+	#[serde(default)]
 	pub vram_polling: VramPolling,
+	#[serde(default)]
 	pub pid_filter_mode: PidFilterMode,
+	#[serde(default = "default_true")]
 	pub clear_search_on_pin: bool,
+	#[serde(default)]
 	pub resource_view_mode: ResourceViewMode,
+	#[serde(default)]
 	pub default_view_mode: DefaultViewMode,
 }
 
@@ -158,7 +177,74 @@ impl Default for Config {
 	}
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct OverrideConfig {
+	pub general: Option<GeneralConfig>,
+	pub processes: Option<ProcessesConfig>,
+	pub default_grouping: Option<ProcessGrouping>,
+	pub disk_devices: Option<Vec<String>>,
+	pub network_interfaces: Option<Vec<String>>,
+	pub window_width: Option<u32>,
+	pub window_height: Option<u32>,
+}
+
 impl Config {
+	pub fn apply_override(&mut self, ron_str: &str) -> Result<()> {
+		let options = ron::Options::default().with_default_extension(
+			ron::extensions::Extensions::IMPLICIT_SOME,
+		);
+		let ov: OverrideConfig = options
+			.from_str(ron_str)
+			.with_context(|| "Failed to parse --override RON")?;
+		if let Some(general) = ov.general {
+			self.general = general;
+		}
+		if let Some(processes) = ov.processes {
+			self.processes = processes;
+		}
+		if let Some(default_grouping) = ov.default_grouping {
+			self.default_grouping = default_grouping;
+		}
+		if let Some(disk_devices) = ov.disk_devices {
+			self.disk_devices = disk_devices;
+		}
+		if let Some(network_interfaces) = ov.network_interfaces {
+			self.network_interfaces = network_interfaces;
+		}
+		if let Some(w) = ov.window_width {
+			self.window_width = w;
+		}
+		if let Some(h) = ov.window_height {
+			self.window_height = h;
+		}
+		Ok(())
+	}
+
+	pub fn load_from(path: Option<&std::path::Path>) -> Self {
+		if let Some(path) = path {
+			match std::fs::read_to_string(path) {
+				Ok(data) => match ron::from_str(&data) {
+					Ok(config) => return config,
+					Err(e) => {
+						eprintln!(
+							"Failed to parse config '{}': {e}. Using \
+							 defaults.",
+							path.display()
+						);
+					}
+				},
+				Err(e) => {
+					eprintln!(
+						"Failed to read config '{}': {e}. Using defaults.",
+						path.display()
+					);
+				}
+			}
+			return Self::default();
+		}
+		Self::load()
+	}
+
 	pub fn config_path() -> PathBuf {
 		let base = dirs::config_dir()
 			.unwrap_or_else(|| PathBuf::from("."))
@@ -434,5 +520,103 @@ mod tests {
 		cfg.disk_devices = vec!["sda".into(), "nvme0n1".into()];
 		cfg.network_interfaces = vec!["eth0".into()];
 		roundtrip(&cfg);
+	}
+
+	#[test]
+	fn test_override_config_deserialize_empty() {
+		let ov: OverrideConfig = ron::from_str("()").unwrap();
+		assert!(ov.general.is_none());
+		assert!(ov.processes.is_none());
+		assert!(ov.default_grouping.is_none());
+		assert!(ov.disk_devices.is_none());
+		assert!(ov.network_interfaces.is_none());
+		assert!(ov.window_width.is_none());
+		assert!(ov.window_height.is_none());
+	}
+
+	#[test]
+	fn test_apply_override_general_refresh_ms() {
+		let mut cfg = Config::default();
+		cfg.apply_override(
+			"(general: (interface: (refresh_ms: 500, theme: Dark)))",
+		)
+		.unwrap();
+		assert_eq!(cfg.general.interface.refresh_ms, 500);
+		assert_eq!(cfg.general.interface.theme, Theme::Dark);
+	}
+
+	#[test]
+	fn test_apply_override_processes_view_mode() {
+		let mut cfg = Config::default();
+		cfg.processes.behaviour.default_view_mode = DefaultViewMode::List;
+		cfg.apply_override(
+			"(processes: (behaviour: (default_view_mode: Tree)))",
+		)
+		.unwrap();
+		assert_eq!(
+			cfg.processes.behaviour.default_view_mode,
+			DefaultViewMode::Tree
+		);
+	}
+
+	#[test]
+	fn test_apply_override_multiple_sections() {
+		let mut cfg = Config::default();
+		cfg.apply_override(
+			r#"(general: (interface: (refresh_ms: 500, theme: Dark)), window_width: 1920)"#,
+		)
+		.unwrap();
+		assert_eq!(cfg.general.interface.refresh_ms, 500);
+		assert_eq!(cfg.window_width, 1920);
+		assert_eq!(cfg.window_height, 700);
+	}
+
+	#[test]
+	fn test_apply_override_last_wins() {
+		let mut cfg = Config::default();
+		cfg.apply_override("(window_width: 800)").unwrap();
+		cfg.apply_override("(window_width: 1024)").unwrap();
+		assert_eq!(cfg.window_width, 1024);
+	}
+
+	#[test]
+	fn test_apply_override_does_not_touch_unspecified() {
+		let mut cfg = Config::default();
+		cfg.processes.behaviour.vram_polling = VramPolling::Off;
+		cfg.apply_override(
+			"(general: (interface: (refresh_ms: 500, theme: Dark)))",
+		)
+		.unwrap();
+		assert_eq!(cfg.processes.behaviour.vram_polling, VramPolling::Off);
+		assert_eq!(cfg.window_width, 1100);
+	}
+
+	#[test]
+	fn test_override_deep_merge_partial() {
+		let mut cfg = Config::default();
+		cfg.apply_override(
+			"(processes: (behaviour: (resource_view_mode: Cumulative)))",
+		)
+		.unwrap();
+		assert_eq!(
+			cfg.processes.behaviour.resource_view_mode,
+			ResourceViewMode::Cumulative
+		);
+		assert_eq!(cfg.processes.behaviour.clear_search_on_pin, true);
+	}
+
+	#[test]
+	fn test_override_config_ron_roundtrip() {
+		let options = ron::Options::default().with_default_extension(
+			ron::extensions::Extensions::IMPLICIT_SOME,
+		);
+		let ron_str = r#"(general: (interface: (refresh_ms: 750, theme: Light)), window_width: 1600, window_height: 900)"#;
+		let ov: OverrideConfig = options.from_str(ron_str).unwrap();
+		let gen = ov.general.unwrap();
+		assert_eq!(gen.interface.refresh_ms, 750);
+		assert_eq!(gen.interface.theme, Theme::Light);
+		assert_eq!(ov.window_width, Some(1600));
+		assert_eq!(ov.window_height, Some(900));
+		assert!(ov.processes.is_none());
 	}
 }

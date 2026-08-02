@@ -17,10 +17,11 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
 ] }
 gpui-component = { git = "https://github.com/longbridge/gpui-component" }
 gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+lexopt = "0.3"
 procfs = "0.16"
 nvml-wrapper = "0.10"
 serde = { version = "1", features = ["derive"] }
-ron = "0.8"
+ron = "0.12"
 anyhow = "1"
 users = "0.11"
 libc = "0.2"

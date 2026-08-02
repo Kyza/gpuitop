@@ -43,8 +43,14 @@ pub(crate) fn apply_theme(
 }
 
 impl App {
-	pub fn new(cx: &mut Context<Self>) -> Self {
-		let config = Config::load();
+	pub fn new(
+		active_tab: usize,
+		initial_settings_page: Option<usize>,
+		search: Option<String>,
+		override_view: Option<bool>,
+		config: Config,
+		cx: &mut Context<Self>,
+	) -> Self {
 		let gpu_backend = detect_gpu();
 		let init_system = detect_init();
 
@@ -55,6 +61,8 @@ impl App {
 				config.clone(),
 				initial_snapshot.clone(),
 				init_system,
+				override_view,
+				search,
 				cx,
 			)
 		});
@@ -68,6 +76,7 @@ impl App {
 				config.clone(),
 				refresh_ms.clone(),
 				theme_cell.clone(),
+				initial_settings_page,
 				cx,
 			)
 		});
@@ -88,7 +97,7 @@ impl App {
 		});
 
 		Self {
-			active_tab: 0,
+			active_tab,
 			theme: theme_cell,
 			config,
 			snapshot: initial_snapshot,

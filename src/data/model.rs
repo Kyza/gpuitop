@@ -101,9 +101,17 @@ pub struct SystemSnapshot {
 }
 
 #[derive(
-	Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
+	Default,
 )]
 pub enum ResourceViewMode {
+	#[default]
 	SelfOnly,
 	Cumulative,
 }
@@ -172,9 +180,17 @@ impl std::fmt::Display for ProcessGrouping {
 }
 
 #[derive(
-	Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
+	Default,
 )]
 pub enum SortColumn {
+	#[default]
 	Name,
 	Pid,
 	User,
@@ -248,10 +264,18 @@ impl std::fmt::Display for SortColumn {
 }
 
 #[derive(
-	Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
+	Default,
 )]
 pub enum PidFilterMode {
 	AllDescendants,
+	#[default]
 	DirectChildren,
 }
 
@@ -272,11 +296,19 @@ pub enum GpuBackend {
 }
 
 #[derive(
-	Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
+	Default,
 )]
 pub enum Theme {
 	Dark,
 	Light,
+	#[default]
 	System,
 }
 
@@ -291,9 +323,17 @@ impl std::fmt::Display for Theme {
 }
 
 #[derive(
-	Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
+	Default,
 )]
 pub enum VramPolling {
+	#[default]
 	Auto,
 	On,
 	Off,
