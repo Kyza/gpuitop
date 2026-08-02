@@ -203,7 +203,7 @@ impl ProcessesTab {
 										gpui_component::button::Button::new("clear-search")
 											.ghost()
 											.icon(
-												LucideIcon::Close.icon()
+												LucideIcon::X.icon()
 													.size(px(14.0))
 													.text_color(
 														cx.theme()

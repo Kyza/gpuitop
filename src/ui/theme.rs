@@ -75,27 +75,21 @@ pub fn tag_icons(
 	let dark = theme_dark_or_light(cx);
 	let mut tags = Vec::new();
 	if proc.is_gui {
-		tags.push((
-			LucideIcon::LayoutDashboard,
-			tag_color(TagType::Gui, dark),
-		));
+		tags.push((LucideIcon::AppWindow, tag_color(TagType::Gui, dark)));
 	}
 	if proc.is_owned_by_current_user && !proc.is_gui {
 		tags.push((LucideIcon::User, tag_color(TagType::User, dark)));
 	}
 	if !proc.is_kthread && !proc.is_owned_by_current_user && proc.ppid != 1 {
-		tags.push((LucideIcon::Settings, tag_color(TagType::System, dark)));
+		tags.push((LucideIcon::UserShield, tag_color(TagType::System, dark)));
 	}
 	let is_svc =
 		is_service(proc, init_system, &HashSet::new(), &HashSet::new());
 	if is_svc {
-		tags.push((
-			LucideIcon::SquareTerminal,
-			tag_color(TagType::Services, dark),
-		));
+		tags.push((LucideIcon::Server, tag_color(TagType::Services, dark)));
 	}
 	if proc.is_kthread {
-		tags.push((LucideIcon::Cpu, tag_color(TagType::Kernel, dark)));
+		tags.push((LucideIcon::Microchip, tag_color(TagType::Kernel, dark)));
 	}
 	if proc.vram_bytes.is_some() {
 		tags.push((LucideIcon::Gpu, tag_color(TagType::Vram, dark)));
@@ -108,11 +102,11 @@ pub fn tag_icons(
 
 pub fn filter_icon(filter: &Filter) -> Option<LucideIcon> {
 	match filter {
-		Filter::Gui => Some(LucideIcon::LayoutDashboard),
+		Filter::Gui => Some(LucideIcon::AppWindow),
 		Filter::User => Some(LucideIcon::User),
-		Filter::System => Some(LucideIcon::Settings),
-		Filter::Services => Some(LucideIcon::SquareTerminal),
-		Filter::Kernel => Some(LucideIcon::Cpu),
+		Filter::System => Some(LucideIcon::UserShield),
+		Filter::Services => Some(LucideIcon::Server),
+		Filter::Kernel => Some(LucideIcon::Microchip),
 		Filter::Parent => Some(LucideIcon::FolderTree),
 		Filter::Vram => Some(LucideIcon::Gpu),
 		Filter::Electron => Some(LucideIcon::Atom),

@@ -85,7 +85,7 @@ pub fn render_filter_chip(
 								});
 								cx.notify();
 							}))
-							.child(LucideIcon::Close.icon().size(px(10.0))),
+							.child(LucideIcon::X.icon().size(px(10.0))),
 					),
 			)
 			.into_any_element()

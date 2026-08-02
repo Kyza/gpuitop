@@ -44,7 +44,7 @@ impl ProcessesTab {
 					.rounded(px(2.0))
 					.hover(|s| s.bg(cx.theme().muted.opacity(0.15)))
 					.child(
-						LucideIcon::Close
+						LucideIcon::X
 							.icon()
 							.size(px(12.0))
 							.text_color(cx.theme().muted_foreground),

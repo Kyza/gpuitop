@@ -2,6 +2,11 @@
 mod data;
 mod ui;
 
+#[allow(dead_code)]
+mod built {
+	include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 use crate::ui::app::app_view;
 use crate::ui::assets::{layered, lucide};
 use gpui::*;

@@ -2,6 +2,10 @@
 name = "gpuitop"
 version = "0.1.0"
 edition = "2021"
+description = "Linux-first process manager"
+license = "MIT"
+authors = ["Kyza"]
+repository = "https://github.com/Kyza/gpuitop"
 
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed" }
@@ -40,3 +44,6 @@ strip = "symbols"
 
 [profile.dev.package."*"]
 opt-level = 2
+
+[build-dependencies]
+cargo_metadata = "0.19"
