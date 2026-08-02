@@ -2769,6 +2769,7 @@ dependencies = [
  "open",
  "procfs",
  "ron",
+ "ron2",
  "rust-embed",
  "serde",
  "users",
@@ -5783,6 +5784,32 @@ dependencies = [
  "serde_derive",
  "typeid",
  "unicode-ident",
+]
+
+[[package]]
+name = "ron2"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d848d04e0f3e72961da846ed82f8d2fbe03e03a6e71558e45b11b9ef7663fcd5"
+dependencies = [
+ "ahash",
+ "bitflags 2.13.1",
+ "indexmap",
+ "itoa",
+ "ron2-derive",
+ "unicode-ident",
+]
+
+[[package]]
+name = "ron2-derive"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071ea1a6cb225f3915d0a5957afa1f4fe48684864a617b7755af59aef52738dc"
+dependencies = [
+ "dirs",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

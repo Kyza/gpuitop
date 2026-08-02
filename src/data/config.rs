@@ -177,46 +177,20 @@ impl Default for Config {
 	}
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct OverrideConfig {
-	pub general: Option<GeneralConfig>,
-	pub processes: Option<ProcessesConfig>,
-	pub default_grouping: Option<ProcessGrouping>,
-	pub disk_devices: Option<Vec<String>>,
-	pub network_interfaces: Option<Vec<String>>,
-	pub window_width: Option<u32>,
-	pub window_height: Option<u32>,
-}
-
 impl Config {
 	pub fn apply_override(&mut self, ron_str: &str) -> Result<()> {
-		let options = ron::Options::default().with_default_extension(
-			ron::extensions::Extensions::IMPLICIT_SOME,
-		);
-		let ov: OverrideConfig = options
-			.from_str(ron_str)
+		let base_ron = ron::to_string(self)
+			.with_context(|| "Failed to serialize base config")?;
+		let mut base_value: ron2::Value = base_ron
+			.parse()
+			.with_context(|| "Failed to parse base config")?;
+		let overlay_value: ron2::Value = ron_str
+			.parse()
 			.with_context(|| "Failed to parse --override RON")?;
-		if let Some(general) = ov.general {
-			self.general = general;
-		}
-		if let Some(processes) = ov.processes {
-			self.processes = processes;
-		}
-		if let Some(default_grouping) = ov.default_grouping {
-			self.default_grouping = default_grouping;
-		}
-		if let Some(disk_devices) = ov.disk_devices {
-			self.disk_devices = disk_devices;
-		}
-		if let Some(network_interfaces) = ov.network_interfaces {
-			self.network_interfaces = network_interfaces;
-		}
-		if let Some(w) = ov.window_width {
-			self.window_width = w;
-		}
-		if let Some(h) = ov.window_height {
-			self.window_height = h;
-		}
+		crate::data::merge::deep_merge(&mut base_value, &overlay_value);
+		let merged_ron = base_value.to_string();
+		*self = ron::from_str(&merged_ron)
+			.with_context(|| "Failed to apply override")?;
 		Ok(())
 	}
 
@@ -523,19 +497,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_override_config_deserialize_empty() {
-		let ov: OverrideConfig = ron::from_str("()").unwrap();
-		assert!(ov.general.is_none());
-		assert!(ov.processes.is_none());
-		assert!(ov.default_grouping.is_none());
-		assert!(ov.disk_devices.is_none());
-		assert!(ov.network_interfaces.is_none());
-		assert!(ov.window_width.is_none());
-		assert!(ov.window_height.is_none());
-	}
-
-	#[test]
-	fn test_apply_override_general_refresh_ms() {
+	fn test_apply_override_refresh_ms() {
 		let mut cfg = Config::default();
 		cfg.apply_override(
 			"(general: (interface: (refresh_ms: 500, theme: Dark)))",
@@ -580,7 +542,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_apply_override_does_not_touch_unspecified() {
+	fn test_apply_override_preserves_unspecified() {
 		let mut cfg = Config::default();
 		cfg.processes.behaviour.vram_polling = VramPolling::Off;
 		cfg.apply_override(
@@ -592,8 +554,19 @@ mod tests {
 	}
 
 	#[test]
-	fn test_override_deep_merge_partial() {
+	fn test_apply_override_partial_enum_field() {
 		let mut cfg = Config::default();
+		cfg.general.interface.theme = Theme::Dark;
+		cfg.apply_override("(general: (interface: (refresh_ms: 500)))")
+			.unwrap();
+		assert_eq!(cfg.general.interface.refresh_ms, 500);
+		assert_eq!(cfg.general.interface.theme, Theme::Dark);
+	}
+
+	#[test]
+	fn test_apply_override_partial_behaviour() {
+		let mut cfg = Config::default();
+		cfg.processes.behaviour.clear_search_on_pin = false;
 		cfg.apply_override(
 			"(processes: (behaviour: (resource_view_mode: Cumulative)))",
 		)
@@ -602,21 +575,6 @@ mod tests {
 			cfg.processes.behaviour.resource_view_mode,
 			ResourceViewMode::Cumulative
 		);
-		assert_eq!(cfg.processes.behaviour.clear_search_on_pin, true);
-	}
-
-	#[test]
-	fn test_override_config_ron_roundtrip() {
-		let options = ron::Options::default().with_default_extension(
-			ron::extensions::Extensions::IMPLICIT_SOME,
-		);
-		let ron_str = r#"(general: (interface: (refresh_ms: 750, theme: Light)), window_width: 1600, window_height: 900)"#;
-		let ov: OverrideConfig = options.from_str(ron_str).unwrap();
-		let gen = ov.general.unwrap();
-		assert_eq!(gen.interface.refresh_ms, 750);
-		assert_eq!(gen.interface.theme, Theme::Light);
-		assert_eq!(ov.window_width, Some(1600));
-		assert_eq!(ov.window_height, Some(900));
-		assert!(ov.processes.is_none());
+		assert_eq!(cfg.processes.behaviour.clear_search_on_pin, false);
 	}
 }

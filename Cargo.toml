@@ -22,6 +22,7 @@ procfs = "0.16"
 nvml-wrapper = "0.10"
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
+ron2 = "0.3"
 anyhow = "1"
 users = "0.11"
 libc = "0.2"
