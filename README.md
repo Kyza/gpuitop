@@ -38,6 +38,16 @@ Discord, VS Code, and other Electron apps show their real name instead of "elect
 
 The Performance tab shows CPU (overall bar + per-core gauges), memory (total, used, available, cached, swap), disk I/O per device, and network throughput per interface.
 
+## Screenshots
+
+| Dark | Light |
+|------|-------|
+| ![List view — dark theme, searching "vesktop"](screenshots/list-view-dark.png) | ![List view — light theme, searching "vesktop"](screenshots/list-view-light.png) |
+| ![Tree view — dark theme, searching "vesktop"](screenshots/tree-view-dark.png) | ![Tree view — light theme, searching "vesktop"](screenshots/tree-view-light.png) |
+| ![Settings about — dark theme](screenshots/settings-about-dark.png) | ![Settings about — light theme](screenshots/settings-about-light.png) |
+
+> Regenerate with `./screenshots/generate.sh` (requires [driftym](https://github.com/malbiruk/driftym)).
+
 ## CLI
 
 Run `gpuitop -h` for the full usage text.
