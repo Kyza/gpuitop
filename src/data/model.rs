@@ -416,3 +416,265 @@ impl std::fmt::Display for FilterMode {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn make_proc(pid: i32, ppid: i32) -> ProcessInfo {
+		ProcessInfo {
+			pid,
+			ppid,
+			name: "test".into(),
+			user: "root".into(),
+			state: 'S',
+			command: "test".into(),
+			cgroup: String::new(),
+			cpu_percent: 0.0,
+			mem_percent: 0.0,
+			mem_rss: 0,
+			vram_bytes: None,
+			disk_read_bytes_per_sec: 0.0,
+			disk_write_bytes_per_sec: 0.0,
+			is_gui: false,
+			is_kthread: false,
+			is_owned_by_current_user: false,
+			is_electron: false,
+			electron_app_name: None,
+			children: vec![],
+			has_children: false,
+		}
+	}
+
+	#[test]
+	fn sort_column_all_returns_9_variants() {
+		let cols = SortColumn::all();
+		assert_eq!(cols.len(), 9);
+		assert!(cols.contains(&SortColumn::Name));
+		assert!(cols.contains(&SortColumn::Pid));
+		assert!(cols.contains(&SortColumn::User));
+		assert!(cols.contains(&SortColumn::State));
+		assert!(cols.contains(&SortColumn::Cpu));
+		assert!(cols.contains(&SortColumn::Memory));
+		assert!(cols.contains(&SortColumn::Vram));
+		assert!(cols.contains(&SortColumn::DiskRead));
+		assert!(cols.contains(&SortColumn::DiskWrite));
+	}
+
+	#[test]
+	fn sort_column_to_col_index() {
+		assert_eq!(SortColumn::Name.to_col_index(), 1);
+		assert_eq!(SortColumn::Pid.to_col_index(), 2);
+		assert_eq!(SortColumn::User.to_col_index(), 3);
+		assert_eq!(SortColumn::State.to_col_index(), 4);
+		assert_eq!(SortColumn::Cpu.to_col_index(), 5);
+		assert_eq!(SortColumn::Memory.to_col_index(), 6);
+		assert_eq!(SortColumn::Vram.to_col_index(), 7);
+		assert_eq!(SortColumn::DiskRead.to_col_index(), 8);
+		assert_eq!(SortColumn::DiskWrite.to_col_index(), 9);
+	}
+
+	#[test]
+	fn sort_column_from_col_index_roundtrip() {
+		for col in SortColumn::all() {
+			let ix = col.to_col_index();
+			let back = SortColumn::from_col_index(ix);
+			assert_eq!(back, Some(col), "roundtrip failed for {:?}", col);
+		}
+	}
+
+	#[test]
+	fn sort_column_from_col_index_valid_indices() {
+		assert_eq!(SortColumn::from_col_index(1), Some(SortColumn::Name));
+		assert_eq!(SortColumn::from_col_index(2), Some(SortColumn::Pid));
+		assert_eq!(SortColumn::from_col_index(3), Some(SortColumn::User));
+		assert_eq!(SortColumn::from_col_index(4), Some(SortColumn::State));
+		assert_eq!(SortColumn::from_col_index(5), Some(SortColumn::Cpu));
+		assert_eq!(SortColumn::from_col_index(6), Some(SortColumn::Memory));
+		assert_eq!(SortColumn::from_col_index(7), Some(SortColumn::Vram));
+		assert_eq!(SortColumn::from_col_index(8), Some(SortColumn::DiskRead));
+		assert_eq!(
+			SortColumn::from_col_index(9),
+			Some(SortColumn::DiskWrite)
+		);
+	}
+
+	#[test]
+	fn sort_column_from_col_index_invalid() {
+		assert_eq!(SortColumn::from_col_index(0), None);
+		assert_eq!(SortColumn::from_col_index(10), None);
+		assert_eq!(SortColumn::from_col_index(999), None);
+	}
+
+	#[test]
+	fn state_label_all_branches() {
+		assert_eq!(state_label('R'), "Running");
+		assert_eq!(state_label('S'), "Sleeping");
+		assert_eq!(state_label('D'), "Disk Sleep");
+		assert_eq!(state_label('Z'), "Zombie");
+		assert_eq!(state_label('T'), "Stopped");
+		assert_eq!(state_label('t'), "Tracing Stop");
+		assert_eq!(state_label('I'), "Idle");
+		assert_eq!(state_label('X'), "Dead");
+		assert_eq!(state_label('?'), "Other");
+		assert_eq!(state_label('A'), "Other");
+		assert_eq!(state_label('z'), "Other");
+	}
+
+	#[test]
+	fn filter_label_simple_variants() {
+		let procs = vec![];
+		assert_eq!(Filter::Gui.label(&procs), "GUI");
+		assert_eq!(Filter::User.label(&procs), "User");
+		assert_eq!(Filter::System.label(&procs), "System");
+		assert_eq!(Filter::Services.label(&procs), "Services");
+		assert_eq!(Filter::Kernel.label(&procs), "Kernel");
+		assert_eq!(Filter::Parent.label(&procs), "Parent");
+		assert_eq!(Filter::Vram.label(&procs), "VRAM");
+		assert_eq!(Filter::Electron.label(&procs), "Electron");
+	}
+
+	#[test]
+	fn filter_label_process_state() {
+		let procs = vec![];
+		assert_eq!(Filter::ProcessState('R').label(&procs), "Running");
+		assert_eq!(Filter::ProcessState('S').label(&procs), "Sleeping");
+		assert_eq!(Filter::ProcessState('X').label(&procs), "Dead");
+		assert_eq!(Filter::ProcessState('?').label(&procs), "Other");
+	}
+
+	#[test]
+	fn filter_label_username() {
+		let procs = vec![];
+		assert_eq!(
+			Filter::Username("testuser".into()).label(&procs),
+			"testuser"
+		);
+		assert_eq!(Filter::Username("root".into()).label(&procs), "root");
+	}
+
+	#[test]
+	fn filter_label_pid_flat_child_count() {
+		let procs = vec![
+			ProcessInfo {
+				pid: 42,
+				ppid: 1,
+				name: "parentish".into(),
+				..make_proc(42, 1)
+			},
+			make_proc(100, 42),
+			make_proc(200, 100),
+			make_proc(300, 200),
+			make_proc(999, 1),
+		];
+		let label = Filter::Pid(42).label(&procs);
+		assert_eq!(label, "parentish (+4 children)");
+	}
+
+	#[test]
+	fn filter_label_pid_no_children() {
+		let procs = vec![ProcessInfo {
+			pid: 7,
+			ppid: 1,
+			name: "lonely".into(),
+			..make_proc(7, 1)
+		}];
+		let label = Filter::Pid(7).label(&procs);
+		assert_eq!(label, "lonely (+1 children)");
+	}
+
+	#[test]
+	fn filter_label_pid_missing_uses_pid_string() {
+		let procs = vec![];
+		let label = Filter::Pid(12345).label(&procs);
+		assert_eq!(label, "12345 (+0 children)");
+	}
+
+	#[test]
+	fn is_descendant_of_flat_direct_child() {
+		let procs = vec![make_proc(10, 5), make_proc(5, 1), make_proc(1, 0)];
+		assert!(is_descendant_of_flat(10, 5, &procs));
+		assert!(is_descendant_of_flat(10, 1, &procs));
+		assert!(!is_descendant_of_flat(5, 10, &procs));
+	}
+
+	#[test]
+	fn is_descendant_of_flat_grandchild() {
+		let procs = vec![make_proc(10, 5), make_proc(5, 1), make_proc(1, 0)];
+		assert!(is_descendant_of_flat(10, 1, &procs));
+	}
+
+	#[test]
+	fn is_descendant_of_flat_chain() {
+		let procs = vec![
+			make_proc(400, 300),
+			make_proc(300, 200),
+			make_proc(200, 100),
+			make_proc(100, 1),
+		];
+		assert!(is_descendant_of_flat(400, 100, &procs));
+		assert!(!is_descendant_of_flat(100, 400, &procs));
+	}
+
+	#[test]
+	fn is_descendant_of_flat_not_found() {
+		let procs = vec![make_proc(1, 0)];
+		assert!(!is_descendant_of_flat(999, 1, &procs));
+	}
+
+	#[test]
+	fn display_resource_view_mode() {
+		assert_eq!(ResourceViewMode::SelfOnly.to_string(), "Self");
+		assert_eq!(ResourceViewMode::Cumulative.to_string(), "Cumulative");
+	}
+
+	#[test]
+	fn display_default_view_mode() {
+		assert_eq!(DefaultViewMode::List.to_string(), "List");
+		assert_eq!(DefaultViewMode::Tree.to_string(), "Tree");
+	}
+
+	#[test]
+	fn display_process_grouping() {
+		assert_eq!(ProcessGrouping::Auto.to_string(), "Auto");
+		assert_eq!(ProcessGrouping::ByUser.to_string(), "By User");
+		assert_eq!(ProcessGrouping::ByState.to_string(), "By State");
+		assert_eq!(ProcessGrouping::Flat.to_string(), "Flat");
+	}
+
+	#[test]
+	fn display_pid_filter_mode() {
+		assert_eq!(
+			PidFilterMode::AllDescendants.to_string(),
+			"All descendants"
+		);
+		assert_eq!(PidFilterMode::DirectChildren.to_string(), "Direct only");
+	}
+
+	#[test]
+	fn display_theme() {
+		assert_eq!(Theme::Dark.to_string(), "Dark");
+		assert_eq!(Theme::Light.to_string(), "Light");
+		assert_eq!(Theme::System.to_string(), "System");
+	}
+
+	#[test]
+	fn display_vram_polling() {
+		assert_eq!(VramPolling::Auto.to_string(), "Auto");
+		assert_eq!(VramPolling::On.to_string(), "On");
+		assert_eq!(VramPolling::Off.to_string(), "Off");
+	}
+
+	#[test]
+	fn display_gpu_backend() {
+		assert_eq!(GpuBackend::None.to_string(), "None");
+		assert_eq!(GpuBackend::Nvidia.to_string(), "NVIDIA");
+		assert_eq!(GpuBackend::Amd.to_string(), "AMD");
+	}
+
+	#[test]
+	fn display_filter_mode() {
+		assert_eq!(FilterMode::And.to_string(), "AND");
+		assert_eq!(FilterMode::Or.to_string(), "OR");
+	}
+}

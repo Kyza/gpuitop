@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InterfaceConfig {
 	pub refresh_ms: u64,
 	pub theme: Theme,
@@ -21,7 +21,7 @@ impl Default for InterfaceConfig {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeneralConfig {
 	#[serde(default)]
 	pub interface: InterfaceConfig,
@@ -35,13 +35,13 @@ impl Default for GeneralConfig {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColumnEntry {
 	pub column: SortColumn,
 	pub visible: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SortConfig {
 	pub column: SortColumn,
 	pub descending: bool,
@@ -75,7 +75,7 @@ fn default_column_layout() -> Vec<ColumnEntry> {
 		.collect()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BehaviourConfig {
 	pub vram_polling: VramPolling,
 	pub pid_filter_mode: PidFilterMode,
@@ -96,7 +96,7 @@ impl Default for BehaviourConfig {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProcessesConfig {
 	#[serde(default)]
 	pub behaviour: BehaviourConfig,
@@ -126,7 +126,7 @@ impl ProcessesConfig {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
 	#[serde(default)]
 	pub general: GeneralConfig,
@@ -226,5 +226,213 @@ mod dirs {
 			return Some(PathBuf::from(home).join(".config"));
 		}
 		None
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::data::model::{
+		DefaultViewMode, PidFilterMode, ResourceViewMode, SortColumn, Theme,
+		VramPolling,
+	};
+
+	#[test]
+	fn test_interface_config_default() {
+		let cfg = InterfaceConfig::default();
+		assert_eq!(cfg.refresh_ms, 1500);
+		assert_eq!(cfg.theme, Theme::System);
+	}
+
+	#[test]
+	fn test_general_config_default() {
+		let cfg = GeneralConfig::default();
+		assert_eq!(cfg.interface, InterfaceConfig::default());
+	}
+
+	#[test]
+	fn test_column_entry_default() {
+		let entry = ColumnEntry::default();
+		assert_eq!(entry.column, SortColumn::Name);
+		assert!(entry.visible);
+	}
+
+	#[test]
+	fn test_sort_config_default() {
+		let sort = SortConfig::default();
+		assert_eq!(sort.column, SortColumn::Cpu);
+		assert!(sort.descending);
+	}
+
+	#[test]
+	fn test_behaviour_config_default() {
+		let b = BehaviourConfig::default();
+		assert_eq!(b.vram_polling, VramPolling::Auto);
+		assert_eq!(b.pid_filter_mode, PidFilterMode::DirectChildren);
+		assert!(b.clear_search_on_pin);
+		assert_eq!(b.resource_view_mode, ResourceViewMode::SelfOnly);
+		assert_eq!(b.default_view_mode, DefaultViewMode::List);
+	}
+
+	#[test]
+	fn test_processes_config_default() {
+		let cfg = ProcessesConfig::default();
+		assert_eq!(cfg.behaviour, BehaviourConfig::default());
+		assert_eq!(cfg.default_sort, SortConfig::default());
+		assert_eq!(cfg.columns.len(), 9);
+		for entry in &cfg.columns {
+			assert!(entry.visible);
+		}
+		let columns: Vec<SortColumn> =
+			cfg.columns.iter().map(|e| e.column).collect();
+		assert_eq!(columns, SortColumn::all());
+	}
+
+	#[test]
+	fn test_config_default() {
+		let cfg = Config::default();
+		assert_eq!(cfg.window_width, 1100);
+		assert_eq!(cfg.window_height, 700);
+		assert_eq!(cfg.general, GeneralConfig::default());
+		assert_eq!(cfg.processes, ProcessesConfig::default());
+		assert!(cfg.disk_devices.is_empty());
+		assert!(cfg.network_interfaces.is_empty());
+	}
+
+	#[test]
+	fn test_is_col_visible_known_column() {
+		let cfg = ProcessesConfig::default();
+		assert!(cfg.is_col_visible(SortColumn::Name));
+		assert!(cfg.is_col_visible(SortColumn::Cpu));
+		assert!(cfg.is_col_visible(SortColumn::Vram));
+	}
+
+	#[test]
+	fn test_is_col_visible_hidden() {
+		let mut cfg = ProcessesConfig::default();
+		if let Some(entry) = cfg
+			.columns
+			.iter_mut()
+			.find(|e| e.column == SortColumn::Vram)
+		{
+			entry.visible = false;
+		}
+		assert!(!cfg.is_col_visible(SortColumn::Vram));
+		assert!(cfg.is_col_visible(SortColumn::Cpu));
+	}
+
+	#[test]
+	fn test_is_col_visible_missing_column_returns_true() {
+		let mut cfg = ProcessesConfig::default();
+		cfg.columns.retain(|e| e.column != SortColumn::Pid);
+		assert!(cfg.is_col_visible(SortColumn::Pid));
+	}
+
+	#[test]
+	fn test_default_column_layout() {
+		let layout = default_column_layout();
+		assert_eq!(layout.len(), 9);
+		for entry in &layout {
+			assert!(entry.visible);
+		}
+		let columns: Vec<SortColumn> =
+			layout.iter().map(|e| e.column).collect();
+		let mut expected = SortColumn::all();
+		expected.sort_by_key(|c| c.to_col_index());
+		let mut sorted: Vec<SortColumn> = columns.clone();
+		sorted.sort_by_key(|c| c.to_col_index());
+		assert_eq!(sorted, expected);
+	}
+
+	#[test]
+	fn test_config_path_ends_with_gpuitop_config_ron() {
+		let path = Config::config_path();
+		assert!(
+			path.ends_with("gpuitop/config.ron"),
+			"Expected path to end with 'gpuitop/config.ron', got {:?}",
+			path
+		);
+	}
+
+	fn roundtrip<
+		T: Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
+	>(
+		val: &T,
+	) {
+		let serialized = ron::ser::to_string_pretty(
+			val,
+			ron::ser::PrettyConfig::default(),
+		)
+		.expect("serialization failed");
+		let deserialized: T =
+			ron::from_str(&serialized).expect("deserialization failed");
+		assert_eq!(*val, deserialized);
+	}
+
+	#[test]
+	fn test_interface_config_roundtrip() {
+		roundtrip(&InterfaceConfig::default());
+		roundtrip(&InterfaceConfig {
+			refresh_ms: 500,
+			theme: Theme::Dark,
+		});
+	}
+
+	#[test]
+	fn test_general_config_roundtrip() {
+		roundtrip(&GeneralConfig::default());
+	}
+
+	#[test]
+	fn test_column_entry_roundtrip() {
+		roundtrip(&ColumnEntry::default());
+		roundtrip(&ColumnEntry {
+			column: SortColumn::Vram,
+			visible: false,
+		});
+	}
+
+	#[test]
+	fn test_sort_config_roundtrip() {
+		roundtrip(&SortConfig::default());
+		roundtrip(&SortConfig {
+			column: SortColumn::Memory,
+			descending: false,
+		});
+	}
+
+	#[test]
+	fn test_behaviour_config_roundtrip() {
+		roundtrip(&BehaviourConfig::default());
+		roundtrip(&BehaviourConfig {
+			vram_polling: VramPolling::On,
+			pid_filter_mode: PidFilterMode::AllDescendants,
+			clear_search_on_pin: false,
+			resource_view_mode: ResourceViewMode::Cumulative,
+			default_view_mode: DefaultViewMode::Tree,
+		});
+	}
+
+	#[test]
+	fn test_processes_config_roundtrip() {
+		roundtrip(&ProcessesConfig::default());
+		let mut cfg = ProcessesConfig::default();
+		cfg.columns.truncate(3);
+		cfg.default_sort = SortConfig {
+			column: SortColumn::Name,
+			descending: false,
+		};
+		roundtrip(&cfg);
+	}
+
+	#[test]
+	fn test_config_roundtrip() {
+		roundtrip(&Config::default());
+		let mut cfg = Config::default();
+		cfg.window_width = 1920;
+		cfg.window_height = 1080;
+		cfg.disk_devices = vec!["sda".into(), "nvme0n1".into()];
+		cfg.network_interfaces = vec!["eth0".into()];
+		roundtrip(&cfg);
 	}
 }

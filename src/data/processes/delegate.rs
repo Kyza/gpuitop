@@ -443,3 +443,393 @@ impl ProcessTableDelegate {
 			.collect()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::data::config::ProcessesConfig;
+	use crate::data::platform::system::InitSystem;
+	use std::cell::RefCell;
+	use std::rc::Rc;
+
+	fn make_snapshot(
+		procs: Vec<ProcessInfo>,
+	) -> Rc<RefCell<Rc<SystemSnapshot>>> {
+		let snap = SystemSnapshot {
+			processes: procs,
+			cpu: CpuInfo {
+				cores: vec![],
+				overall_percent: 0.0,
+			},
+			memory: MemoryInfo {
+				total: 0,
+				used: 0,
+				available: 0,
+				free: 0,
+				buffers: 0,
+				cached: 0,
+				swap_total: 0,
+				swap_used: 0,
+				swap_free: 0,
+			},
+			disks: vec![],
+			networks: vec![],
+			timestamp: std::time::Instant::now(),
+			gpu_backend: GpuBackend::None,
+		};
+		Rc::new(RefCell::new(Rc::new(snap)))
+	}
+
+	fn make_proc(pid: i32, ppid: i32) -> ProcessInfo {
+		ProcessInfo {
+			pid,
+			ppid,
+			name: format!("proc-{pid}"),
+			user: "root".into(),
+			state: 'S',
+			command: format!("/usr/bin/proc-{pid}"),
+			cgroup: String::new(),
+			cpu_percent: pid as f32,
+			mem_percent: 0.0,
+			mem_rss: pid as u64 * 1024,
+			vram_bytes: None,
+			disk_read_bytes_per_sec: pid as f64,
+			disk_write_bytes_per_sec: pid as f64,
+			is_gui: false,
+			is_kthread: false,
+			is_owned_by_current_user: false,
+			is_electron: false,
+			electron_app_name: None,
+			children: vec![],
+			has_children: false,
+		}
+	}
+
+	fn make_delegate(procs: Vec<ProcessInfo>) -> ProcessTableDelegate {
+		ProcessTableDelegate {
+			snapshot_cell: make_snapshot(procs),
+			cum_cache: Rc::new(RefCell::new(None)),
+			pid_index: Rc::new(RefCell::new(None)),
+			view_state: Rc::new(RefCell::new(ViewState {
+				generation: 0,
+				filters: vec![],
+				filter_mode: FilterMode::And,
+				pid_filter_mode: PidFilterMode::AllDescendants,
+				search: String::new(),
+				sort_col: 2,
+				sort_dir: SortDirection::Ascending,
+				resource_view_mode: ResourceViewMode::SelfOnly,
+				cached: None,
+			})),
+			column_visibility: ProcessesConfig::default(),
+			init_system: InitSystem::Unknown,
+		}
+	}
+
+	// ── is_col_hidden ──────────────────────────────────────────
+
+	#[test]
+	fn is_col_hidden_col_0_never_hidden() {
+		let d = make_delegate(vec![]);
+		assert!(!d.is_col_hidden(0));
+	}
+
+	#[test]
+	fn is_col_hidden_name_visible_by_default() {
+		let d = make_delegate(vec![]);
+		assert!(!d.is_col_hidden(1));
+	}
+
+	#[test]
+	fn is_col_hidden_after_hiding_name() {
+		let mut d = make_delegate(vec![]);
+		if let Some(entry) = d
+			.column_visibility
+			.columns
+			.iter_mut()
+			.find(|e| e.column == SortColumn::Name)
+		{
+			entry.visible = false;
+		}
+		assert!(d.is_col_hidden(1));
+	}
+
+	#[test]
+	fn is_col_hidden_out_of_range_returns_false() {
+		let d = make_delegate(vec![]);
+		assert!(!d.is_col_hidden(999));
+	}
+
+	// ── is_descendant_of ──────────────────────────────────────
+
+	#[test]
+	fn descendant_direct_child() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		assert!(d.is_descendant_of(10, 1));
+	}
+
+	#[test]
+	fn descendant_grandchild() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(100, 10),
+		]);
+		assert!(d.is_descendant_of(100, 1));
+	}
+
+	#[test]
+	fn descendant_not_descendant() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 2)]);
+		assert!(!d.is_descendant_of(10, 1));
+	}
+
+	#[test]
+	fn descendant_pid_eq_ancestor_returns_false() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		assert!(!d.is_descendant_of(1, 1));
+	}
+
+	#[test]
+	fn descendant_ppid_zero_terminates() {
+		let d = make_delegate(vec![make_proc(1, 0)]);
+		assert!(!d.is_descendant_of(1, 100));
+	}
+
+	#[test]
+	fn descendant_unknown_pid_returns_false() {
+		let d = make_delegate(vec![make_proc(1, 0)]);
+		assert!(!d.is_descendant_of(999, 1));
+	}
+
+	// ── count_descendants_of ──────────────────────────────────
+
+	#[test]
+	fn count_descendants_parent_with_children() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(20, 1),
+			make_proc(30, 1),
+		]);
+		assert_eq!(d.count_descendants_of(1), 3);
+	}
+
+	#[test]
+	fn count_descendants_leaf_has_none() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		assert_eq!(d.count_descendants_of(10), 0);
+	}
+
+	#[test]
+	fn count_descendants_nested() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(20, 10),
+			make_proc(30, 20),
+		]);
+		assert_eq!(d.count_descendants_of(1), 3);
+		assert_eq!(d.count_descendants_of(10), 2);
+	}
+
+	// ── ancestor_chain_of ─────────────────────────────────────
+
+	#[test]
+	fn ancestor_chain_leaf_to_root() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(100, 10),
+		]);
+		let chain = d.ancestor_chain_of(100);
+		let pids: Vec<i32> = chain.iter().map(|p| p.pid).collect();
+		assert_eq!(pids, vec![1, 10, 100]);
+	}
+
+	#[test]
+	fn ancestor_chain_root_is_itself() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let chain = d.ancestor_chain_of(1);
+		let pids: Vec<i32> = chain.iter().map(|p| p.pid).collect();
+		assert_eq!(pids, vec![1]);
+	}
+
+	#[test]
+	fn ancestor_chain_unknown_pid_empty() {
+		let d = make_delegate(vec![make_proc(1, 0)]);
+		let chain = d.ancestor_chain_of(999);
+		assert!(chain.is_empty());
+	}
+
+	// ── compute_aggregate_cumulative_map ──────────────────────
+
+	#[test]
+	fn cum_map_parent_child_sum() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let map = d.compute_aggregate_cumulative_map();
+		assert_eq!(map[&1].cpu, 1.0 + 10.0);
+		assert_eq!(map[&1].mem_rss, 1024 + 10240);
+		assert_eq!(map[&10].cpu, 10.0);
+	}
+
+	#[test]
+	fn cum_map_multi_level_tree() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(100, 10),
+			make_proc(200, 10),
+		]);
+		let map = d.compute_aggregate_cumulative_map();
+		assert_eq!(map[&1].cpu, 1.0 + 10.0 + 100.0 + 200.0);
+		assert_eq!(map[&10].cpu, 10.0 + 100.0 + 200.0);
+		assert_eq!(map[&100].cpu, 100.0);
+	}
+
+	#[test]
+	fn cum_map_no_children_self_values() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 0),
+			make_proc(20, 0),
+		]);
+		let map = d.compute_aggregate_cumulative_map();
+		assert_eq!(map[&1].cpu, 1.0);
+		assert_eq!(map[&10].cpu, 10.0);
+		assert_eq!(map[&20].cpu, 20.0);
+	}
+
+	#[test]
+	fn cum_map_cache_hit_second_call() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let map1 = d.compute_aggregate_cumulative_map();
+		let map2 = d.compute_aggregate_cumulative_map();
+		assert_eq!(map1[&1].cpu, map2[&1].cpu);
+	}
+
+	#[test]
+	fn cum_map_vram_parent_none_child_some() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let new_snap = {
+			let borrowed = d.snapshot_cell.borrow();
+			let mut clone: SystemSnapshot = (**borrowed).clone();
+			clone.processes[1].vram_bytes = Some(4096);
+			clone
+		};
+		*d.snapshot_cell.borrow_mut() = Rc::new(new_snap);
+		let map = d.compute_aggregate_cumulative_map();
+		assert_eq!(map[&1].vram, Some(4096));
+	}
+
+	#[test]
+	fn cum_map_vram_child_none_parent_some() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let new_snap = {
+			let borrowed = d.snapshot_cell.borrow();
+			let mut clone: SystemSnapshot = (**borrowed).clone();
+			clone.processes[0].vram_bytes = Some(4096);
+			clone
+		};
+		*d.snapshot_cell.borrow_mut() = Rc::new(new_snap);
+		let map = d.compute_aggregate_cumulative_map();
+		assert_eq!(map[&1].vram, Some(4096));
+	}
+
+	#[test]
+	fn cum_map_empty() {
+		let d = make_delegate(vec![]);
+		let map = d.compute_aggregate_cumulative_map();
+		assert!(map.is_empty());
+	}
+
+	// ── pid_filter_mode ───────────────────────────────────────
+
+	#[test]
+	fn pid_filter_mode_all_descendants() {
+		let d = make_delegate(vec![]);
+		assert_eq!(d.pid_filter_mode(), PidFilterMode::AllDescendants);
+	}
+
+	#[test]
+	fn pid_filter_mode_direct_children() {
+		let d = make_delegate(vec![]);
+		d.view_state.borrow_mut().pid_filter_mode =
+			PidFilterMode::DirectChildren;
+		assert_eq!(d.pid_filter_mode(), PidFilterMode::DirectChildren);
+	}
+
+	// ── pinned_pid ────────────────────────────────────────────
+
+	#[test]
+	fn pinned_pid_none_when_no_pid_filter() {
+		let d = make_delegate(vec![]);
+		assert_eq!(d.pinned_pid(), None);
+	}
+
+	#[test]
+	fn pinned_pid_returns_some() {
+		let d = make_delegate(vec![]);
+		d.view_state.borrow_mut().filters = vec![Filter::Pid(42)];
+		assert_eq!(d.pinned_pid(), Some(42));
+	}
+
+	#[test]
+	fn pinned_pid_with_other_filters_returns_none() {
+		let d = make_delegate(vec![]);
+		d.view_state.borrow_mut().filters = vec![Filter::Gui, Filter::Kernel];
+		assert_eq!(d.pinned_pid(), None);
+	}
+
+	// ── descendant_pids_of ────────────────────────────────────
+
+	#[test]
+	fn descendant_pids_of_empty() {
+		let d = make_delegate(vec![make_proc(1, 0)]);
+		assert_eq!(d.descendant_pids_of(1), Vec::<i32>::new());
+	}
+
+	#[test]
+	fn descendant_pids_of_children() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(20, 1),
+			make_proc(30, 2),
+		]);
+		let mut pids = d.descendant_pids_of(1);
+		pids.sort();
+		assert_eq!(pids, vec![10, 20]);
+	}
+
+	// ── pid_to_ppid_map ───────────────────────────────────────
+
+	#[test]
+	fn pid_to_ppid_map_entries() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(100, 10),
+		]);
+		let map = d.pid_to_ppid_map();
+		assert_eq!(map[&1], 0);
+		assert_eq!(map[&10], 1);
+		assert_eq!(map[&100], 10);
+	}
+
+	#[test]
+	fn pid_to_ppid_map_size() {
+		let d = make_delegate(vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(20, 1),
+		]);
+		assert_eq!(d.pid_to_ppid_map().len(), 3);
+	}
+
+	#[test]
+	fn pid_to_ppid_map_empty() {
+		let d = make_delegate(vec![]);
+		assert!(d.pid_to_ppid_map().is_empty());
+	}
+}
