@@ -46,7 +46,7 @@ The Performance tab shows CPU (overall bar + per-core gauges), memory (total, us
 | ![Tree view — dark theme, searching "vesktop"](screenshots/tree-view-dark.png) | ![Tree view — light theme, searching "vesktop"](screenshots/tree-view-light.png) |
 | ![Settings about — dark theme](screenshots/settings-about-dark.png) | ![Settings about — light theme](screenshots/settings-about-light.png) |
 
-> Regenerate with `./screenshots/generate.sh` (requires [driftym](https://github.com/malbiruk/driftym)).
+> Regenerate with `./screenshots/generate.sh` (requires [driftwm](https://github.com/malbiruk/driftwm)).
 
 ## CLI
 
