@@ -91,7 +91,9 @@ pub fn pids_of_runsv(processes: &[ProcessInfo]) -> HashSet<i32> {
 		.collect()
 }
 
-pub(crate) fn pids_of_supervise_daemon(processes: &[ProcessInfo]) -> HashSet<i32> {
+pub(crate) fn pids_of_supervise_daemon(
+	processes: &[ProcessInfo],
+) -> HashSet<i32> {
 	processes
 		.iter()
 		.filter(|p| p.name == "supervise-daemon")
@@ -113,8 +115,7 @@ pub fn is_service(
 			is_systemd_service_cgroup(&proc.cgroup)
 		}
 		InitSystem::OpenRc => {
-			proc.ppid == 1
-				|| supervise_pids.contains(&proc.ppid)
+			proc.ppid == 1 || supervise_pids.contains(&proc.ppid)
 		}
 		InitSystem::Runit => runsv_pids.contains(&proc.ppid),
 		InitSystem::Dinit | InitSystem::SysV | InitSystem::Unknown => {
@@ -129,22 +130,22 @@ mod tests {
 
 	#[test]
 	fn systemd_cgroup_matches_service() {
-		assert!(is_systemd_service_cgroup(
-			"0::/system.slice/sshd.service\n"
-		));
+		assert!(is_systemd_service_cgroup("0::/system.slice/sshd.service\n"));
 	}
 
 	#[test]
 	fn systemd_cgroup_matches_user_service() {
 		assert!(is_systemd_service_cgroup(
-			"0::/user.slice/user-1000.slice/user@1000.service/app.slice/gnome-keyring-daemon.service\n"
+			"0::/user.slice/user-1000.slice/user@1000.service/app.slice/\
+			 gnome-keyring-daemon.service\n"
 		));
 	}
 
 	#[test]
 	fn systemd_cgroup_rejects_scope_unit() {
 		assert!(!is_systemd_service_cgroup(
-			"0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-ghostty-surface-transient-1562569.scope\n"
+			"0::/user.slice/user-1000.slice/user@1000.service/app.slice/\
+			 app-ghostty-surface-transient-1562569.scope\n"
 		));
 	}
 
@@ -155,16 +156,12 @@ mod tests {
 
 	#[test]
 	fn systemd_cgroup_no_newline() {
-		assert!(is_systemd_service_cgroup(
-			"0::/system.slice/cron.service"
-		));
+		assert!(is_systemd_service_cgroup("0::/system.slice/cron.service"));
 	}
 
 	#[test]
 	fn systemd_cgroup_init_scope_rejected() {
-		assert!(!is_systemd_service_cgroup(
-			"0::/init.scope\n"
-		));
+		assert!(!is_systemd_service_cgroup("0::/init.scope\n"));
 	}
 
 	#[test]

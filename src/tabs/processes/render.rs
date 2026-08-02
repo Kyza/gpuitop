@@ -1,4 +1,4 @@
-use super::chips::{get_state_item, render_filter_chip};
+use super::chips::get_state_item;
 use super::state::ViewState;
 use super::ProcessesTab;
 use crate::model::*;
@@ -6,13 +6,16 @@ use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
 	breadcrumb::{Breadcrumb, BreadcrumbItem},
-	button::{Button, ButtonGroup, ButtonVariants, Toggle, ToggleGroup},
+	button::{
+		Button, ButtonGroup, ButtonVariants, Toggle, ToggleGroup,
+		ToggleVariants,
+	},
 	input::{Input, InputEvent, InputState},
 	menu::{DropdownMenu, PopupMenuItem},
 	skeleton::Skeleton,
 	spinner::Spinner,
 	table::{DataTable, TableEvent, TableState},
-	ActiveTheme, Icon, IconName, Sizable,
+	ActiveTheme, Icon, IconName, Sizable, StyledExt,
 };
 
 impl ProcessesTab {
@@ -165,7 +168,9 @@ impl ProcessesTab {
 							.map(|f| self.view_state.borrow().filters.contains(f))
 							.collect();
 						let mut group = ToggleGroup::new("type-filters")
-							.small();
+							.segmented()
+							.small()
+							.outline();
 						for (i, f) in type_filters.iter().enumerate() {
 							let icon_name = super::theme::filter_icon(f);
 							let tooltip = match f {
@@ -177,6 +182,17 @@ impl ProcessesTab {
 								Filter::Parent => "Processes that have child processes.",
 								Filter::Vram => "Processes using GPU video memory.",
 								Filter::Electron => "Electron-based desktop applications.",
+								_ => "",
+							};
+							let label = match f {
+								Filter::Gui => "GUI",
+								Filter::User => "User",
+								Filter::System => "System",
+								Filter::Services => "Services",
+								Filter::Kernel => "Kernel",
+								Filter::Parent => "Parent",
+								Filter::Vram => "VRAM",
+								Filter::Electron => "Electron",
 								_ => "",
 							};
 							let id = match f {
@@ -193,7 +209,8 @@ impl ProcessesTab {
 							let color = super::theme::filter_color(f, cx);
 							let mut t = Toggle::new(id)
 								.checked(active[i])
-								.tooltip(tooltip);
+								.tooltip(tooltip)
+								.gap_1();
 							if let Some(ic) = icon_name {
 								t = t.icon(
 									Icon::new(ic)
@@ -201,6 +218,7 @@ impl ProcessesTab {
 										.text_color(color),
 								);
 							}
+							t = t.label(label);
 							group = group.child(t);
 						}
 						group.on_click(cx.listener(move |this, checkeds: &Vec<bool>, _, cx| {
@@ -221,31 +239,18 @@ impl ProcessesTab {
 							cx.notify();
 						}))
 					})
-					.children({
-						let active_states: Vec<_> = self
-							.view_state
-							.borrow()
-							.filters
-							.iter()
-							.filter(|f| matches!(f, Filter::ProcessState(_)))
-							.cloned()
-							.collect();
-						let chips: Vec<AnyElement> = active_states
-							.iter()
-							.map(|f| {
-								render_filter_chip(
-									f,
-									&f.label(&[]),
-									true,
-									true,
-									cx,
-								)
-							})
-							.collect();
-						chips
-					}),
 			)
-			.child(
+			.child({
+				let active_states: Vec<char> = self
+					.view_state
+					.borrow()
+					.filters
+					.iter()
+					.filter_map(|f| match f {
+						Filter::ProcessState(c) => Some(*c),
+						_ => None,
+					})
+					.collect();
 				div()
 					.flex()
 					.flex_row()
@@ -277,66 +282,69 @@ impl ProcessesTab {
 									}))
 							}),
 					)
-					.child({
-						let view_state = self.view_state.clone();
-						Button::new("state-filter")
-							.ghost()
-							.label("State")
-							.small()
-							.tooltip("Filter processes by state.")
-							.dropdown_menu(move |menu, _window, _cx| {
-								let vs = view_state.borrow();
-								let active: Vec<char> = vs
-									.filters
-									.iter()
-									.filter_map(|f| match f {
-										Filter::ProcessState(c) => Some(*c),
-										_ => None,
+					.child(
+						div()
+							.flex()
+							.flex_row()
+							.gap_1()
+							.child({
+								let view_state = self.view_state.clone();
+								Button::new("state-filter")
+									.label("State")
+									.dropdown_caret(true)
+									.small()
+									.tooltip("Filter processes by state.")
+									.dropdown_menu(move |mut menu, _window, _cx| {
+										let vs = view_state.borrow();
+										let active: Vec<char> = vs
+											.filters
+											.iter()
+											.filter_map(|f| match f {
+												Filter::ProcessState(c) => Some(*c),
+												_ => None,
+											})
+											.collect();
+										drop(vs);
+										let vs = view_state.clone();
+										let all_states = ['R', 'S', 'D', 'Z', 'T', 't', 'I'];
+										if !active.is_empty() {
+											menu = menu.item(PopupMenuItem::Label(
+												"Process State".into(),
+											));
+										}
+										for c in all_states.iter().filter(|c| !active.contains(c)) {
+											menu = menu.item(get_state_item(
+												*c,
+												&active,
+												vs.clone(),
+											));
+										}
+										menu
 									})
-									.collect();
-								drop(vs);
-								let vs = view_state.clone();
-								menu.item(PopupMenuItem::Label(
-									"Process State".into(),
-								))
-								.item(get_state_item(
-									'R',
-									&active,
-									vs.clone(),
-								))
-								.item(get_state_item(
-									'S',
-									&active,
-									vs.clone(),
-								))
-								.item(get_state_item(
-									'D',
-									&active,
-									vs.clone(),
-								))
-								.item(get_state_item(
-									'Z',
-									&active,
-									vs.clone(),
-								))
-								.item(get_state_item(
-									'T',
-									&active,
-									vs.clone(),
-								))
-								.item(get_state_item(
-									't',
-									&active,
-									vs.clone(),
-								))
-								.item(get_state_item(
-									'I',
-									&active,
-									vs.clone(),
-								))
 							})
-					}),
-			)
+							.when(!active_states.is_empty(), |el| {
+								el.child(
+									ButtonGroup::new("active-state-buttons")
+										.outline()
+										.children(active_states.iter().map(|c| {
+									let state = *c;
+									Button::new(format!("state-btn-{state}"))
+										.label(state.to_string())
+										.small()
+										.tooltip("Click to remove this state filter.")
+										.on_click(cx.listener(move |this, _, _, cx| {
+											ViewState::mutate(&this.view_state, |s| {
+												s.filters.retain(|f| {
+													!matches!(f, Filter::ProcessState(c2) if *c2 == state)
+												});
+											});
+											cx.notify();
+										}))
+								}))
+							)
+						})
+					)
+				})
 			.when(!pid_filters.is_empty(), |el| {
 				el.child(self.render_pid_breadcrumb(_window, cx))
 			})

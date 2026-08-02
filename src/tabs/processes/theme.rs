@@ -82,12 +82,8 @@ pub fn tag_icons(
 	if !proc.is_kthread && !proc.is_owned_by_current_user && proc.ppid != 1 {
 		tags.push((IconName::Settings2, tag_color(TagType::System, dark)));
 	}
-	let is_svc = is_service(
-		proc,
-		init_system,
-		&HashSet::new(),
-		&HashSet::new(),
-	);
+	let is_svc =
+		is_service(proc, init_system, &HashSet::new(), &HashSet::new());
 	if is_svc {
 		tags.push((
 			IconName::SquareTerminal,

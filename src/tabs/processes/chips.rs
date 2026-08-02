@@ -40,28 +40,27 @@ pub fn render_filter_chip(
 			}));
 		if let Some(t) = tooltip {
 			el = el.tooltip(move |window, cx| {
-				gpui_component::tooltip::Tooltip::new(t)
-					.build(window, cx)
+				gpui_component::tooltip::Tooltip::new(t).build(window, cx)
 			});
 		}
 		el.child(
-				Tag::info().outline().child(
-					div()
-						.flex()
-						.flex_row()
-						.items_center()
-						.gap(px(4.0))
-						.when(icon.is_some(), |el| {
-							el.child(
-								Icon::new(icon.unwrap())
-									.size(px(12.0))
-									.text_color(icon_color),
-							)
-						})
-						.child(label_str),
-				),
-			)
-			.into_any_element()
+			Tag::info().outline().child(
+				div()
+					.flex()
+					.flex_row()
+					.items_center()
+					.gap(px(4.0))
+					.when(icon.is_some(), |el| {
+						el.child(
+							Icon::new(icon.unwrap())
+								.size(px(12.0))
+								.text_color(icon_color),
+						)
+					})
+					.child(label_str),
+			),
+		)
+		.into_any_element()
 	} else if is_active {
 		// PidFilter active: shows ✕ to remove
 		let f = filter.clone();
@@ -102,28 +101,27 @@ pub fn render_filter_chip(
 			}));
 		if let Some(t) = tooltip {
 			el = el.tooltip(move |window, cx| {
-				gpui_component::tooltip::Tooltip::new(t)
-					.build(window, cx)
+				gpui_component::tooltip::Tooltip::new(t).build(window, cx)
 			});
 		}
 		el.child(
-				Tag::new().child(
-					div()
-						.flex()
-						.flex_row()
-						.items_center()
-						.gap(px(4.0))
-						.when(icon.is_some(), |el| {
-							el.child(
-								Icon::new(icon.unwrap())
-									.size(px(12.0))
-									.text_color(icon_color),
-							)
-						})
-						.child(label_str),
-				),
-			)
-			.into_any_element()
+			Tag::new().child(
+				div()
+					.flex()
+					.flex_row()
+					.items_center()
+					.gap(px(4.0))
+					.when(icon.is_some(), |el| {
+						el.child(
+							Icon::new(icon.unwrap())
+								.size(px(12.0))
+								.text_color(icon_color),
+						)
+					})
+					.child(label_str),
+			),
+		)
+		.into_any_element()
 	}
 }
 

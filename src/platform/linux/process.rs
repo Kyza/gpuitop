@@ -256,7 +256,8 @@ impl SystemCollector {
 								.unwrap_or(false)
 					})
 				};
-				let roots: HashSet<i32> = root_map.values().copied().collect();
+				let roots: HashSet<i32> =
+					root_map.values().copied().collect();
 				let real_electron_roots: HashSet<i32> = roots
 					.iter()
 					.filter(|r| is_electron_root(**r))
