@@ -15,7 +15,7 @@ use gpui_component::{
 	skeleton::Skeleton,
 	spinner::Spinner,
 	table::{DataTable, TableEvent, TableState},
-	ActiveTheme, Icon, IconName, Sizable, StyledExt,
+	ActiveTheme, Icon, IconName, Sizable,
 };
 
 impl ProcessesTab {
@@ -47,6 +47,14 @@ impl ProcessesTab {
 				(f.clone(), label)
 			})
 			.collect();
+		let mut username_set = std::collections::BTreeSet::new();
+		for p in &snapshot.processes {
+			if !p.user.is_empty() {
+				username_set.insert(p.user.clone());
+			}
+		}
+		let unique_usernames: Vec<String> =
+			username_set.into_iter().collect();
 		drop(snapshot);
 
 		let mode = self.view_state.borrow().filter_mode;
@@ -66,6 +74,25 @@ impl ProcessesTab {
 					.flex_row()
 					.gap(px(8.0))
 					.items_center()
+					.child(
+						Toggle::new("toggle-filters")
+							.outline()
+							.checked(self.show_filters)
+							.icon(
+								Icon::new(IconName::Menu)
+									.size(px(12.0))
+									.text_color(cx.theme().muted_foreground),
+							)
+							.tooltip(if self.show_filters {
+								"Hide filter bar."
+							} else {
+								"Show filter bar."
+							})
+							.on_click(cx.listener(move |this, checked: &bool, _, cx| {
+								this.show_filters = *checked;
+								cx.notify();
+							})),
+					)
 					.child({
 						let pick_result = self.pick_result.clone();
 						let is_picking = self.is_picking.clone();
@@ -86,7 +113,6 @@ impl ProcessesTab {
 								div()
 									.flex()
 									.flex_row()
-									.items_center()
 									.child({
 										let r = pick_result.clone();
 										let p = is_picking.clone();
@@ -155,14 +181,15 @@ impl ProcessesTab {
 							)
 					}),
 			)
-			.child(
-				div()
-					.flex()
-					.flex_row()
-					.flex_wrap()
-					.gap(px(4.0))
-					.items_center()
-					.child({
+			.when(self.show_filters, |el| {
+				el.child(
+					div()
+						.flex()
+						.flex_row()
+						.flex_wrap()
+						.gap(px(4.0))
+						.items_center()
+						.child({
 						let active: Vec<bool> = type_filters
 							.iter()
 							.map(|f| self.view_state.borrow().filters.contains(f))
@@ -238,115 +265,161 @@ impl ProcessesTab {
 							});
 							cx.notify();
 						}))
-					})
-			)
-			.child({
-				let active_states: Vec<char> = self
-					.view_state
-					.borrow()
-					.filters
-					.iter()
-					.filter_map(|f| match f {
-						Filter::ProcessState(c) => Some(*c),
-						_ => None,
-					})
-					.collect();
-				div()
-					.flex()
-					.flex_row()
-					.gap(px(4.0))
-					.child(
-						ButtonGroup::new("controls")
-							.outline()
-							.child(
-								Button::new("and-or")
-									.label(mode.to_string())
-									.small()
-									.tooltip("Toggle between AND and OR filter logic.")
-									.on_click(cx.listener(|this, _, _, cx| {
-										this.toggle_filter_mode(cx)
-									})),
-							)
-							.child({
-								let view_label = self
-									.view_state
-									.borrow()
-									.resource_view_mode
-									.to_string();
-								Button::new("resource-view")
-									.label(view_label)
-									.small()
-									.tooltip("Toggle between per-process and cumulative resource usage.")
-									.on_click(cx.listener(|this, _, _, cx| {
-										this.toggle_resource_view_mode(cx)
-									}))
-							}),
-					)
-					.child(
-						div()
-							.flex()
-							.flex_row()
-							.gap_1()
-							.child({
-								let view_state = self.view_state.clone();
-								Button::new("state-filter")
-									.label("State")
-									.dropdown_caret(true)
-									.small()
-									.tooltip("Filter processes by state.")
-									.dropdown_menu(move |mut menu, _window, _cx| {
-										let vs = view_state.borrow();
-										let active: Vec<char> = vs
-											.filters
-											.iter()
-											.filter_map(|f| match f {
-												Filter::ProcessState(c) => Some(*c),
-												_ => None,
-											})
-											.collect();
-										drop(vs);
-										let vs = view_state.clone();
-										let all_states = ['R', 'S', 'D', 'Z', 'T', 't', 'I'];
-										if !active.is_empty() {
-											menu = menu.item(PopupMenuItem::Label(
-												"Process State".into(),
-											));
-										}
-										for c in all_states.iter().filter(|c| !active.contains(c)) {
-											menu = menu.item(get_state_item(
-												*c,
-												&active,
-												vs.clone(),
-											));
-										}
-										menu
-									})
-							})
-							.when(!active_states.is_empty(), |el| {
-								el.child(
-									ButtonGroup::new("active-state-buttons")
-										.outline()
-										.children(active_states.iter().map(|c| {
-									let state = *c;
-									Button::new(format!("state-btn-{state}"))
-										.label(state.to_string())
-										.small()
-										.tooltip("Click to remove this state filter.")
-										.on_click(cx.listener(move |this, _, _, cx| {
-											ViewState::mutate(&this.view_state, |s| {
-												s.filters.retain(|f| {
-													!matches!(f, Filter::ProcessState(c2) if *c2 == state)
-												});
-											});
-											cx.notify();
-										}))
-								}))
-							)
 						})
-					)
+				)
+				.when(unique_usernames.len() > 1, |el| {
+					let usernames = unique_usernames.clone();
+					let active: Vec<bool> = usernames
+						.iter()
+						.map(|u| {
+							self.view_state.borrow().filters.iter().any(|f| {
+								matches!(f, Filter::Username(s) if s == u)
+							})
+						})
+						.collect();
+					let mut group = ToggleGroup::new("username-filters")
+						.segmented()
+						.small()
+						.outline();
+					for (i, u) in usernames.iter().enumerate() {
+						let uname = u.clone();
+						let mut t = Toggle::new(format!("username-{uname}"))
+							.checked(active[i])
+							.tooltip(format!("Processes owned by {uname}."))
+							.gap_1();
+						let color = super::theme::filter_color(
+							&Filter::Username(uname.clone()),
+							cx,
+						);
+						t = t.icon(
+							Icon::new(IconName::User)
+								.size(px(12.0))
+								.text_color(color),
+						);
+						t = t.label(uname.clone());
+						group = group.child(t);
+					}
+					let group = group.on_click(cx.listener(move |this, checkeds: &Vec<bool>, _, cx| {
+						ViewState::mutate(&this.view_state, |s| {
+							s.filters.retain(|f| !matches!(f, Filter::Username(_)));
+							for (i, checked) in checkeds.iter().enumerate() {
+								if *checked {
+									s.filters.push(Filter::Username(usernames[i].clone()));
+								}
+							}
+						});
+						cx.notify();
+					}));
+					el.child(group)
 				})
-			.when(!pid_filters.is_empty(), |el| {
-				el.child(self.render_pid_breadcrumb(_window, cx))
+				.child({
+					let active_states: Vec<char> = self
+						.view_state
+						.borrow()
+						.filters
+						.iter()
+						.filter_map(|f| match f {
+							Filter::ProcessState(c) => Some(*c),
+							_ => None,
+						})
+						.collect();
+					div()
+						.flex()
+						.flex_row()
+						.gap(px(4.0))
+						.child(
+							ButtonGroup::new("controls")
+								.outline()
+								.child(
+									Button::new("and-or")
+										.label(mode.to_string())
+										.small()
+										.tooltip("Toggle between AND and OR filter logic.")
+										.on_click(cx.listener(|this, _, _, cx| {
+											this.toggle_filter_mode(cx)
+										})),
+								)
+								.child({
+									let view_label = self
+										.view_state
+										.borrow()
+										.resource_view_mode
+										.to_string();
+									Button::new("resource-view")
+										.label(view_label)
+										.small()
+										.tooltip("Toggle between per-process and cumulative resource usage.")
+										.on_click(cx.listener(|this, _, _, cx| {
+											this.toggle_resource_view_mode(cx)
+										}))
+								}),
+						)
+						.child(
+							div()
+								.flex()
+								.flex_row()
+								.gap_1()
+								.child({
+									let view_state = self.view_state.clone();
+									Button::new("state-filter")
+										.label("State")
+										.dropdown_caret(true)
+										.small()
+										.tooltip("Filter processes by state.")
+										.dropdown_menu(move |mut menu, _window, _cx| {
+											let vs = view_state.borrow();
+											let active: Vec<char> = vs
+												.filters
+												.iter()
+												.filter_map(|f| match f {
+													Filter::ProcessState(c) => Some(*c),
+													_ => None,
+												})
+												.collect();
+											drop(vs);
+											let vs = view_state.clone();
+											let all_states = ['R', 'S', 'D', 'Z', 'T', 't', 'I'];
+											if !active.is_empty() {
+												menu = menu.item(PopupMenuItem::Label(
+													"Process State".into(),
+												));
+											}
+											for c in all_states.iter().filter(|c| !active.contains(c)) {
+												menu = menu.item(get_state_item(
+													*c,
+													&active,
+													vs.clone(),
+												));
+											}
+											menu
+										})
+								})
+								.when(!active_states.is_empty(), |el| {
+									el.child(
+										ButtonGroup::new("active-state-buttons")
+											.outline()
+											.children(active_states.iter().map(|c| {
+										let state = *c;
+										Button::new(format!("state-btn-{state}"))
+											.label(state.to_string())
+											.small()
+											.tooltip("Click to remove this state filter.")
+											.on_click(cx.listener(move |this, _, _, cx| {
+												ViewState::mutate(&this.view_state, |s| {
+													s.filters.retain(|f| {
+														!matches!(f, Filter::ProcessState(c2) if *c2 == state)
+													});
+												});
+												cx.notify();
+											}))
+									}))
+								)
+							})
+						)
+				})
+				.when(!pid_filters.is_empty(), |el| {
+					el.child(self.render_pid_breadcrumb(_window, cx))
+				})
 			})
 	}
 

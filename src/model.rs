@@ -305,6 +305,7 @@ pub enum Filter {
 	Vram,
 	Electron,
 	ProcessState(char),
+	Username(String),
 	Pid(i32),
 }
 
@@ -348,6 +349,7 @@ impl Filter {
 			Self::Vram => "VRAM".into(),
 			Self::Electron => "Electron".into(),
 			Self::ProcessState(c) => state_label(*c).into(),
+			Self::Username(s) => s.clone(),
 			Self::Pid(pid) => {
 				let count = processes
 					.iter()

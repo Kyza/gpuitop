@@ -43,6 +43,7 @@ pub struct ProcessesTab {
 	pub is_picking: std::sync::Arc<std::sync::atomic::AtomicBool>,
 	pub pick_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 	pub init_system: InitSystem,
+	pub show_filters: bool,
 }
 
 impl ProcessesTab {
@@ -94,6 +95,7 @@ impl ProcessesTab {
 			),
 			pick_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
 			init_system,
+			show_filters: true,
 		}
 	}
 

@@ -113,6 +113,7 @@ pub fn filter_icon(filter: &Filter) -> Option<IconName> {
 		Filter::Vram => Some(IconName::Eye),
 		Filter::Electron => Some(IconName::Globe),
 		Filter::ProcessState(_) => Some(IconName::Heart),
+		Filter::Username(_) => Some(IconName::User),
 		Filter::Pid(_) => None,
 	}
 }
@@ -129,6 +130,7 @@ pub fn filter_color(filter: &Filter, cx: &App) -> Hsla {
 		Filter::Parent => tag_color(TagType::Parent, dark),
 		Filter::Electron => tag_color(TagType::Electron, dark),
 		Filter::ProcessState(_) => tag_color(TagType::Gui, dark),
+		Filter::Username(_) => tag_color(TagType::User, dark),
 		Filter::Pid(_) => tag_color(TagType::Services, dark),
 	}
 }

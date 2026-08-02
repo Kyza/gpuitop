@@ -71,6 +71,7 @@ fn proc_matches_standalone(
 		Filter::Vram => proc.vram_bytes.is_some(),
 		Filter::Electron => proc.is_electron,
 		Filter::ProcessState(c) => proc.state == *c,
+		Filter::Username(s) => proc.user == *s,
 		Filter::Pid(pid) => {
 			proc.pid == *pid
 				|| is_descendant_of(proc.pid, *pid, processes)

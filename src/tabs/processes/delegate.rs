@@ -229,10 +229,6 @@ impl ProcessTableDelegate {
 						&mut matcher,
 					) && !p.pid.to_string().contains(&search)
 						&& !fuzzy_match(
-							&search,
-							&p.user.to_lowercase(),
-							&mut matcher,
-						) && !fuzzy_match(
 						&search,
 						&p.command.to_lowercase(),
 						&mut matcher,
@@ -415,6 +411,7 @@ impl ProcessTableDelegate {
 			Filter::Vram => proc.vram_bytes.is_some(),
 			Filter::Electron => proc.is_electron,
 			Filter::ProcessState(c) => proc.state == *c,
+			Filter::Username(s) => proc.user == *s,
 			Filter::Pid(pid) => match self.pid_filter_mode() {
 				PidFilterMode::AllDescendants => {
 					proc.pid == *pid || self.is_descendant_of(proc.pid, *pid)
