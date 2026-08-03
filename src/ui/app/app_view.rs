@@ -108,7 +108,7 @@ impl App {
 							.themes()
 							.contains_key(&active_name);
 					if still_missing {
-						crate::data::theme::apply_theme_by_name(
+						crate::data::themes::apply_theme_by_name(
 							&SharedString::from("Default Dark"),
 							None,
 							cx,
@@ -191,7 +191,7 @@ fn theme_preview_item(
 										.clone();
 								*hover_preview.borrow_mut() = Some(original);
 							}
-							crate::data::theme::apply_theme_by_name(
+							crate::data::themes::apply_theme_by_name(
 								&preview_name,
 								Some(window),
 								cx,
@@ -199,7 +199,7 @@ fn theme_preview_item(
 						} else {
 							let original = hover_preview.borrow().clone();
 							if let Some(original) = original {
-								crate::data::theme::apply_theme_by_name(
+								crate::data::themes::apply_theme_by_name(
 									&original,
 									Some(window),
 									cx,
@@ -220,7 +220,7 @@ fn theme_preview_item(
 				item_name.clone();
 			let _ = item_config.borrow().save();
 			(on_commit)(&item_name, cx);
-			crate::data::theme::apply_theme_by_name(
+			crate::data::themes::apply_theme_by_name(
 				&item_name,
 				Some(window),
 				cx,
@@ -237,7 +237,7 @@ pub(crate) fn build_theme_menu(
 	window: &mut Window,
 	cx: &mut Context<PopupMenu>,
 ) -> PopupMenu {
-	let families = crate::data::theme::list_theme_families(cx);
+	let families = crate::data::themes::list_theme_families(cx);
 	let current = gpui_component::theme::Theme::global(cx)
 		.theme_name()
 		.clone();
@@ -280,131 +280,131 @@ pub(crate) fn build_theme_menu(
 }
 
 impl Render for App {
+	#[hotpath::measure]
 	fn render(
 		&mut self,
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		hotpath::measure_block!("render", {
-			cx.on_next_frame(window, |_, _, cx| cx.notify());
+		cx.on_next_frame(window, |_, _, cx| cx.notify());
 
-			while let Ok(new_snap) = self.rx.try_recv() {
-				self.gpu_backend = new_snap.gpu_backend;
-				let snap = Rc::new(new_snap);
-				self.processes_tab
-					.update(cx, |tab, _| tab.set_snapshot(snap.clone()));
-				self.performance_tab
-					.update(cx, |tab, _| tab.set_snapshot(snap.clone()));
-				self.snapshot = snap;
-			}
+		while let Ok(new_snap) = self.rx.try_recv() {
+			self.gpu_backend = new_snap.gpu_backend;
+			let snap = Rc::new(new_snap);
+			self.processes_tab
+				.update(cx, |tab, _| tab.set_snapshot(snap.clone()));
+			self.performance_tab
+				.update(cx, |tab, _| tab.set_snapshot(snap.clone()));
+			self.snapshot = snap;
+		}
 
-			let active = self.active_tab;
-			let labels = ["Processes", "Performance", "Settings"];
-			let icons = [
-				LucideIcon::List,
-				LucideIcon::ChartPie,
-				LucideIcon::Settings2,
-			];
+		let active = self.active_tab;
+		let labels = ["Processes", "Performance", "Settings"];
+		let icons = [
+			LucideIcon::List,
+			LucideIcon::ChartPie,
+			LucideIcon::Settings2,
+		];
 
-			let gpu = self.gpu_backend;
-			let init = self.init_system;
+		let gpu = self.gpu_backend;
+		let init = self.init_system;
 
-			let tabs = labels
-				.iter()
-				.enumerate()
-				.map(|(i, label)| {
-					let is_active = i == active;
-					let border = if is_active {
-						cx.theme().primary
-					} else {
-						transparent_white()
-					};
-					let fg = if is_active {
-						cx.theme().foreground
-					} else {
-						cx.theme().muted_foreground
-					};
+		let tabs = labels
+			.iter()
+			.enumerate()
+			.map(|(i, label)| {
+				let is_active = i == active;
+				let border = if is_active {
+					cx.theme().primary
+				} else {
+					transparent_white()
+				};
+				let fg = if is_active {
+					cx.theme().foreground
+				} else {
+					cx.theme().muted_foreground
+				};
+				div()
+					.id(ElementId::Name(format!("tab-{i}").into()))
+					.px(px(14.0))
+					.h(px(32.0))
+					.flex()
+					.flex_row()
+					.items_center()
+					.gap(px(6.0))
+					.cursor(CursorStyle::PointingHand)
+					.text_size(px(13.0))
+					.text_color(fg)
+					.border_b_2()
+					.border_color(border)
+					.child(
+						icons[i]
+							.icon()
+							.w(px(14.0))
+							.h(px(14.0))
+							.text_color(fg),
+					)
+					.child(*label)
+					.on_click(cx.listener(move |this, _, _, cx| {
+						this.active_tab = i;
+						if i == 0 {
+							this.processes_tab.update(cx, |tab, cx| {
+								tab.focus_input(cx);
+							});
+						}
+						cx.notify();
+					}))
+					.into_any_element()
+			})
+			.collect::<Vec<_>>();
+
+		let content = match active {
+			0 => self.processes_tab.clone().into_any_element(),
+			1 => self.performance_tab.clone().into_any_element(),
+			2 => self.settings_tab.clone().into_any_element(),
+			_ => div().into_any_element(),
+		};
+
+		div()
+			.size_full()
+			.flex()
+			.flex_col()
+			.bg(cx.theme().background)
+			.child(
+				TitleBar::new().child(
 					div()
-						.id(ElementId::Name(format!("tab-{i}").into()))
-						.px(px(14.0))
-						.h(px(32.0))
 						.flex()
 						.flex_row()
 						.items_center()
-						.gap(px(6.0))
-						.cursor(CursorStyle::PointingHand)
-						.text_size(px(13.0))
-						.text_color(fg)
-						.border_b_2()
-						.border_color(border)
+						.w_full()
 						.child(
-							icons[i]
-								.icon()
-								.w(px(14.0))
-								.h(px(14.0))
-								.text_color(fg),
+							div()
+								.flex()
+								.flex_row()
+								.items_center()
+								.gap(px(2.0))
+								.children(tabs),
 						)
-						.child(*label)
-						.on_click(cx.listener(move |this, _, _, cx| {
-							this.active_tab = i;
-							if i == 0 {
-								this.processes_tab.update(cx, |tab, cx| {
-									tab.focus_input(cx);
-								});
-							}
-							cx.notify();
-						}))
-						.into_any_element()
-				})
-				.collect::<Vec<_>>();
-
-			let content = match active {
-				0 => self.processes_tab.clone().into_any_element(),
-				1 => self.performance_tab.clone().into_any_element(),
-				2 => self.settings_tab.clone().into_any_element(),
-				_ => div().into_any_element(),
-			};
-
-			div()
-				.size_full()
-				.flex()
-				.flex_col()
-				.bg(cx.theme().background)
-				.child(
-					TitleBar::new().child(
-						div()
-							.flex()
-							.flex_row()
-							.items_center()
-							.w_full()
-							.child(
-								div()
-									.flex()
-									.flex_row()
-									.items_center()
-									.gap(px(2.0))
-									.children(tabs),
-							)
-							.child(div().flex_grow(1.0))
-							.child({
-								let config = self.config.clone();
-								let entity: Entity<App> = cx.entity().clone();
-								Button::new("theme-btn")
-									.ghost()
-									.compact()
-									.small()
-									.icon(
-										LucideIcon::Palette
-											.icon()
-											.size(px(14.0))
-											.text_color(
-												cx.theme().muted_foreground,
-											),
-									)
-									.dropdown_menu(move |menu, window, cx| {
-										let on_commit = {
-											let entity = entity.clone();
-											Rc::new(
+						.child(div().flex_grow(1.0))
+						.child({
+							let config = self.config.clone();
+							let entity: Entity<App> = cx.entity().clone();
+							Button::new("theme-btn")
+								.ghost()
+								.compact()
+								.small()
+								.icon(
+									LucideIcon::Palette
+										.icon()
+										.size(px(14.0))
+										.text_color(
+											cx.theme().muted_foreground,
+										),
+								)
+								.dropdown_menu(move |menu, window, cx| {
+									let on_commit = {
+										let entity = entity.clone();
+										Rc::new(
 											move |name: &SharedString,
 											      cx: &mut GpuiApp| {
 												entity.update(cx, |this, cx| {
@@ -433,35 +433,33 @@ impl Render for App {
 												&mut GpuiApp,
 											),
 										>
-										};
-										build_theme_menu(
-											menu, &config, &on_commit,
-											window, cx,
-										)
-									})
-							}),
-					),
-				)
-				.child(div().flex_grow(1.0).size_full().child(content))
-				.child({
-					let gpu_label = match gpu {
-						GpuBackend::Nvidia => "NVIDIA",
-						GpuBackend::Amd => "ROCm",
-						_ => "None",
-					};
-					div()
-						.flex()
-						.flex_row()
-						.gap(px(12.0))
-						.px(px(8.0))
-						.py(px(2.0))
-						.text_size(px(11.0))
-						.text_color(cx.theme().muted_foreground)
-						.border_t_1()
-						.border_color(cx.theme().border)
-						.child(format!("GPU: {gpu_label}"))
-						.child(format!("Init: {init}"))
-				})
-		})
+									};
+									build_theme_menu(
+										menu, &config, &on_commit, window, cx,
+									)
+								})
+						}),
+				),
+			)
+			.child(div().flex_grow(1.0).size_full().child(content))
+			.child({
+				let gpu_label = match gpu {
+					GpuBackend::Nvidia => "NVIDIA",
+					GpuBackend::Amd => "ROCm",
+					_ => "None",
+				};
+				div()
+					.flex()
+					.flex_row()
+					.gap(px(12.0))
+					.px(px(8.0))
+					.py(px(2.0))
+					.text_size(px(11.0))
+					.text_color(cx.theme().muted_foreground)
+					.border_t_1()
+					.border_color(cx.theme().border)
+					.child(format!("GPU: {gpu_label}"))
+					.child(format!("Init: {init}"))
+			})
 	}
 }

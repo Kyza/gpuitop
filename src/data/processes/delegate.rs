@@ -29,6 +29,7 @@ impl ProcessTableDelegate {
 			.unwrap_or(false)
 	}
 
+	#[hotpath::measure]
 	pub fn is_descendant_of(&self, child_pid: i32, ancestor: i32) -> bool {
 		let procs = &self.snapshot_cell.borrow().processes;
 		if self.pid_index.borrow().is_none() {
@@ -426,6 +427,7 @@ impl ProcessTableDelegate {
 			})
 	}
 
+	#[hotpath::measure]
 	pub fn proc_matches(&self, proc: &ProcessInfo, filter: &Filter) -> bool {
 		match filter {
 			Filter::Gui => proc.is_gui,

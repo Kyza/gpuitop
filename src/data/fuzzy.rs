@@ -145,6 +145,7 @@ mod tests {
 	}
 }
 
+#[hotpath::measure]
 pub fn best_fuzzy_score(
 	needle: &str,
 	p: &ProcessInfo,
