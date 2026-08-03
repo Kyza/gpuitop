@@ -53,8 +53,8 @@ fn verify_active_theme(cx: &mut gpui::App) {
 		.themes()
 		.contains_key(&current_name);
 	if !exists {
-		gpui_component::Theme::change(
-			gpui_component::ThemeMode::Dark,
+		crate::data::theme::apply_theme_by_name(
+			&gpui::SharedString::from("Default Dark"),
 			None,
 			cx,
 		);

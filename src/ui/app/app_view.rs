@@ -84,11 +84,21 @@ impl App {
 			}
 		});
 
-		let app: &mut gpui::App = &mut *cx;
-		let theme_observer = app
-			.observe_global::<gpui_component::theme::ThemeRegistry>(|cx| {
-				crate::data::themes::register_builtin_themes(cx);
-			});
+		let theme_observer = cx
+			.observe_global::<gpui_component::theme::ThemeRegistry>(
+				|this, cx| {
+					crate::data::themes::register_builtin_themes(cx);
+					let active_name =
+						gpui_component::theme::Theme::global(cx)
+							.theme_name()
+							.clone();
+					if this.config.general.interface.theme != active_name {
+						this.config.general.interface.theme = active_name;
+						let _ = this.config.save();
+						cx.notify();
+					}
+				},
+			);
 
 		Self {
 			active_tab,
