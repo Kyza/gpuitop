@@ -65,11 +65,6 @@ fn main() {
 			},
 		);
 
-		cx.observe_global::<gpui_component::theme::ThemeRegistry>(|cx| {
-			crate::data::themes::register_builtin_themes(cx);
-		})
-		.detach();
-
 		gpui_component::Theme::change(
 			gpui_component::ThemeMode::Dark,
 			None,

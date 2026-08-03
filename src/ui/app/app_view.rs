@@ -29,6 +29,7 @@ pub struct App {
 	processes_tab: Entity<ProcessesTab>,
 	performance_tab: Entity<PerformanceTab>,
 	settings_tab: Entity<SettingsTab>,
+	_theme_observer: Subscription,
 }
 
 impl App {
@@ -83,6 +84,12 @@ impl App {
 			}
 		});
 
+		let app: &mut gpui::App = &mut *cx;
+		let theme_observer = app
+			.observe_global::<gpui_component::theme::ThemeRegistry>(|cx| {
+				crate::data::themes::register_builtin_themes(cx);
+			});
+
 		Self {
 			active_tab,
 			config,
@@ -93,6 +100,7 @@ impl App {
 			processes_tab,
 			performance_tab,
 			settings_tab,
+			_theme_observer: theme_observer,
 		}
 	}
 }
