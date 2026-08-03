@@ -104,6 +104,24 @@ mod tests {
 	use std::sync::Arc;
 
 	#[test]
+	fn test_set_window_width() {
+		let mut config = Config::default();
+		set_window_width(&mut config, 1280.7);
+		assert_eq!(config.window_size.0, 1280);
+		set_window_width(&mut config, 0.0);
+		assert_eq!(config.window_size.0, 0);
+	}
+
+	#[test]
+	fn test_set_window_height() {
+		let mut config = Config::default();
+		set_window_height(&mut config, 720.3);
+		assert_eq!(config.window_size.1, 720);
+		set_window_height(&mut config, 1080.0);
+		assert_eq!(config.window_size.1, 1080);
+	}
+
+	#[test]
 	fn test_set_refresh_ms_valid() {
 		let mut cfg = Config::default();
 		let atomic =
