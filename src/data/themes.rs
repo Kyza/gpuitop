@@ -27,14 +27,36 @@ pub fn register_builtin_themes(cx: &mut gpui::App) {
 			.iter()
 			.any(|name| registry.themes().contains_key(name.as_str()))
 	};
-	if any_registered {
+	if !any_registered {
+		let registry = gpui_component::theme::ThemeRegistry::global_mut(cx);
+		for filename in ThemeAssets::iter() {
+			if let Some(file) = ThemeAssets::get(&filename) {
+				let json =
+					std::str::from_utf8(&file.data).unwrap_or_default();
+				let _ = registry.load_themes_from_str(json);
+			}
+		}
+	}
+
+	verify_active_theme(cx);
+}
+
+fn verify_active_theme(cx: &mut gpui::App) {
+	if !cx.has_global::<gpui_component::theme::Theme>() {
 		return;
 	}
-	let registry = gpui_component::theme::ThemeRegistry::global_mut(cx);
-	for filename in ThemeAssets::iter() {
-		if let Some(file) = ThemeAssets::get(&filename) {
-			let json = std::str::from_utf8(&file.data).unwrap_or_default();
-			let _ = registry.load_themes_from_str(json);
-		}
+	let current_name = {
+		let theme = gpui_component::theme::Theme::global(cx);
+		theme.theme_name().clone()
+	};
+	let exists = gpui_component::theme::ThemeRegistry::global(cx)
+		.themes()
+		.contains_key(&current_name);
+	if !exists {
+		gpui_component::Theme::change(
+			gpui_component::ThemeMode::Dark,
+			None,
+			cx,
+		);
 	}
 }
