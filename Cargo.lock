@@ -2772,7 +2772,6 @@ dependencies = [
  "ron2",
  "rust-embed",
  "serde",
- "serde_json",
  "users",
  "wayland-client",
  "wayland-protocols-wlr",

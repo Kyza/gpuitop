@@ -87,13 +87,34 @@ impl App {
 		let theme_observer = cx
 			.observe_global::<gpui_component::theme::ThemeRegistry>(
 				|this, cx| {
-					crate::data::themes::register_builtin_themes(cx);
+					crate::data::themes::unpack_builtins_to_disk();
+
 					let active_name =
 						gpui_component::theme::Theme::global(cx)
 							.theme_name()
 							.clone();
-					if this.config.general.interface.theme != active_name {
-						this.config.general.interface.theme = active_name;
+					let active_exists =
+						gpui_component::theme::ThemeRegistry::global(cx)
+							.themes()
+							.contains_key(&active_name);
+					if active_exists {
+						return;
+					}
+
+					crate::data::themes::load_builtins_into_registry(cx);
+
+					let still_missing =
+						!gpui_component::theme::ThemeRegistry::global(cx)
+							.themes()
+							.contains_key(&active_name);
+					if still_missing {
+						crate::data::theme::apply_theme_by_name(
+							&SharedString::from("Default Dark"),
+							None,
+							cx,
+						);
+						this.config.general.interface.theme =
+							SharedString::from("Default Dark");
 						let _ = this.config.save();
 						cx.notify();
 					}

@@ -14,18 +14,17 @@ A GPU-accelerated task manager for Linux built with [GPUI](https://www.gpui.rs/)
 
 ## Themes
 
-37 builtin themes from [gpui-component](https://github.com/longbridge/gpui-component) (Apache 2.0).
+Builtin themes from [gpui-component](https://github.com/longbridge/gpui-component) (Apache 2.0).
 
 | Theme | Light | Dark |
 |-------|-------|------|
-| Adventure | — | Adventure |
-| Adventure Time | — | Adventure Time |
+| Adventure | — | Adventure, Adventure Time |
 | Alduin | — | Alduin |
 | Asciinema | — | Asciinema |
 | Aurora | Aurora Light | — |
 | Ayu | Ayu Light | Ayu Dark |
 | Catppuccin | Catppuccin Latte | Catppuccin Frappe, Catppuccin Macchiato, Catppuccin Mocha |
-| Default (builtin) | Default Light | Default Dark |
+| Default | Default Light | Default Dark |
 | Everforest | Everforest Light | Everforest Dark |
 | Fahrenheit | — | Fahrenheit |
 | Flexoki | Flexoki Light | Flexoki Dark |
@@ -40,16 +39,14 @@ A GPU-accelerated task manager for Linux built with [GPUI](https://www.gpui.rs/)
 | Molokai | Molokai Light | Molokai Dark |
 | Solarized | Solarized Light | Solarized Dark |
 | Spaceduck | — | Spaceduck |
-| Tokyo Night | — | Tokyo Night |
-| Tokyo Storm | — | Tokyo Storm |
-| Tokyo Moon | — | Tokyo Moon |
+| Tokyo | — | Tokyo Night, Tokyo Storm, Tokyo Moon |
 | Twilight | — | Twilight |
 
 Switch themes from the palette icon in the titlebar (hierarchical dropdown with live preview on hover) or from Settings > General. Drop `.json` theme files into `~/.config/gpuitop/themes/` to add custom themes — they're loaded automatically and watched for live changes.
 
 ![Settings about in Catppuccin Mocha](screenshots/settings-about-catppuccin-mocha.png)
 
-*Settings > About in the Catppuccin Mocha theme — one of 37 builtins.*
+*Settings > About in Catppuccin Mocha.*
 
 ## Features
 

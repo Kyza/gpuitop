@@ -50,25 +50,17 @@ fn main() {
 	);
 	app.run(move |cx: &mut App| {
 		gpui_component::init(cx);
-		crate::data::themes::register_builtin_themes(cx);
+		crate::data::themes::unpack_builtins_to_disk();
+		crate::data::themes::load_builtins_into_registry(cx);
 
 		let config_dir = crate::data::config::Config::config_path()
 			.parent()
 			.map(|p| p.to_path_buf())
 			.unwrap_or_default();
-		let _ = std::fs::create_dir_all(config_dir.join("themes"));
 		let _ = gpui_component::theme::ThemeRegistry::watch_dir(
 			config_dir.join("themes"),
 			cx,
-			|cx| {
-				crate::data::themes::register_builtin_themes(cx);
-			},
-		);
-
-		gpui_component::Theme::change(
-			gpui_component::ThemeMode::Dark,
-			None,
-			cx,
+			|_| {},
 		);
 
 		cx.open_window(
@@ -88,6 +80,15 @@ fn main() {
 				..Default::default()
 			},
 			|window, cx| {
+				if !gpui_component::theme::ThemeRegistry::global(cx)
+					.themes()
+					.contains_key(&config.general.interface.theme)
+				{
+					config.general.interface.theme =
+						SharedString::new_static("Default Dark");
+					let _ = config.save();
+				}
+
 				let view = cx.new(|cx| {
 					app_view::App::new(
 						active_tab,
