@@ -28,7 +28,6 @@ fn make_process(
 		is_owned_by_current_user: false,
 		is_electron: false,
 		electron_app_name: None,
-		children: vec![],
 		has_children: false,
 	}
 }

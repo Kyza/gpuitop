@@ -125,7 +125,6 @@ impl SystemCollector {
 					cores.push(CpuCore {
 						index: 0,
 						usage_percent: usage,
-						history: Vec::new(),
 					});
 				} else {
 					let cidx = i - 1;
@@ -137,7 +136,6 @@ impl SystemCollector {
 					cores.push(CpuCore {
 						index: cidx,
 						usage_percent: usage,
-						history: history.clone(),
 					});
 				}
 			}
@@ -149,7 +147,6 @@ impl SystemCollector {
 				cores.push(CpuCore {
 					index: i,
 					usage_percent: 0.0,
-					history: Vec::new(),
 				});
 			}
 		}
@@ -193,11 +190,7 @@ impl SystemCollector {
 			total,
 			used,
 			available,
-			free,
-			buffers,
 			cached,
-			swap_total,
-			swap_free,
 			swap_used: swap_total.saturating_sub(swap_free),
 		}
 	}
