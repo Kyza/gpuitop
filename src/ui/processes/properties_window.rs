@@ -4,36 +4,54 @@ use bytesize::ByteSize;
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::scroll::ScrollableElement;
-use gpui_component::ActiveTheme;
+use gpui_component::{ActiveTheme, TitleBar};
 
 pub struct PropertiesWindow {
-	details: ProcessDetails,
+	pid: i32,
 	icon_name: Option<String>,
 }
 
 impl PropertiesWindow {
 	pub fn new(pid: i32, icon_name: Option<String>) -> Self {
-		let details = process_details::collect(pid);
-		Self { details, icon_name }
+		Self { pid, icon_name }
 	}
 }
 
 impl Render for PropertiesWindow {
 	fn render(
 		&mut self,
-		_window: &mut Window,
+		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		let d = &self.details;
+		cx.on_next_frame(window, |_, _, cx| cx.notify());
+
+		let d = process_details::collect(self.pid);
 
 		if !d.exists {
 			return div()
 				.size_full()
 				.flex()
-				.items_center()
-				.justify_center()
+				.flex_col()
 				.bg(cx.theme().background)
-				.child("Process terminated")
+				.child(
+					TitleBar::new().child(
+						div()
+							.flex()
+							.flex_row()
+							.items_center()
+							.px(px(16.0))
+							.child("Process terminated"),
+					),
+				)
+				.child(
+					div()
+						.flex_1()
+						.flex()
+						.items_center()
+						.justify_center()
+						.text_color(cx.theme().muted_foreground)
+						.child(format!("PID {} no longer exists.", self.pid)),
+				)
 				.into_any_element();
 		}
 
@@ -43,71 +61,66 @@ impl Render for PropertiesWindow {
 			.flex_col()
 			.bg(cx.theme().background)
 			.text_color(cx.theme().foreground)
-			.child(header(d, &self.icon_name, cx))
+			.child(titlebar(&d, &self.icon_name, cx))
 			.child(
 				div()
 					.flex_1()
 					.overflow_y_scrollbar()
 					.px(px(16.0))
-					.child(section("Overview", overview(d)))
-					.child(section("Memory", memory(d)))
-					.child(section("I/O", io(d)))
-					.child(section("Limits", limits(d)))
-					.child(section("Environment", environment(d)))
-					.child(section("File Descriptors", file_descriptors(d))),
+					.child(section("Overview", overview(&d)))
+					.child(section("Memory", memory(&d)))
+					.child(section("I/O", io(&d)))
+					.child(section("Limits", limits(&d)))
+					.child(section("Environment", environment(&d)))
+					.child(section("File Descriptors", file_descriptors(&d))),
 			)
 			.into_any_element()
 	}
 }
 
-fn header(
+fn titlebar(
 	d: &ProcessDetails,
 	icon_name: &Option<String>,
 	cx: &mut Context<PropertiesWindow>,
 ) -> impl IntoElement + use<> {
 	let icon_path = icon_name.as_deref().and_then(resolve_icon_path);
 
-	div()
-		.flex()
-		.flex_row()
-		.items_center()
-		.gap(px(12.0))
-		.px(px(16.0))
-		.py(px(12.0))
-		.border_b_1()
-		.border_color(cx.theme().border)
-		.when_some(icon_path, |el, path| {
-			el.child(
-				div()
-					.w(px(32.0))
-					.h(px(32.0))
-					.flex()
-					.items_center()
-					.justify_center()
-					.child(img(path).object_fit(ObjectFit::Contain)),
-			)
-		})
-		.child(
-			div()
-				.flex()
-				.flex_col()
-				.child(
+	TitleBar::new().child(
+		div()
+			.flex()
+			.flex_row()
+			.items_center()
+			.gap(px(10.0))
+			.px(px(12.0))
+			.h(px(36.0))
+			.when_some(icon_path, |el, path| {
+				el.child(
 					div()
-						.text_lg()
-						.font_weight(FontWeight::BOLD)
-						.child(d.name.clone()),
+						.w(px(20.0))
+						.h(px(20.0))
+						.flex()
+						.items_center()
+						.justify_center()
+						.child(img(path).object_fit(ObjectFit::Contain)),
 				)
-				.child(
-					div()
-						.text_sm()
-						.text_color(cx.theme().muted_foreground)
-						.child(format!(
-							"PID: {}  —  State: {}",
-							d.state,
-							crate::data::model::state_label(d.state)
-						)),
-				),
-		)
+			})
+			.child(
+				div()
+					.text_sm()
+					.font_weight(FontWeight::BOLD)
+					.child(d.name.clone()),
+			)
+			.child(
+				div()
+					.text_xs()
+					.text_color(cx.theme().muted_foreground)
+					.child(format!(
+						"PID {}  —  {}",
+						d.state,
+						crate::data::model::state_label(d.state)
+					)),
+			),
+	)
 }
 
 fn section(title: &str, body: impl IntoElement) -> impl IntoElement {
