@@ -2,6 +2,7 @@ pub mod breadcrumbs;
 pub mod chips;
 pub mod context_menu;
 pub mod list_view;
+pub mod properties_window;
 pub mod status_bar;
 pub mod tab;
 pub mod table_delegate;

@@ -1,3 +1,4 @@
+use crate::data::platform::process_icon::resolve_icon_path;
 use crate::data::processes::delegate::ProcessTableDelegate;
 use crate::data::state::ViewState;
 use crate::ui::assets::lucide::LucideIcon;
@@ -150,14 +151,33 @@ impl TableDelegate for ProcessTableDelegate {
 					.as_deref()
 					.unwrap_or(&proc.name)
 					.to_string();
+				let icon_path =
+					proc.icon_name.as_deref().and_then(resolve_icon_path);
+
+				let name_el = div()
+					.flex()
+					.flex_row()
+					.items_center()
+					.gap(px(4.0))
+					.text_sm()
+					.text_color(cx.theme().foreground)
+					.when_some(icon_path, |el, path| {
+						el.child(
+							div()
+								.w(px(16.0))
+								.h(px(16.0))
+								.flex()
+								.items_center()
+								.justify_center()
+								.child(
+									img(path).object_fit(ObjectFit::Contain),
+								),
+						)
+					})
+					.child(display_name.clone());
+
 				if show_badge {
-					div()
-						.flex()
-						.flex_row()
-						.items_center()
-						.text_sm()
-						.text_color(cx.theme().foreground)
-						.child(display_name.clone())
+					name_el
 						.child(
 							div()
 								.text_size(px(10.0))
@@ -169,11 +189,7 @@ impl TableDelegate for ProcessTableDelegate {
 						)
 						.into_any()
 				} else {
-					div()
-						.text_sm()
-						.text_color(cx.theme().foreground)
-						.child(display_name.clone())
-						.into_any()
+					name_el.into_any()
 				}
 			}
 			2 => div()

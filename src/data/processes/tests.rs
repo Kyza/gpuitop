@@ -28,6 +28,7 @@ fn make_process(
 		is_owned_by_current_user: false,
 		is_electron: false,
 		electron_app_name: None,
+		icon_name: None,
 		has_children: false,
 	}
 }

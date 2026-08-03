@@ -1,5 +1,6 @@
 use crate::data::config::Config;
 use crate::data::model::{GpuBackend, SystemSnapshot};
+use crate::data::platform::process_icon::DesktopEntryCache;
 use crate::data::platform::system::InitSystem;
 use crate::data::platform::{detect_gpu, detect_init, SystemCollector};
 use crate::ui::assets::lucide::LucideIcon;
@@ -39,6 +40,7 @@ impl App {
 		search: Option<String>,
 		override_view: Option<bool>,
 		config: Config,
+		desktop_cache: Arc<DesktopEntryCache>,
 		cx: &mut Context<Self>,
 	) -> Self {
 		let gpu_backend = detect_gpu();
@@ -73,7 +75,8 @@ impl App {
 		let thread_refresh = refresh_ms.clone();
 
 		std::thread::spawn(move || {
-			let mut collector = SystemCollector::new(gpu_backend);
+			let mut collector =
+				SystemCollector::new(gpu_backend, desktop_cache);
 			loop {
 				let snapshot = collector.tick();
 				if tx.send(snapshot).is_err() {

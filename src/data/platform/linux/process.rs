@@ -110,6 +110,11 @@ impl SystemCollector {
 			let display_name =
 				cmdline_name.unwrap_or_else(|| proc_name.clone());
 
+			let icon_name = self
+				.desktop_cache
+				.lookup(&display_command, &display_name)
+				.map(|de| de.icon_name.clone());
+
 			// I/O
 			let io_data =
 				Self::read(&format!("{base}/io")).unwrap_or_default();
@@ -191,6 +196,7 @@ impl SystemCollector {
 					is_owned_by_current_user: is_owned,
 					is_electron: false,
 					electron_app_name: None,
+					icon_name,
 					has_children: false,
 				},
 			);
@@ -394,7 +400,8 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_processes() {
-		let mut collector = SystemCollector::new(GpuBackend::None);
+		let mut collector =
+			SystemCollector::new(GpuBackend::None, Default::default());
 		let snap = collector.tick();
 
 		assert!(
@@ -430,7 +437,8 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_cpu_data() {
-		let mut collector = SystemCollector::new(GpuBackend::None);
+		let mut collector =
+			SystemCollector::new(GpuBackend::None, Default::default());
 
 		collector.tick();
 		let snap = collector.tick();
@@ -445,7 +453,8 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_memory_data() {
-		let mut collector = SystemCollector::new(GpuBackend::None);
+		let mut collector =
+			SystemCollector::new(GpuBackend::None, Default::default());
 		let snap = collector.tick();
 
 		assert!(snap.memory.total > 0, "Total memory is 0");
@@ -460,7 +469,8 @@ mod tests {
 
 	#[test]
 	fn test_processes_flat_list() {
-		let mut collector = SystemCollector::new(GpuBackend::None);
+		let mut collector =
+			SystemCollector::new(GpuBackend::None, Default::default());
 		let snap = collector.tick();
 
 		let total = snap.processes.len();
@@ -774,13 +784,15 @@ mod tests {
 			is_owned_by_current_user: false,
 			is_electron: false,
 			electron_app_name: None,
+			icon_name: None,
 			has_children: false,
 		}
 	}
 
 	#[test]
 	fn bench_collector_tick() {
-		let mut collector = SystemCollector::new(GpuBackend::None);
+		let mut collector =
+			SystemCollector::new(GpuBackend::None, Default::default());
 
 		// Warmup
 		collector.tick();

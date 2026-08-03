@@ -1,5 +1,6 @@
 use crate::data::model::ProcessInfo;
 use crate::ui::assets::lucide::LucideIcon;
+use crate::ui::processes::properties_window::PropertiesWindow;
 use gpui::*;
 use gpui_component::menu::PopupMenuItem;
 use std::rc::Rc;
@@ -103,11 +104,34 @@ pub fn build_process_menu(proc: &ProcessInfo) -> Vec<PopupMenuItem> {
 		"PID: {}  —  {}",
 		proc.pid, proc.name
 	))));
-	items.push(menu_item(
-		"Properties",
-		Some(LucideIcon::Info),
-		move |_, _, _| {},
-	));
+	items.push(menu_item("Properties", Some(LucideIcon::Info), {
+		let pid = proc.pid;
+		let icon_name = proc.icon_name.clone();
+		move |_, _, cx| {
+			let opts = WindowOptions {
+				window_bounds: Some(WindowBounds::Windowed(Bounds {
+					origin: point(px(200.0), px(200.0)),
+					size: size(px(600.0), px(500.0)),
+				})),
+				window_min_size: Some(size(px(400.0), px(300.0))),
+				titlebar: Some(TitlebarOptions {
+					title: Some(SharedString::new(format!(
+						"Properties — PID {pid}"
+					))),
+					appears_transparent: true,
+					..Default::default()
+				}),
+				window_decorations: Some(WindowDecorations::Client),
+				..Default::default()
+			};
+			let _ = cx.open_window(opts, {
+				let icon = icon_name.clone();
+				move |_window, cx| {
+					cx.new(|_cx| PropertiesWindow::new(pid, icon.clone()))
+				}
+			});
+		}
+	}));
 
 	items
 }

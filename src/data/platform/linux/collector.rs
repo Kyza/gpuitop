@@ -1,6 +1,8 @@
 use crate::data::model::*;
+use crate::data::platform::process_icon::DesktopEntryCache;
 use std::collections::HashMap;
 use std::fs;
+use std::sync::Arc;
 use std::time::Instant;
 
 const HISTORY_LEN: usize = 60;
@@ -18,12 +20,17 @@ pub struct SystemCollector {
 	pub(crate) prev_proc: HashMap<i32, (u64, u64, u64, u64)>,
 	pub(crate) prev_proc_time: Option<Instant>,
 	core_history: HashMap<usize, Vec<f32>>,
+	pub(crate) desktop_cache: Arc<DesktopEntryCache>,
 }
 
 impl SystemCollector {
-	pub fn new(gpu_backend: GpuBackend) -> Self {
+	pub fn new(
+		gpu_backend: GpuBackend,
+		desktop_cache: Arc<DesktopEntryCache>,
+	) -> Self {
 		Self {
 			gpu_backend,
+			desktop_cache,
 			current_uid: unsafe { libc::getuid() },
 			user_cache: HashMap::new(),
 			prev_cpu_totals: None,

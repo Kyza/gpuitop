@@ -1,6 +1,8 @@
 pub mod collector;
 pub mod gpu;
 pub mod process;
+pub mod process_details;
+pub mod process_icon;
 pub mod system;
 pub mod wayland;
 

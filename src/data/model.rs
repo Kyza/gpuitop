@@ -18,6 +18,7 @@ pub struct ProcessInfo {
 	pub is_owned_by_current_user: bool,
 	pub is_electron: bool,
 	pub electron_app_name: Option<String>,
+	pub icon_name: Option<String>,
 	pub has_children: bool,
 }
 
@@ -447,6 +448,7 @@ mod tests {
 			is_owned_by_current_user: false,
 			is_electron: false,
 			electron_app_name: None,
+			icon_name: None,
 			has_children: false,
 		}
 	}

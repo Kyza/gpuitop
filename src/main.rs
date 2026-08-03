@@ -8,10 +8,12 @@ mod built {
 	include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
+use crate::data::platform::process_icon::DesktopEntryCache;
 use crate::ui::app::app_view;
 use crate::ui::assets::{layered, lucide};
 use gpui::*;
 use gpui_component::Root;
+use std::sync::Arc;
 
 pub const GPUITOP_APP_ID: &str = "com.github.kyza.gpuitop";
 
@@ -48,6 +50,7 @@ fn main() {
 			.with(gpui_component_assets::Assets)
 			.with(lucide::LucideAssets),
 	);
+	let desktop_cache = Arc::new(DesktopEntryCache::load());
 	app.run(move |cx: &mut App| {
 		gpui_component::init(cx);
 		crate::data::themes::unpack_builtins_to_disk();
@@ -96,6 +99,7 @@ fn main() {
 						search,
 						override_view,
 						config.clone(),
+						desktop_cache.clone(),
 						cx,
 					)
 				});

@@ -109,6 +109,7 @@ mod tests {
 			is_owned_by_current_user: true,
 			is_electron: false,
 			electron_app_name: None,
+			icon_name: None,
 			has_children: false,
 		};
 		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
@@ -137,6 +138,7 @@ mod tests {
 			is_owned_by_current_user: true,
 			is_electron: false,
 			electron_app_name: None,
+			icon_name: None,
 			has_children: false,
 		};
 		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
