@@ -22,7 +22,7 @@ capture() {
 	echo "  Launching gpuitop ($theme)..."
 
 	cargo run -- \
-		"--override" "(general: (interface: (theme: $theme)))" \
+		"--override" "(general: (interface: (theme: \"$theme\")))" \
 		"--override" "(window_size: (1100, 700))" \
 		"$@" &
 	local pid=$!
@@ -49,22 +49,34 @@ capture() {
 echo "=== Building (debug) ==="
 cargo build 2>&1 | tail -1
 
-for theme in Dark Light; do
+for theme in "Default Dark" "Default Light"; do
+	suffix=""
+	case "$theme" in
+		"Default Dark") suffix="dark" ;;
+		"Default Light") suffix="light" ;;
+	esac
+
 	echo ""
 	echo "=== Theme: $theme ==="
 
-	capture "$SCREENSHOTS_DIR/list-view-${theme,,}.png" \
+	capture "$SCREENSHOTS_DIR/list-view-$suffix.png" \
 		"$theme" \
 		"--page" "processes.list" "--search" "vesktop"
 
-	capture "$SCREENSHOTS_DIR/tree-view-${theme,,}.png" \
+	capture "$SCREENSHOTS_DIR/tree-view-$suffix.png" \
 		"$theme" \
 		"--page" "processes.tree" "--search" "vesktop"
 
-	capture "$SCREENSHOTS_DIR/settings-about-${theme,,}.png" \
+	capture "$SCREENSHOTS_DIR/settings-about-$suffix.png" \
 		"$theme" \
 		"--page" "settings.about"
 done
+
+echo ""
+echo "=== Theme: Catppuccin Mocha (settings about) ==="
+capture "$SCREENSHOTS_DIR/settings-about-catppuccin-mocha.png" \
+	"Catppuccin Mocha" \
+	"--page" "settings.about"
 
 echo ""
 echo "Done:"

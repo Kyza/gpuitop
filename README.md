@@ -12,6 +12,45 @@ A GPU-accelerated task manager for Linux built with [GPUI](https://www.gpui.rs/)
 
 > Regenerate with `./screenshots/generate.sh` (requires [driftwm](https://github.com/malbiruk/driftwm)).
 
+## Themes
+
+37 builtin themes from [gpui-component](https://github.com/longbridge/gpui-component) (Apache 2.0).
+
+| Theme | Light | Dark |
+|-------|-------|------|
+| Adventure | — | Adventure |
+| Adventure Time | — | Adventure Time |
+| Alduin | — | Alduin |
+| Asciinema | — | Asciinema |
+| Aurora | Aurora Light | — |
+| Ayu | Ayu Light | Ayu Dark |
+| Catppuccin | Catppuccin Latte | Catppuccin Frappe, Catppuccin Macchiato, Catppuccin Mocha |
+| Default (builtin) | Default Light | Default Dark |
+| Everforest | Everforest Light | Everforest Dark |
+| Fahrenheit | — | Fahrenheit |
+| Flexoki | Flexoki Light | Flexoki Dark |
+| Gruvbox | Gruvbox Light | Gruvbox Dark |
+| Harper | — | Harper |
+| Hybrid | Hybrid Light | Hybrid Dark |
+| Jellybeans | — | Jellybeans |
+| Kibble | — | Kibble |
+| macOS Classic | macOS Classic Light | macOS Classic Dark |
+| Matrix | — | Matrix |
+| Mellifluous | Mellifluous Light | Mellifluous Dark |
+| Molokai | Molokai Light | Molokai Dark |
+| Solarized | Solarized Light | Solarized Dark |
+| Spaceduck | — | Spaceduck |
+| Tokyo Night | — | Tokyo Night |
+| Tokyo Storm | — | Tokyo Storm |
+| Tokyo Moon | — | Tokyo Moon |
+| Twilight | — | Twilight |
+
+Switch themes from the palette icon in the titlebar (hierarchical dropdown with live preview on hover) or from Settings > General. Drop `.json` theme files into `~/.config/gpuitop/themes/` to add custom themes — they're loaded automatically and watched for live changes.
+
+![Settings about in Catppuccin Mocha](screenshots/settings-about-catppuccin-mocha.png)
+
+*Settings > About in the Catppuccin Mocha theme — one of 37 builtins.*
+
 ## Features
 
 ### Find Processes
@@ -108,7 +147,7 @@ Stored at `~/.config/gpuitop/config.ron` (respects `XDG_CONFIG_HOME`). Edit from
 | Setting | Type | Default |
 |---------|------|---------|
 | Refresh Rate | u64 | 1500 (ms) |
-| Theme | Theme | System (Dark, Light) |
+| Theme | string | "Default Dark" (see [Themes](#themes)) |
 | Window Width | u32 | 1100 |
 | Window Height | u32 | 700 |
 | VRAM Polling | VramPolling | Auto (On, Off) |
@@ -127,7 +166,7 @@ The 9 process table columns can be reordered and toggled on/off from Settings > 
 
 ```bash
 # Change refresh rate and theme
-gpuitop --override '(general: (interface: (refresh_ms: 500, theme: Dark)))'
+gpuitop --override '(general: (interface: (refresh_ms: 500, theme: "Default Dark")))'
 
 # Set window size
 gpuitop --override '(window_size: (1920, 1080))'

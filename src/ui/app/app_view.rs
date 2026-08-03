@@ -1,5 +1,5 @@
 use crate::data::config::Config;
-use crate::data::model::{GpuBackend, SystemSnapshot, Theme};
+use crate::data::model::{GpuBackend, SystemSnapshot};
 use crate::data::platform::system::InitSystem;
 use crate::data::platform::{detect_gpu, detect_init, SystemCollector};
 use crate::ui::assets::lucide::LucideIcon;
@@ -7,9 +7,12 @@ use crate::ui::performance::PerformanceTab;
 use crate::ui::processes::ProcessesTab;
 use crate::ui::settings::SettingsTab;
 use gpui::prelude::*;
+use gpui::App as GpuiApp;
 use gpui::*;
-use gpui_component::{ActiveTheme, TitleBar};
-use std::cell::Cell;
+use gpui_component::button::{Button, ButtonVariants};
+use gpui_component::menu::{DropdownMenu, PopupMenu, PopupMenuItem};
+use gpui_component::{ActiveTheme, Sizable, StyledExt, TitleBar};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
@@ -18,8 +21,7 @@ use std::time::Duration;
 
 pub struct App {
 	active_tab: usize,
-	config: Config,
-	pub(crate) theme: Rc<Cell<Theme>>,
+	pub config: Config,
 	snapshot: Rc<SystemSnapshot>,
 	gpu_backend: GpuBackend,
 	init_system: InitSystem,
@@ -27,19 +29,6 @@ pub struct App {
 	processes_tab: Entity<ProcessesTab>,
 	performance_tab: Entity<PerformanceTab>,
 	settings_tab: Entity<SettingsTab>,
-}
-
-pub(crate) fn apply_theme(
-	theme: Theme,
-	window: &mut Window,
-	app: &mut gpui::App,
-) {
-	let mode = match theme {
-		Theme::Dark => gpui_component::ThemeMode::Dark,
-		Theme::Light => gpui_component::ThemeMode::Light,
-		Theme::System => window.appearance().into(),
-	};
-	gpui_component::Theme::change(mode, Some(window), app);
 }
 
 impl App {
@@ -70,12 +59,10 @@ impl App {
 			cx.new(|cx| PerformanceTab::new(initial_snapshot.clone(), cx));
 		let refresh_ms =
 			Arc::new(AtomicU64::new(config.general.interface.refresh_ms));
-		let theme_cell = Rc::new(Cell::new(config.general.interface.theme));
 		let settings_tab = cx.new(|cx| {
 			SettingsTab::new(
 				config.clone(),
 				refresh_ms.clone(),
-				theme_cell.clone(),
 				initial_settings_page,
 				cx,
 			)
@@ -98,7 +85,6 @@ impl App {
 
 		Self {
 			active_tab,
-			theme: theme_cell,
 			config,
 			snapshot: initial_snapshot,
 			gpu_backend,
@@ -109,6 +95,149 @@ impl App {
 			settings_tab,
 		}
 	}
+}
+
+fn theme_preview_item(
+	menu: PopupMenu,
+	name: &SharedString,
+	mode: gpui_component::ThemeMode,
+	current: &SharedString,
+	config: &Config,
+	preview: &Rc<RefCell<Option<SharedString>>>,
+	on_commit: &Rc<dyn Fn(&SharedString, &mut GpuiApp)>,
+) -> PopupMenu {
+	let name_owned = name.clone();
+	let item_name = name_owned.clone();
+	let item_current = name_owned == *current;
+	let item_config = RefCell::new(config.clone());
+	let preview_name = name_owned.clone();
+	let hover_preview = preview.clone();
+	let click_preview = preview.clone();
+	let on_commit = on_commit.clone();
+
+	let item = PopupMenuItem::element({
+		let name_display = name_owned.clone();
+		move |_window: &mut Window, _cx: &mut GpuiApp| {
+			let hover_preview = hover_preview.clone();
+			let preview_name = preview_name.clone();
+			div()
+				.id(ElementId::Name(format!("theme-{name_display}").into()))
+				.w_full()
+				.flex()
+				.flex_row()
+				.items_center()
+				.gap(px(4.0))
+				.child(if mode.is_dark() {
+					LucideIcon::Moon.icon().size(px(12.0)).text_color(
+						gpui_component::theme::Theme::global(_cx)
+							.muted_foreground,
+					)
+				} else {
+					LucideIcon::Sun.icon().size(px(12.0)).text_color(
+						gpui_component::theme::Theme::global(_cx)
+							.muted_foreground,
+					)
+				})
+				.child(SharedString::from(name_display.as_ref()))
+				.child(div().flex_grow(1.0))
+				.on_hover(
+					move |hovered: &bool,
+					      window: &mut Window,
+					      cx: &mut GpuiApp| {
+						if *hovered {
+							if hover_preview.borrow().is_none() {
+								let original =
+									gpui_component::theme::Theme::global(cx)
+										.theme_name()
+										.clone();
+								*hover_preview.borrow_mut() = Some(original);
+							}
+							crate::data::theme::apply_theme_by_name(
+								&preview_name,
+								Some(window),
+								cx,
+							);
+						} else {
+							let original = hover_preview.borrow().clone();
+							if let Some(original) = original {
+								crate::data::theme::apply_theme_by_name(
+									&original,
+									Some(window),
+									cx,
+								);
+								*hover_preview.borrow_mut() = None;
+							}
+						}
+					},
+				)
+		}
+	})
+	.checked(item_current)
+	.disabled(item_current)
+	.on_click(
+		move |_: &ClickEvent, window: &mut Window, cx: &mut GpuiApp| {
+			*click_preview.borrow_mut() = None;
+			item_config.borrow_mut().general.interface.theme =
+				item_name.clone();
+			let _ = item_config.borrow().save();
+			(on_commit)(&item_name, cx);
+			crate::data::theme::apply_theme_by_name(
+				&item_name,
+				Some(window),
+				cx,
+			);
+		},
+	);
+	menu.item(item)
+}
+
+pub(crate) fn build_theme_menu(
+	mut menu: PopupMenu,
+	config: &Config,
+	on_commit: &Rc<dyn Fn(&SharedString, &mut GpuiApp)>,
+	window: &mut Window,
+	cx: &mut Context<PopupMenu>,
+) -> PopupMenu {
+	let families = crate::data::theme::list_theme_families(cx);
+	let current = gpui_component::theme::Theme::global(cx)
+		.theme_name()
+		.clone();
+	let preview = Rc::new(RefCell::new(None::<SharedString>));
+
+	for family in families {
+		if family.variants.len() == 1 {
+			let (name, mode) = &family.variants[0];
+			menu = theme_preview_item(
+				menu, name, *mode, &current, config, &preview, on_commit,
+			);
+		} else {
+			let family_name = SharedString::from(family.name.as_ref());
+			let family_has_current =
+				family.variants.iter().any(|(n, _)| n == &current);
+			let submenu = PopupMenu::build(window, cx, {
+				let variants = family.variants.clone();
+				let current = current.clone();
+				let config = config.clone();
+				let preview = preview.clone();
+				let on_commit = on_commit.clone();
+				move |mut menu, _, _| {
+					for (name, mode) in &variants {
+						menu = theme_preview_item(
+							menu, name, *mode, &current, &config, &preview,
+							&on_commit,
+						);
+					}
+					menu
+				}
+			});
+			menu = menu.item(
+				PopupMenuItem::submenu(family_name, submenu)
+					.checked(family_has_current),
+			);
+		}
+	}
+
+	menu
 }
 
 impl Render for App {
@@ -138,12 +267,6 @@ impl Render for App {
 				LucideIcon::Settings2,
 			];
 
-			let current_theme = self.theme.get();
-			let theme_icon = match current_theme {
-				Theme::Dark => LucideIcon::Moon,
-				Theme::Light => LucideIcon::Sun,
-				Theme::System => LucideIcon::Palette,
-			};
 			let gpu = self.gpu_backend;
 			let init = self.init_system;
 
@@ -225,42 +348,58 @@ impl Render for App {
 							)
 							.child(div().flex_grow(1.0))
 							.child({
-								let theme = self.theme.clone();
 								let config = self.config.clone();
-								div()
-									.id(ElementId::Name("theme-btn".into()))
-									.px(px(8.0))
-									.h(px(32.0))
-									.flex()
-									.items_center()
-									.justify_center()
-									.cursor(CursorStyle::PointingHand)
-									.child(
-										theme_icon
+								let entity: Entity<App> = cx.entity().clone();
+								Button::new("theme-btn")
+									.ghost()
+									.compact()
+									.small()
+									.icon(
+										LucideIcon::Palette
 											.icon()
-											.w(px(14.0))
-											.h(px(14.0))
+											.size(px(14.0))
 											.text_color(
 												cx.theme().muted_foreground,
 											),
 									)
-									.on_click(
-										move |_,
-										      window,
-										      cx: &mut gpui::App| {
-											let new = match theme.get() {
-												Theme::Dark => Theme::Light,
-												Theme::Light => Theme::System,
-												Theme::System => Theme::Dark,
-											};
-											theme.set(new);
-											apply_theme(new, window, cx);
-											let mut config = config.clone();
-											config.general.interface.theme =
-												new;
-											let _ = config.save();
-										},
-									)
+									.dropdown_menu(move |menu, window, cx| {
+										let on_commit = {
+											let entity = entity.clone();
+											Rc::new(
+											move |name: &SharedString,
+											      cx: &mut GpuiApp| {
+												entity.update(cx, |this, cx| {
+													this.config
+														.general
+														.interface
+														.theme =
+														name.clone();
+													this.settings_tab.update(
+														cx,
+														|tab, cx| {
+															tab.config
+																.general
+																.interface
+																.theme =
+																name.clone();
+															cx.notify();
+														},
+													);
+													cx.notify();
+												});
+											},
+										) as Rc<
+											dyn Fn(
+												&SharedString,
+												&mut GpuiApp,
+											),
+										>
+										};
+										build_theme_menu(
+											menu, &config, &on_commit,
+											window, cx,
+										)
+									})
 							}),
 					),
 				)

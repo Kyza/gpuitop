@@ -50,11 +50,32 @@ fn main() {
 	);
 	app.run(move |cx: &mut App| {
 		gpui_component::init(cx);
+		crate::data::themes::register_builtin_themes(cx);
+
+		let config_dir = crate::data::config::Config::config_path()
+			.parent()
+			.map(|p| p.to_path_buf())
+			.unwrap_or_default();
+		let _ = std::fs::create_dir_all(config_dir.join("themes"));
+		let _ = gpui_component::theme::ThemeRegistry::watch_dir(
+			config_dir.join("themes"),
+			cx,
+			|cx| {
+				crate::data::themes::register_builtin_themes(cx);
+			},
+		);
+
+		cx.observe_global::<gpui_component::theme::ThemeRegistry>(|cx| {
+			crate::data::themes::register_builtin_themes(cx);
+		})
+		.detach();
+
 		gpui_component::Theme::change(
 			gpui_component::ThemeMode::Dark,
 			None,
 			cx,
 		);
+
 		cx.open_window(
 			WindowOptions {
 				window_bounds: Some(WindowBounds::Windowed(Bounds {
@@ -82,8 +103,13 @@ fn main() {
 						cx,
 					)
 				});
-				let theme = view.read(cx).theme.get();
-				app_view::apply_theme(theme, window, cx);
+				let theme_name =
+					view.read(cx).config.general.interface.theme.clone();
+				crate::data::theme::apply_theme_by_name(
+					&theme_name,
+					Some(window),
+					cx,
+				);
 				cx.new(|cx| Root::new(view, window, cx))
 			},
 		)

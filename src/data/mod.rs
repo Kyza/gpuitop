@@ -6,3 +6,5 @@ pub mod platform;
 pub mod processes;
 pub mod settings;
 pub mod state;
+pub mod theme;
+pub mod themes;

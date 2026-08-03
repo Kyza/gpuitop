@@ -1,5 +1,4 @@
 use crate::data::config::Config;
-use crate::data::model::*;
 use crate::ui::assets::lucide::LucideIcon;
 use gpui::prelude::*;
 use gpui::*;
@@ -8,15 +7,12 @@ use gpui_component::{
 	setting::{SelectIndex, SettingPage, Settings},
 	ActiveTheme, Sizable,
 };
-use std::cell::Cell;
-use std::rc::Rc;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 pub struct SettingsTab {
 	pub config: Config,
 	refresh_ms: Arc<AtomicU64>,
-	theme: Rc<Cell<Theme>>,
 	initial_page_index: Option<usize>,
 }
 
@@ -24,14 +20,12 @@ impl SettingsTab {
 	pub fn new(
 		config: Config,
 		refresh_ms: Arc<AtomicU64>,
-		theme: Rc<Cell<Theme>>,
 		initial_page_index: Option<usize>,
 		_cx: &mut Context<Self>,
 	) -> Self {
 		Self {
 			config,
 			refresh_ms,
-			theme,
 			initial_page_index,
 		}
 	}
@@ -49,16 +43,10 @@ impl SettingsTab {
 	) -> Vec<SettingPage> {
 		let view = cx.entity();
 		let refresh_ms = self.refresh_ms.clone();
-		let theme_cell = self.theme.clone();
 		let default_config = Config::default();
 
 		vec![
-			super::general::general_page(
-				&view,
-				&refresh_ms,
-				&theme_cell,
-				&default_config,
-			),
+			super::general::general_page(&view, &refresh_ms, &default_config),
 			super::processes::processes_page(&view, &default_config),
 			super::about::about_page(),
 		]

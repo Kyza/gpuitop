@@ -1,7 +1,6 @@
 use crate::data::config::Config;
 use crate::data::model::{
-	DefaultViewMode, PidFilterMode, ResourceViewMode, SortColumn, Theme,
-	VramPolling,
+	DefaultViewMode, PidFilterMode, ResourceViewMode, SortColumn, VramPolling,
 };
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -16,17 +15,6 @@ pub fn set_refresh_ms(
 		config.general.interface.refresh_ms = ms;
 		refresh_ms.store(ms, Ordering::SeqCst);
 	}
-}
-
-pub fn set_theme(config: &mut Config, val: &str) -> Option<Theme> {
-	let new = match val {
-		"Dark" => Theme::Dark,
-		"Light" => Theme::Light,
-		"System" => Theme::System,
-		_ => return None,
-	};
-	config.general.interface.theme = new;
-	Some(new)
 }
 
 pub fn set_vram_polling(config: &mut Config, val: &str) {
@@ -136,30 +124,6 @@ mod tests {
 			atomic.load(std::sync::atomic::Ordering::SeqCst),
 			original
 		);
-	}
-
-	#[test]
-	fn test_set_theme_valid() {
-		let cases = vec![
-			("Dark", Theme::Dark),
-			("Light", Theme::Light),
-			("System", Theme::System),
-		];
-		for (input, expected) in cases {
-			let mut cfg = Config::default();
-			let result = set_theme(&mut cfg, input);
-			assert_eq!(result, Some(expected));
-			assert_eq!(cfg.general.interface.theme, expected);
-		}
-	}
-
-	#[test]
-	fn test_set_theme_invalid() {
-		let mut cfg = Config::default();
-		let original = cfg.general.interface.theme;
-		let result = set_theme(&mut cfg, "InvalidTheme");
-		assert_eq!(result, None);
-		assert_eq!(cfg.general.interface.theme, original);
 	}
 
 	#[test]

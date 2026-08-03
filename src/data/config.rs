@@ -1,8 +1,9 @@
 use crate::data::model::{
 	DefaultViewMode, PidFilterMode, ProcessGrouping, ResourceViewMode,
-	SortColumn, Theme, VramPolling,
+	SortColumn, VramPolling,
 };
 use anyhow::{Context, Result};
+use gpui::SharedString;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -14,19 +15,23 @@ fn default_sort_column() -> SortColumn {
 	SortColumn::Cpu
 }
 
+fn default_theme() -> SharedString {
+	SharedString::new_static("Default Dark")
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InterfaceConfig {
 	#[serde(default)]
 	pub refresh_ms: u64,
-	#[serde(default)]
-	pub theme: Theme,
+	#[serde(default = "default_theme")]
+	pub theme: SharedString,
 }
 
 impl Default for InterfaceConfig {
 	fn default() -> Self {
 		Self {
 			refresh_ms: 1500,
-			theme: Theme::System,
+			theme: default_theme(),
 		}
 	}
 }
@@ -287,7 +292,7 @@ mod dirs {
 mod tests {
 	use super::*;
 	use crate::data::model::{
-		DefaultViewMode, PidFilterMode, ResourceViewMode, SortColumn, Theme,
+		DefaultViewMode, PidFilterMode, ResourceViewMode, SortColumn,
 		VramPolling,
 	};
 
@@ -295,7 +300,7 @@ mod tests {
 	fn test_interface_config_default() {
 		let cfg = InterfaceConfig::default();
 		assert_eq!(cfg.refresh_ms, 1500);
-		assert_eq!(cfg.theme, Theme::System);
+		assert_eq!(cfg.theme, default_theme());
 	}
 
 	#[test]
@@ -427,7 +432,7 @@ mod tests {
 		roundtrip(&InterfaceConfig::default());
 		roundtrip(&InterfaceConfig {
 			refresh_ms: 500,
-			theme: Theme::Dark,
+			theme: SharedString::new_static("Default Dark"),
 		});
 	}
 
@@ -492,11 +497,14 @@ mod tests {
 	fn test_apply_override_refresh_ms() {
 		let mut cfg = Config::default();
 		cfg.apply_override(
-			"(general: (interface: (refresh_ms: 500, theme: Dark)))",
+			r#"(general: (interface: (refresh_ms: 500, theme: "Default Dark")))"#,
 		)
 		.unwrap();
 		assert_eq!(cfg.general.interface.refresh_ms, 500);
-		assert_eq!(cfg.general.interface.theme, Theme::Dark);
+		assert_eq!(
+			cfg.general.interface.theme,
+			SharedString::new_static("Default Dark")
+		);
 	}
 
 	#[test]
@@ -517,7 +525,7 @@ mod tests {
 	fn test_apply_override_multiple_sections() {
 		let mut cfg = Config::default();
 		cfg.apply_override(
-			r#"(general: (interface: (refresh_ms: 500, theme: Dark)), window_size: (1920, 1080))"#,
+			r#"(general: (interface: (refresh_ms: 500, theme: "Default Dark")), window_size: (1920, 1080))"#,
 		)
 		.unwrap();
 		assert_eq!(cfg.general.interface.refresh_ms, 500);
@@ -537,7 +545,7 @@ mod tests {
 		let mut cfg = Config::default();
 		cfg.processes.behaviour.vram_polling = VramPolling::Off;
 		cfg.apply_override(
-			"(general: (interface: (refresh_ms: 500, theme: Dark)))",
+			r#"(general: (interface: (refresh_ms: 500, theme: "Default Dark")))"#,
 		)
 		.unwrap();
 		assert_eq!(cfg.processes.behaviour.vram_polling, VramPolling::Off);
@@ -547,11 +555,15 @@ mod tests {
 	#[test]
 	fn test_apply_override_partial_enum_field() {
 		let mut cfg = Config::default();
-		cfg.general.interface.theme = Theme::Dark;
+		cfg.general.interface.theme =
+			SharedString::new_static("Catppuccin Latte");
 		cfg.apply_override("(general: (interface: (refresh_ms: 500)))")
 			.unwrap();
 		assert_eq!(cfg.general.interface.refresh_ms, 500);
-		assert_eq!(cfg.general.interface.theme, Theme::Dark);
+		assert_eq!(
+			cfg.general.interface.theme,
+			SharedString::new_static("Catppuccin Latte")
+		);
 	}
 
 	#[test]

@@ -1,16 +1,16 @@
-use crate::data::config::Config;
-use crate::data::model::Theme;
 use crate::data::settings;
 use crate::ui::settings::SettingsTab;
+use crate::{data::config::Config, ui::assets::lucide::LucideIcon};
 use gpui::*;
 use gpui_component::{
+	button::{Button, ButtonVariants},
+	menu::DropdownMenu,
 	setting::{
 		NumberFieldOptions, SettingField, SettingGroup, SettingItem,
 		SettingPage,
 	},
-	Icon, IconName,
+	Icon, IconName, Sizable,
 };
-use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -18,22 +18,17 @@ use std::sync::Arc;
 pub fn general_page(
 	view: &Entity<SettingsTab>,
 	refresh_ms: &Arc<AtomicU64>,
-	theme_cell: &Rc<Cell<Theme>>,
 	default_config: &Config,
 ) -> SettingPage {
 	let view = view.clone();
 	let refresh_ms = refresh_ms.clone();
-	let theme_cell = theme_cell.clone();
 	let default_refresh = SharedString::from(
 		default_config.general.interface.refresh_ms.to_string(),
-	);
-	let default_theme = SharedString::from(
-		default_config.general.interface.theme.to_string(),
 	);
 
 	SettingPage::new("General")
 		.default_open(true)
-		.icon(Icon::new(IconName::Settings2))
+		.icon(LucideIcon::Settings2.icon())
 		.groups(vec![SettingGroup::new().title("Interface").items(vec![
 			SettingItem::new(
 				"Refresh Interval",
@@ -84,61 +79,40 @@ pub fn general_page(
 			.keywords(["polling", "update", "interval"]),
 			SettingItem::new(
 				"Theme",
-				SettingField::dropdown(
-					vec![
-						("Dark".into(), "Dark".into()),
-						("Light".into(), "Light".into()),
-						("System".into(), "System".into()),
-					],
-					{
+				SettingField::render({
+					let view = view.clone();
+					move |_options, _window, cx| {
+						let config = view.read(cx).config.clone();
+						let label = config.general.interface.theme.clone();
 						let view = view.clone();
-						move |cx: &App| {
-							SharedString::from(
-								view.read(cx)
-									.config
-									.general
-									.interface
-									.theme
-									.to_string(),
-							)
-						}
-					},
-					{
-						let view = view.clone();
-						let theme_cell = theme_cell.clone();
-						move |val: SharedString, cx: &mut App| {
-							view.update(cx, |this, cx| {
-								if let Some(new) = settings::set_theme(
-									&mut this.config,
-									&val,
-								) {
-									let mode = match new {
-										Theme::Dark => {
-											gpui_component::ThemeMode::Dark
-										}
-										Theme::Light => {
-											gpui_component::ThemeMode::Light
-										}
-										Theme::System => {
-											gpui_component::ThemeMode::Light
-										}
-									};
-									gpui_component::Theme::change(
-										mode, None, cx,
-									);
-									theme_cell.set(new);
-									this.save();
-									cx.notify();
-								}
-							});
-						}
-					},
-				)
-				.default_value(default_theme),
+						Button::new("settings-theme-btn")
+							.label(label)
+							.dropdown_menu(move |menu, window, cx| {
+								let on_commit: Rc<
+									dyn Fn(&SharedString, &mut gpui::App),
+								> = {
+									let view = view.clone();
+									Rc::new(move |name, cx| {
+										view.update(cx, |this, cx| {
+											this.config
+												.general
+												.interface
+												.theme = name.clone();
+											this.save();
+											cx.notify();
+										});
+									})
+								};
+								crate::ui::app::app_view::build_theme_menu(
+									menu, &config, &on_commit, window, cx,
+								)
+							})
+					}
+				}),
 			)
 			.description(
-				"Change the appearance theme. System follows your desktop \
-				 setting.",
+				"Select a theme from built-in or custom themes. Drop JSON \
+				 theme files into ~/.config/gpuitop/themes/ to add more.",
 			)
 			.keywords(["appearance", "mode", "dark", "light"]),
 			SettingItem::new(

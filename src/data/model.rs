@@ -305,33 +305,6 @@ pub enum GpuBackend {
 	serde::Deserialize,
 	Default,
 )]
-pub enum Theme {
-	Dark,
-	Light,
-	#[default]
-	System,
-}
-
-impl std::fmt::Display for Theme {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Dark => write!(f, "Dark"),
-			Self::Light => write!(f, "Light"),
-			Self::System => write!(f, "System"),
-		}
-	}
-}
-
-#[derive(
-	Debug,
-	Clone,
-	Copy,
-	PartialEq,
-	Eq,
-	serde::Serialize,
-	serde::Deserialize,
-	Default,
-)]
 pub enum VramPolling {
 	#[default]
 	Auto,
@@ -698,13 +671,6 @@ mod tests {
 			"All descendants"
 		);
 		assert_eq!(PidFilterMode::DirectChildren.to_string(), "Direct only");
-	}
-
-	#[test]
-	fn display_theme() {
-		assert_eq!(Theme::Dark.to_string(), "Dark");
-		assert_eq!(Theme::Light.to_string(), "Light");
-		assert_eq!(Theme::System.to_string(), "System");
 	}
 
 	#[test]
