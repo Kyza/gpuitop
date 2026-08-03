@@ -101,7 +101,7 @@ fn main() {
 				});
 				let theme_name =
 					view.read(cx).config.general.interface.theme.clone();
-				crate::data::theme::apply_theme_by_name(
+				crate::data::themes::apply_theme_by_name(
 					&theme_name,
 					Some(window),
 					cx,

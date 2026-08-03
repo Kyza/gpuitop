@@ -39,6 +39,7 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 hotpath = ["hotpath/hotpath"]
 hotpath-cpu = ["hotpath/hotpath-cpu"]
 hotpath-alloc = ["hotpath/hotpath-alloc"]
+hotpath-mcp = ["hotpath/hotpath-mcp"]
 
 [profile.release]
 lto = "thin"
