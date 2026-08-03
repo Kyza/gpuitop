@@ -6,9 +6,10 @@ use rust_embed::RustEmbed;
 struct ThemeAssets;
 
 pub fn register_builtin_themes(cx: &mut gpui::App) {
-	let already_registered = gpui_component::theme::ThemeRegistry::global(cx)
-		.themes()
-		.contains_key("Catppuccin Latte");
+	let already_registered = {
+		let registry = gpui_component::theme::ThemeRegistry::global(cx);
+		registry.themes().len() > 2
+	};
 	if already_registered {
 		return;
 	}
