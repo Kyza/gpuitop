@@ -1,6 +1,6 @@
 # gpuitop
 
-A GPU-accelerated task manager for Linux built with [GPUI](https://www.gpui.rs/), the Rust UI framework behind the [Zed](https://zed.dev) editor. Fuzzy search, window picking, per-process GPU VRAM tracking (NVIDIA + AMD), and a right-click context menu for signals.
+A GPU-accelerated task manager for Linux. It uses [GPUI](https://www.gpui.rs/), the Rust UI framework that powers [Zed](https://zed.dev). Features: fuzzy search, window picking, per-process GPU VRAM tracking (NVIDIA + AMD), and a right-click signal menu.
 
 ## Screenshots
 
@@ -42,7 +42,7 @@ Builtin themes from [gpui-component](https://github.com/longbridge/gpui-componen
 | Tokyo | — | Tokyo Night, Tokyo Storm, Tokyo Moon |
 | Twilight | — | Twilight |
 
-Switch themes from the palette icon in the titlebar (hierarchical dropdown with live preview on hover) or from Settings > General. Drop `.json` theme files into `~/.config/gpuitop/themes/` to add custom themes — they're loaded automatically and watched for live changes.
+Switch themes from the palette icon in the titlebar (hierarchical dropdown with live preview on hover) or from Settings > General. Put `.json` theme files into `~/.config/gpuitop/themes/` to add custom themes. The app loads them automatically and watches for live changes.
 
 ![Settings about in Catppuccin Mocha](screenshots/settings-about-catppuccin-mocha.png)
 
@@ -52,9 +52,9 @@ Switch themes from the palette icon in the titlebar (hierarchical dropdown with 
 
 ### Find Processes
 
-Fuzzy search the process table, or click **Pick** and switch to any window to jump to its process. Toggle filters to narrow the list: GUI apps, kernel threads, Services, Electron apps, your user, process state (R/S/D/Z/T/I/X), parents, VRAM-consuming processes. Filters combine with AND/OR logic.
+Fuzzy search the process table, or click **Pick** and switch to any window to jump to its process. Toggle filters to narrow the list: GUI apps, kernel threads, Services, Electron apps, your user, process state (R/S/D/Z/T/I/X), parents, and processes that use VRAM. Filters combine with AND/OR logic.
 
-The window picker uses the `zwlr_foreign_toplevel_manager_v1` Wayland protocol. It does not work under X11; the Pick button will time out in an X11 session.
+The window picker uses the `zwlr_foreign_toplevel_manager_v1` Wayland protocol. It does not work under X11. The Pick button will time out in an X11 session.
 
 ### Tree View
 
@@ -74,7 +74,7 @@ Double-click a process to filter by it. Click column headers to sort by Name, PI
 
 ### GPU VRAM Tracking
 
-NVIDIA GPUs are queried through NVML. AMD GPUs use `rocm-smi`. Both backends aggregate across all GPUs and show per-process VRAM usage.
+gpuitop queries NVIDIA GPUs through NVML. AMD GPUs use `rocm-smi`. Both backends aggregate across all GPUs and show per-process VRAM usage.
 
 ### Electron Detection
 
@@ -137,7 +137,7 @@ cargo install --git https://github.com/Kyza/gpuitop.git
 
 ## Config
 
-Stored at `~/.config/gpuitop/config.ron` (respects `XDG_CONFIG_HOME`). Edit from Settings > General and Settings > Processes in the app, or write the RON file directly.
+The config file is at `~/.config/gpuitop/config.ron` (respects `XDG_CONFIG_HOME`). Edit it from Settings > General and Settings > Processes in the app, or write the RON file directly.
 
 ### Available Settings
 
@@ -155,11 +155,11 @@ Stored at `~/.config/gpuitop/config.ron` (respects `XDG_CONFIG_HOME`). Edit from
 | Sort Column | SortColumn | Cpu |
 | Sort Descending | bool | true |
 
-The 9 process table columns can be reordered and toggled on/off from Settings > Processes.
+You can reorder and toggle the 9 process table columns from Settings > Processes.
 
 ### [RON](https://github.com/ron-rs/ron) Override
 
-`--override` takes a partial RON struct and deep-merges it into the loaded config. Only the keys you specify change; everything else stays as-is.
+`--override` takes a partial RON struct and deep-merges it into the loaded config. Only the keys you specify change. Everything else stays the same.
 
 ```bash
 # Change refresh rate and theme
@@ -194,11 +194,11 @@ Multiple `--override` flags stack and later values win for overlapping keys.
 | SysV init | Supported, untested |
 | Unknown | Heuristic fallback (ppid 1) |
 
-The codebase uses platform abstraction (`src/data/platform/`) so the process collector, GPU queries, and window picker can be swapped per OS.
+The codebase uses platform abstraction (`src/data/platform/`) so each OS can swap the process collector, GPU queries, and window picker.
 
 ### Profiling
 
-Key functions are instrumented with [hotpath](https://crates.io/crates/hotpath). Build with the `hotpath` feature:
+The app instruments key functions with [hotpath](https://crates.io/crates/hotpath). Build with the `hotpath` feature:
 
 ```bash
 cargo run --features hotpath
