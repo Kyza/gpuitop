@@ -1025,4 +1025,289 @@ mod tests {
 		let p = make_proc(20, 100);
 		assert!(!d.proc_matches(&p, &Filter::Services));
 	}
+
+	fn set_view_state(
+		d: &ProcessTableDelegate,
+		f: impl FnOnce(&mut ViewState),
+	) {
+		f(&mut d.view_state.borrow_mut());
+	}
+
+	#[test]
+	fn filtered_sorted_rows_empty() {
+		let d = make_delegate(vec![]);
+		let rows = d.filtered_sorted_rows();
+		assert!(rows.is_empty());
+	}
+
+	#[test]
+	fn filtered_sorted_rows_no_search_no_filters_sort_by_pid() {
+		let procs =
+			vec![make_proc(30, 1), make_proc(10, 1), make_proc(20, 1)];
+		let d = make_delegate(procs);
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows.len(), 3);
+		assert_eq!(rows[0].pid, 10);
+		assert_eq!(rows[1].pid, 20);
+		assert_eq!(rows[2].pid, 30);
+	}
+
+	#[test]
+	fn filtered_sorted_rows_sort_by_name() {
+		let procs = vec![
+			make_proc_named(1, "c-process"),
+			make_proc_named(2, "a-process"),
+			make_proc_named(3, "b-process"),
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.sort_col = 1;
+			s.sort_dir = SortDirection::Ascending;
+		});
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows[0].name, "a-process");
+		assert_eq!(rows[1].name, "b-process");
+		assert_eq!(rows[2].name, "c-process");
+	}
+
+	#[test]
+	fn filtered_sorted_rows_sort_by_cpu_descending() {
+		let procs = vec![
+			make_proc_with_cpu(1, 10.0),
+			make_proc_with_cpu(2, 50.0),
+			make_proc_with_cpu(3, 30.0),
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.sort_col = 5;
+			s.sort_dir = SortDirection::Descending;
+		});
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows[0].cpu_percent, 50.0);
+		assert_eq!(rows[1].cpu_percent, 30.0);
+		assert_eq!(rows[2].cpu_percent, 10.0);
+	}
+
+	#[test]
+	fn filtered_sorted_rows_search_by_name() {
+		let procs = vec![
+			make_proc_named(1, "firefox"),
+			make_proc_named(2, "bash"),
+			make_proc_named(3, "firewalld"),
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.search = "fire".into();
+		});
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows.len(), 2);
+		let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+		assert!(names.contains(&"firefox"));
+		assert!(names.contains(&"firewalld"));
+	}
+
+	#[test]
+	fn filtered_sorted_rows_search_by_pid_partial() {
+		let procs = vec![
+			make_proc(1, 0),
+			make_proc(10, 1),
+			make_proc(100, 10),
+			make_proc(99, 10),
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.search = "10".into();
+		});
+		let rows = d.filtered_sorted_rows();
+		assert!(!rows.is_empty());
+		let pids: Vec<i32> = rows.iter().map(|r| r.pid).collect();
+		assert!(pids.contains(&10));
+	}
+
+	#[test]
+	fn filtered_sorted_rows_search_no_results() {
+		let procs =
+			vec![make_proc_named(1, "bash"), make_proc_named(2, "vim")];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.search = "zzz_nonexistent".into();
+		});
+		let rows = d.filtered_sorted_rows();
+		assert!(rows.is_empty());
+	}
+
+	#[test]
+	fn filtered_sorted_rows_filter_user() {
+		let procs = vec![
+			make_proc_with_user(1, "root", true),
+			make_proc_with_user(2, "kyza", false),
+			make_proc_with_user(3, "root", true),
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.filters = vec![Filter::User];
+		});
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows.len(), 2);
+		for r in rows.iter() {
+			assert!(!r.is_gui);
+			assert!(r.is_owned_by_current_user);
+		}
+	}
+
+	#[test]
+	fn filtered_sorted_rows_filter_gui() {
+		let procs = vec![
+			{
+				let mut p = make_proc(1, 0);
+				p.is_gui = true;
+				p
+			},
+			make_proc(2, 1),
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.filters = vec![Filter::Gui];
+		});
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows.len(), 1);
+		assert_eq!(rows[0].pid, 1);
+	}
+
+	#[test]
+	fn filtered_sorted_rows_filter_mode_and() {
+		let procs = vec![
+			{
+				let mut p = make_proc(1, 0);
+				p.is_kthread = true;
+				p.has_children = true;
+				p
+			},
+			{
+				let mut p = make_proc(2, 0);
+				p.is_kthread = true;
+				p
+			},
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.filters = vec![Filter::Kernel, Filter::Parent];
+			s.filter_mode = FilterMode::And;
+		});
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows.len(), 1);
+		assert_eq!(rows[0].pid, 1);
+	}
+
+	#[test]
+	fn filtered_sorted_rows_filter_mode_or() {
+		let procs = vec![
+			{
+				let mut p = make_proc(1, 0);
+				p.is_gui = true;
+				p
+			},
+			{
+				let mut p = make_proc(2, 0);
+				p.is_owned_by_current_user = true;
+				p
+			},
+			make_proc(3, 0),
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.filters = vec![Filter::Gui, Filter::User];
+			s.filter_mode = FilterMode::Or;
+		});
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows.len(), 2);
+	}
+
+	#[test]
+	fn filtered_sorted_rows_pid_filter_pins_to_top() {
+		let procs = vec![
+			make_proc(50, 1),
+			make_proc(10, 1),
+			make_proc(90, 100),
+			make_proc(100, 1),
+		];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.filters = vec![Filter::Pid(100)];
+			s.pid_filter_mode = PidFilterMode::AllDescendants;
+		});
+		let rows = d.filtered_sorted_rows();
+		assert!(!rows.is_empty());
+		assert_eq!(rows[0].pid, 100);
+	}
+
+	#[test]
+	fn filtered_sorted_rows_cumulative_view_mode() {
+		let parent = {
+			let mut p = make_proc(1, 0);
+			p.cpu_percent = 10.0;
+			p.mem_rss = 1000;
+			p.disk_read_bytes_per_sec = 5.0;
+			p.disk_write_bytes_per_sec = 3.0;
+			p.has_children = true;
+			p
+		};
+		let child = {
+			let mut p = make_proc(2, 1);
+			p.cpu_percent = 20.0;
+			p.mem_rss = 2000;
+			p.disk_read_bytes_per_sec = 7.0;
+			p.disk_write_bytes_per_sec = 4.0;
+			p
+		};
+		let procs = vec![parent, child];
+		let d = make_delegate(procs);
+		set_view_state(&d, |s| {
+			s.sort_col = 5;
+			s.sort_dir = SortDirection::Descending;
+			s.resource_view_mode = ResourceViewMode::Cumulative;
+		});
+		let rows = d.filtered_sorted_rows();
+		assert_eq!(rows.len(), 2);
+		assert_eq!(rows[0].pid, 1);
+		assert_eq!(rows[1].pid, 2);
+	}
+
+	#[test]
+	fn filtered_sorted_rows_cache_invalidation_on_generation() {
+		let procs = vec![make_proc(1, 0), make_proc(2, 0)];
+		let d = make_delegate(procs.clone());
+		set_view_state(&d, |s| {
+			s.sort_col = 2;
+			s.sort_dir = SortDirection::Ascending;
+		});
+		let r1 = d.filtered_sorted_rows();
+		assert_eq!(r1[0].pid, 1);
+		d.view_state.borrow_mut().generation += 1;
+		let r2 = d.filtered_sorted_rows();
+		assert_eq!(r2[0].pid, 1);
+	}
+
+	fn make_proc_named(pid: i32, name: &str) -> ProcessInfo {
+		let mut p = make_proc(pid, 0);
+		p.name = name.into();
+		p
+	}
+
+	fn make_proc_with_user(
+		pid: i32,
+		user: &str,
+		is_owned: bool,
+	) -> ProcessInfo {
+		let mut p = make_proc(pid, 0);
+		p.user = user.into();
+		p.is_owned_by_current_user = is_owned;
+		p
+	}
+
+	fn make_proc_with_cpu(pid: i32, cpu: f32) -> ProcessInfo {
+		let mut p = make_proc(pid, 0);
+		p.cpu_percent = cpu;
+		p
+	}
 }

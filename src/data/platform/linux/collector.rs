@@ -269,3 +269,64 @@ impl SystemCollector {
 		result
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_parse_kv_normal() {
+		let data = "Key1: value1\nKey2:  value2 \nKey3:val3";
+		let map = SystemCollector::parse_kv(data);
+		assert_eq!(map.get("Key1").unwrap(), "value1");
+		assert_eq!(map.get("Key2").unwrap(), "value2");
+		assert_eq!(map.get("Key3").unwrap(), "val3");
+	}
+
+	#[test]
+	fn test_parse_kv_skip_no_colon() {
+		let data = "good: value\nno_colon_line\nanother:123";
+		let map = SystemCollector::parse_kv(data);
+		assert_eq!(map.len(), 2);
+		assert!(map.contains_key("good"));
+		assert!(map.contains_key("another"));
+	}
+
+	#[test]
+	fn test_parse_kv_empty() {
+		let map = SystemCollector::parse_kv("");
+		assert!(map.is_empty());
+	}
+
+	#[test]
+	fn test_parse_kv_multiple_colons() {
+		let data = "time: 12:34:56\naddr: 127.0.0.1:8080";
+		let map = SystemCollector::parse_kv(data);
+		assert_eq!(map.get("time").unwrap(), "12:34:56");
+		assert_eq!(map.get("addr").unwrap(), "127.0.0.1:8080");
+	}
+
+	#[test]
+	fn test_parse_kv_meminfo_format() {
+		let data = "MemTotal:       32849320 kB\nMemFree:         1234567 \
+		            kB\nBuffers:           89012 kB";
+		let map = SystemCollector::parse_kv(data);
+		assert_eq!(map.get("MemTotal").unwrap(), "32849320 kB");
+		assert_eq!(map.get("MemFree").unwrap(), "1234567 kB");
+		assert_eq!(map.get("Buffers").unwrap(), "89012 kB");
+	}
+
+	#[test]
+	fn test_parse_kv_blank_lines() {
+		let data = "a:1\n\nb:2\n   \nc:3";
+		let map = SystemCollector::parse_kv(data);
+		assert_eq!(map.len(), 3);
+	}
+
+	#[test]
+	fn test_parse_kv_overwrites_duplicate_keys() {
+		let data = "dup: first\ndup: second";
+		let map = SystemCollector::parse_kv(data);
+		assert_eq!(map.get("dup").unwrap(), "second");
+	}
+}

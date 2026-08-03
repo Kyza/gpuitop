@@ -11,7 +11,7 @@ impl SystemCollector {
 		stat_data: &str,
 	) -> Option<(String, char, i32, u64, u64, u64, u64)> {
 		let comm_start = stat_data.find('(')? + 1;
-		let comm_end = stat_data.find(')')?;
+		let comm_end = stat_data.rfind(')')?;
 		let comm = stat_data[comm_start..comm_end].to_string();
 		let rest = &stat_data[comm_end + 2..];
 		let parts: Vec<&str> = rest.split_whitespace().collect();
@@ -552,6 +552,230 @@ mod tests {
 		}
 
 		eprintln!("Found {systemd_count} processes with PPID=1");
+	}
+
+	#[test]
+	fn test_parse_stat_valid() {
+		let line = "1234 (bash) S 1 0 0 0 0 0 0 0 0 0 100 200 300 400 0 0 \
+		            20 0 1 0 12345";
+		let r = SystemCollector::parse_stat(line);
+		assert!(r.is_some());
+		let (comm, state, ppid, utime, stime, cutime, cstime) = r.unwrap();
+		assert_eq!(comm, "bash");
+		assert_eq!(state, 'S');
+		assert_eq!(ppid, 1);
+		assert_eq!(utime, 100);
+		assert_eq!(stime, 200);
+		assert_eq!(cutime, 300);
+		assert_eq!(cstime, 400);
+	}
+
+	#[test]
+	fn test_parse_stat_parentheses_in_name() {
+		let line = "5678 ((sd-pam)) S 1 0 0 0 0 0 0 0 0 0 50 60 70 80 0 0";
+		let r = SystemCollector::parse_stat(line);
+		assert!(r.is_some());
+		let (comm, state, ppid, utime, stime, cutime, cstime) = r.unwrap();
+		assert_eq!(comm, "(sd-pam)");
+		assert_eq!(state, 'S');
+		assert_eq!(ppid, 1);
+		assert_eq!(utime, 50);
+		assert_eq!(stime, 60);
+		assert_eq!(cutime, 70);
+		assert_eq!(cstime, 80);
+	}
+
+	#[test]
+	fn test_parse_stat_too_short() {
+		let line = "1 (init) S";
+		assert!(SystemCollector::parse_stat(line).is_none());
+	}
+
+	#[test]
+	fn test_parse_stat_no_parens() {
+		assert!(SystemCollector::parse_stat("").is_none());
+		assert!(SystemCollector::parse_stat("no parens here").is_none());
+	}
+
+	#[test]
+	fn test_parse_stat_barely_enough() {
+		let mut parts = vec!["0"; 15];
+		parts[0] = "S";
+		parts[1] = "42";
+		let line = format!(
+			"999 (minimal) {}",
+			parts.iter().map(|s| *s).collect::<Vec<_>>().join(" ")
+		);
+		let r = SystemCollector::parse_stat(&line);
+		assert!(r.is_some());
+		let (comm, state, ppid, ..) = r.unwrap();
+		assert_eq!(comm, "minimal");
+		assert_eq!(state, 'S');
+		assert_eq!(ppid, 42);
+	}
+
+	#[test]
+	fn test_parse_stat_space_after_parens() {
+		let line = "10 (name) R 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0";
+		let r = SystemCollector::parse_stat(line);
+		assert!(r.is_some());
+	}
+
+	#[test]
+	fn test_extract_electron_app_name_non_electron() {
+		let name = extract_electron_app_name(
+			"/usr/bin/firefox --new-window",
+			"firefox",
+		);
+		assert_eq!(name, "firefox");
+	}
+
+	#[test]
+	fn test_extract_electron_app_name_from_path() {
+		let name = extract_electron_app_name(
+			"/opt/Discord/discord --type=renderer",
+			"electron",
+		);
+		assert_eq!(name, "Discord");
+	}
+
+	#[test]
+	fn test_extract_electron_app_name_skips_flags() {
+		let name = extract_electron_app_name(
+			"/usr/share/code/code --no-sandbox --type=renderer",
+			"electron",
+		);
+		assert_eq!(name, "Code");
+	}
+
+	#[test]
+	fn test_extract_electron_app_name_skips_electron_dir() {
+		let name = extract_electron_app_name(
+			"/opt/Spotify/electron/spotify --type=renderer",
+			"electron",
+		);
+		assert_eq!(name, "Spotify");
+	}
+
+	#[test]
+	fn test_extract_electron_app_name_skips_node_modules() {
+		let name = extract_electron_app_name(
+			"/usr/share/code --type=renderer",
+			"electron",
+		);
+		assert_eq!(name, "Code");
+	}
+
+	#[test]
+	fn test_extract_electron_app_name_fallback_to_binary() {
+		let name = extract_electron_app_name(
+			"/opt/electron-app/electron-bin --type=renderer",
+			"electron",
+		);
+		assert_eq!(name, "Electron-bin");
+	}
+
+	#[test]
+	fn test_extract_electron_app_name_fallback_to_name() {
+		let name = extract_electron_app_name(
+			"--type=renderer --some-flag",
+			"electron-something",
+		);
+		assert_eq!(name, "electron-something");
+	}
+
+	#[test]
+	fn test_capitalize() {
+		assert_eq!(capitalize("hello"), "Hello");
+		assert_eq!(capitalize("HELLO"), "Hello");
+		assert_eq!(capitalize("h"), "H");
+		assert_eq!(capitalize(""), "");
+		assert_eq!(capitalize("discord"), "Discord");
+	}
+
+	#[test]
+	fn test_find_electron_root_direct_parent() {
+		let sub = ProcessInfo {
+			pid: 200,
+			ppid: 100,
+			name: "electron".into(),
+			command: "--type=renderer".into(),
+			..make_stub_proc(200, 100)
+		};
+		let parent = ProcessInfo {
+			pid: 100,
+			ppid: 1,
+			name: "discord".into(),
+			command: "/opt/Discord/discord".into(),
+			..make_stub_proc(100, 1)
+		};
+		let pids: HashMap<i32, ProcessInfo> =
+			[(200, sub), (100, parent)].into();
+		let subs: HashSet<i32> = [200].into();
+		let root = find_electron_root(200, &subs, &pids);
+		assert_eq!(root, 100);
+	}
+
+	#[test]
+	fn test_find_electron_root_nested_subprocesses() {
+		let deepest = ProcessInfo {
+			pid: 300,
+			ppid: 200,
+			name: "electron".into(),
+			command: "--type=renderer".into(),
+			..make_stub_proc(300, 200)
+		};
+		let mid = ProcessInfo {
+			pid: 200,
+			ppid: 100,
+			name: "electron".into(),
+			command: "--type=zygote".into(),
+			..make_stub_proc(200, 100)
+		};
+		let root = ProcessInfo {
+			pid: 100,
+			ppid: 1,
+			name: "code".into(),
+			command: "/usr/share/code/code".into(),
+			..make_stub_proc(100, 1)
+		};
+		let pids: HashMap<i32, ProcessInfo> =
+			[(300, deepest), (200, mid), (100, root)].into();
+		let subs: HashSet<i32> = [300, 200].into();
+		let r = find_electron_root(300, &subs, &pids);
+		assert_eq!(r, 100);
+	}
+
+	#[test]
+	fn test_find_electron_root_pid_not_found() {
+		let subs: HashSet<i32> = [999].into();
+		let pids: HashMap<i32, ProcessInfo> = HashMap::new();
+		let r = find_electron_root(999, &subs, &pids);
+		assert_eq!(r, 999);
+	}
+
+	fn make_stub_proc(pid: i32, ppid: i32) -> ProcessInfo {
+		ProcessInfo {
+			pid,
+			ppid,
+			name: String::new(),
+			user: String::new(),
+			state: 'S',
+			command: String::new(),
+			cgroup: String::new(),
+			cpu_percent: 0.0,
+			mem_percent: 0.0,
+			mem_rss: 0,
+			vram_bytes: None,
+			disk_read_bytes_per_sec: 0.0,
+			disk_write_bytes_per_sec: 0.0,
+			is_gui: false,
+			is_kthread: false,
+			is_owned_by_current_user: false,
+			is_electron: false,
+			electron_app_name: None,
+			has_children: false,
+		}
 	}
 
 	#[test]
