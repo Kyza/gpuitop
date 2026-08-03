@@ -191,7 +191,6 @@ impl SystemCollector {
 					is_owned_by_current_user: is_owned,
 					is_electron: false,
 					electron_app_name: None,
-					children: Vec::new(),
 					has_children: false,
 				},
 			);

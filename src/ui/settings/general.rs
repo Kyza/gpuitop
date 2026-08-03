@@ -3,13 +3,12 @@ use crate::ui::settings::SettingsTab;
 use crate::{data::config::Config, ui::assets::lucide::LucideIcon};
 use gpui::*;
 use gpui_component::{
-	button::{Button, ButtonVariants},
+	button::Button,
 	menu::DropdownMenu,
 	setting::{
 		NumberFieldOptions, SettingField, SettingGroup, SettingItem,
 		SettingPage,
 	},
-	Icon, IconName, Sizable,
 };
 use std::rc::Rc;
 use std::sync::atomic::AtomicU64;

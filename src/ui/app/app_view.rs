@@ -11,7 +11,7 @@ use gpui::App as GpuiApp;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::menu::{DropdownMenu, PopupMenu, PopupMenuItem};
-use gpui_component::{ActiveTheme, Sizable, StyledExt, TitleBar};
+use gpui_component::{ActiveTheme, Sizable, TitleBar};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};

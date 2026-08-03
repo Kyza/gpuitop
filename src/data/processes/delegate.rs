@@ -508,12 +508,8 @@ mod tests {
 				total: 0,
 				used: 0,
 				available: 0,
-				free: 0,
-				buffers: 0,
 				cached: 0,
-				swap_total: 0,
 				swap_used: 0,
-				swap_free: 0,
 			},
 			disks: vec![],
 			networks: vec![],
@@ -543,7 +539,6 @@ mod tests {
 			is_owned_by_current_user: false,
 			is_electron: false,
 			electron_app_name: None,
-			children: vec![],
 			has_children: false,
 		}
 	}

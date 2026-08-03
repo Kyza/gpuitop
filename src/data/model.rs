@@ -18,7 +18,6 @@ pub struct ProcessInfo {
 	pub is_owned_by_current_user: bool,
 	pub is_electron: bool,
 	pub electron_app_name: Option<String>,
-	pub children: Vec<ProcessInfo>,
 	pub has_children: bool,
 }
 
@@ -26,7 +25,6 @@ pub struct ProcessInfo {
 pub struct CpuCore {
 	pub index: usize,
 	pub usage_percent: f32,
-	pub history: Vec<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -40,12 +38,8 @@ pub struct MemoryInfo {
 	pub total: u64,
 	pub used: u64,
 	pub available: u64,
-	pub free: u64,
-	pub buffers: u64,
 	pub cached: u64,
-	pub swap_total: u64,
 	pub swap_used: u64,
-	pub swap_free: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -74,12 +68,8 @@ impl SystemSnapshot {
 				total: 0,
 				used: 0,
 				available: 0,
-				free: 0,
-				buffers: 0,
 				cached: 0,
-				swap_total: 0,
 				swap_used: 0,
-				swap_free: 0,
 			},
 			disks: Vec::new(),
 			networks: Vec::new(),
@@ -457,7 +447,6 @@ mod tests {
 			is_owned_by_current_user: false,
 			is_electron: false,
 			electron_app_name: None,
-			children: vec![],
 			has_children: false,
 		}
 	}

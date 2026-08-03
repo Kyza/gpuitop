@@ -1,7 +1,5 @@
-use anyhow::{Context, Result};
 use gpui::{px, SharedString};
 use gpui_component::theme::{Theme, ThemeConfig, ThemeRegistry};
-use std::path::Path;
 use std::rc::Rc;
 
 pub fn apply_theme_by_name(
@@ -129,21 +127,4 @@ pub fn list_theme_families(cx: &gpui::App) -> Vec<ThemeFamily> {
 			variants,
 		})
 		.collect()
-}
-
-pub fn load_theme_from_file(
-	path: &Path,
-	cx: &mut gpui::App,
-) -> Result<Vec<SharedString>> {
-	let json = std::fs::read_to_string(path)
-		.with_context(|| format!("Failed to read {:?}", path))?;
-	let registry = ThemeRegistry::global_mut(cx);
-	let before: Vec<SharedString> =
-		registry.themes().keys().cloned().collect();
-	registry
-		.load_themes_from_str(&json)
-		.with_context(|| format!("Failed to parse theme file {:?}", path))?;
-	let after: Vec<SharedString> =
-		registry.themes().keys().cloned().collect();
-	Ok(after.into_iter().filter(|n| !before.contains(n)).collect())
 }

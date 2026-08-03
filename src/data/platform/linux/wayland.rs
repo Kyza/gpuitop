@@ -133,50 +133,6 @@ impl
 	}
 }
 
-/// Query the compositor for all toplevel windows, returning their app_id
-/// and title (skipping entries with empty app_id). Entries are deduplicated
-/// by app_id.
-pub fn get_toplevels() -> Vec<(String, String)> {
-	let Some(conn) = Connection::connect_to_env().ok() else {
-		return Vec::new();
-	};
-
-	let Some((globals, mut event_queue)) =
-		registry_queue_init::<AppData>(&conn).ok()
-	else {
-		return Vec::new();
-	};
-
-	let qh = event_queue.handle();
-
-	let _manager: zwlr_foreign_toplevel_manager_v1::ZwlrForeignToplevelManagerV1 =
-		match globals.bind(&qh, 1..=3, ()) {
-			Ok(m) => m,
-			Err(_) => return Vec::new(),
-		};
-
-	let mut app_data = AppData::new();
-
-	if event_queue.roundtrip(&mut app_data).is_err() {
-		return Vec::new();
-	}
-
-	let mut seen = std::collections::HashSet::new();
-	let mut results = Vec::new();
-	for info in app_data.handles.values() {
-		if info.app_id.is_empty() || !seen.insert(info.app_id.clone()) {
-			continue;
-		}
-		let label = if info.title.is_empty() {
-			info.app_id.clone()
-		} else {
-			format!("{} — {}", info.app_id, info.title)
-		};
-		results.push((info.app_id.clone(), label));
-	}
-	results
-}
-
 /// Query the compositor for the currently active (focused) toplevel's
 /// app_id. Skips gpuitop itself. Returns `None` if no other toplevel
 /// is focused.

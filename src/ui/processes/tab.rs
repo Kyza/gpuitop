@@ -124,17 +124,6 @@ impl ProcessesTab {
 		*self.descendant_counts.borrow_mut() = None;
 	}
 
-	pub fn toggle_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
-		ViewState::mutate(&self.view_state, |s| {
-			if let Some(pos) = s.filters.iter().position(|f| *f == filter) {
-				s.filters.remove(pos);
-			} else {
-				s.filters.push(filter);
-			}
-		});
-		cx.notify();
-	}
-
 	pub fn toggle_filter_mode(&mut self, cx: &mut Context<Self>) {
 		ViewState::mutate(&self.view_state, |s| {
 			s.filter_mode = match s.filter_mode {
