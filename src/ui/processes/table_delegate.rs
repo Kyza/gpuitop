@@ -1,4 +1,4 @@
-use crate::data::platform::process_icon::resolve_icon_path;
+use crate::data::icons::resolve_icon_path;
 use crate::data::processes::delegate::ProcessTableDelegate;
 use crate::data::state::ViewState;
 use crate::ui::assets::lucide::LucideIcon;

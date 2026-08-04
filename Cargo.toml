@@ -36,10 +36,14 @@ wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 
 [features]
+default = ["runtime-compositor"]
 hotpath = ["hotpath/hotpath"]
 hotpath-cpu = ["hotpath/hotpath-cpu"]
 hotpath-alloc = ["hotpath/hotpath-alloc"]
 hotpath-mcp = ["hotpath/hotpath-mcp"]
+runtime-compositor = []
+x11 = []
+wayland = []
 
 [profile.release]
 lto = "thin"

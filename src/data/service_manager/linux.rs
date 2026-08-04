@@ -1,8 +1,8 @@
 use std::collections::HashSet;
-use std::fmt;
 use std::path::Path;
 
-use crate::data::model::ProcessInfo;
+use super::InitSystem;
+use crate::data::model::ProcessSnapshot;
 
 /// Check if a cgroup path belongs to a systemd service unit.
 ///
@@ -19,29 +19,6 @@ pub fn is_systemd_service_cgroup(cgroup: &str) -> bool {
 		.next()
 		.map(|s| s.ends_with(".service"))
 		.unwrap_or(false)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InitSystem {
-	Systemd,
-	OpenRc,
-	Runit,
-	Dinit,
-	SysV,
-	Unknown,
-}
-
-impl fmt::Display for InitSystem {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::Systemd => write!(f, "systemd"),
-			Self::OpenRc => write!(f, "OpenRC"),
-			Self::Runit => write!(f, "runit"),
-			Self::Dinit => write!(f, "dinit"),
-			Self::SysV => write!(f, "SysV init"),
-			Self::Unknown => write!(f, "unknown"),
-		}
-	}
 }
 
 pub fn detect_init() -> InitSystem {
@@ -83,7 +60,7 @@ pub fn detect_init() -> InitSystem {
 	InitSystem::Unknown
 }
 
-pub fn pids_of_runsv(processes: &[ProcessInfo]) -> HashSet<i32> {
+pub fn pids_of_runsv(processes: &[ProcessSnapshot]) -> HashSet<i32> {
 	processes
 		.iter()
 		.filter(|p| p.name == "runsv")
@@ -92,7 +69,7 @@ pub fn pids_of_runsv(processes: &[ProcessInfo]) -> HashSet<i32> {
 }
 
 pub(crate) fn pids_of_supervise_daemon(
-	processes: &[ProcessInfo],
+	processes: &[ProcessSnapshot],
 ) -> HashSet<i32> {
 	processes
 		.iter()
@@ -102,7 +79,7 @@ pub(crate) fn pids_of_supervise_daemon(
 }
 
 pub fn is_service(
-	proc: &ProcessInfo,
+	proc: &ProcessSnapshot,
 	init: InitSystem,
 	runsv_pids: &HashSet<i32>,
 	supervise_pids: &HashSet<i32>,
@@ -169,8 +146,8 @@ mod tests {
 		let _init = detect_init();
 	}
 
-	fn sproc(pid: i32, ppid: i32, cgroup: &str) -> ProcessInfo {
-		ProcessInfo {
+	fn sproc(pid: i32, ppid: i32, cgroup: &str) -> ProcessSnapshot {
+		ProcessSnapshot {
 			pid,
 			ppid,
 			name: "test".into(),
@@ -194,13 +171,13 @@ mod tests {
 		}
 	}
 
-	fn runit_proc(pid: i32, ppid: i32) -> ProcessInfo {
+	fn runit_proc(pid: i32, ppid: i32) -> ProcessSnapshot {
 		let mut p = sproc(pid, ppid, "");
 		p.name = "runsv".into();
 		p
 	}
 
-	fn supervise_proc(pid: i32, ppid: i32) -> ProcessInfo {
+	fn supervise_proc(pid: i32, ppid: i32) -> ProcessSnapshot {
 		let mut p = sproc(pid, ppid, "");
 		p.name = "supervise-daemon".into();
 		p

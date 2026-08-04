@@ -1,4 +1,4 @@
-use crate::data::model::ProcessInfo;
+use crate::data::model::ProcessSnapshot;
 use std::collections::{HashMap, HashSet};
 
 #[hotpath::measure]
@@ -24,7 +24,7 @@ pub fn with_ancestors(
 #[hotpath::measure]
 pub fn ancestors_to_expand(
 	matched: &HashSet<i32>,
-	pid_lookup: &HashMap<i32, ProcessInfo>,
+	pid_lookup: &HashMap<i32, ProcessSnapshot>,
 ) -> HashSet<i32> {
 	let mut expand = HashSet::new();
 	for &mpid in matched {
@@ -45,8 +45,8 @@ pub fn ancestors_to_expand(
 mod tests {
 	use super::*;
 
-	fn make_proc(pid: i32, ppid: i32) -> ProcessInfo {
-		ProcessInfo {
+	fn make_proc(pid: i32, ppid: i32) -> ProcessSnapshot {
+		ProcessSnapshot {
 			pid,
 			ppid,
 			name: String::new(),
@@ -109,7 +109,7 @@ mod tests {
 
 	#[test]
 	fn test_ancestors_to_expand() {
-		let pid_lookup: HashMap<i32, ProcessInfo> = [
+		let pid_lookup: HashMap<i32, ProcessSnapshot> = [
 			(1, make_proc(1, 0)),
 			(100, make_proc(100, 1)),
 			(200, make_proc(200, 100)),

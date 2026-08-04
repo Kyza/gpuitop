@@ -98,7 +98,7 @@ impl ProcessesTab {
 		view_state: &Rc<RefCell<ViewState>>,
 		clear_search_on_pin: bool,
 		double_click: &Rc<RefCell<Option<(Instant, String)>>>,
-		init_system: crate::data::platform::system::InitSystem,
+		init_system: crate::data::service_manager::InitSystem,
 		needs_clear_input: &Rc<Cell<bool>>,
 		view: &Entity<ProcessesTab>,
 		_app: &mut App,

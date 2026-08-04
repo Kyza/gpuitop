@@ -1,9 +1,13 @@
 pub mod config;
 pub mod fuzzy;
+pub mod gpu;
+pub mod icons;
 pub mod merge;
 pub mod model;
-pub mod platform;
 pub mod processes;
+pub mod service_manager;
 pub mod settings;
+pub mod snapshot;
 pub mod state;
 pub mod themes;
+pub mod window_picker;

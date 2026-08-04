@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 pub struct TreeData {
 	pub items: Vec<TreeItem>,
-	pub process_lookup: HashMap<i32, ProcessInfo>,
+	pub process_lookup: HashMap<i32, ProcessSnapshot>,
 	pub descendant_counts: HashMap<i32, usize>,
 }
 
@@ -89,7 +89,7 @@ impl ProcessTableDelegate {
 
 		let mut matcher = nucleo::Matcher::new(nucleo::Config::DEFAULT);
 
-		let mut proc_matches = |proc: &ProcessInfo| -> bool {
+		let mut proc_matches = |proc: &ProcessSnapshot| -> bool {
 			if let Some(ref scope) = scoped_pids {
 				if !scope.contains(&proc.pid) {
 					return false;
@@ -156,8 +156,8 @@ impl ProcessTableDelegate {
 			&pid_to_ppid,
 		);
 
-		let mut pid_lookup: HashMap<i32, ProcessInfo> = HashMap::new();
-		let mut children_by_ppid: HashMap<i32, Vec<&ProcessInfo>> =
+		let mut pid_lookup: HashMap<i32, ProcessSnapshot> = HashMap::new();
+		let mut children_by_ppid: HashMap<i32, Vec<&ProcessSnapshot>> =
 			HashMap::new();
 
 		for proc in processes {
@@ -205,8 +205,8 @@ impl ProcessTableDelegate {
 
 		fn build_subtree(
 			pids: &[i32],
-			children_by_ppid: &HashMap<i32, Vec<&ProcessInfo>>,
-			pid_lookup: &HashMap<i32, ProcessInfo>,
+			children_by_ppid: &HashMap<i32, Vec<&ProcessSnapshot>>,
+			pid_lookup: &HashMap<i32, ProcessSnapshot>,
 			matched_pids: &HashSet<i32>,
 			expand_pids: &HashSet<i32>,
 			fuzzy_scores: &HashMap<i32, u32>,
@@ -304,11 +304,11 @@ impl ProcessTableDelegate {
 
 #[hotpath::measure]
 fn count_descendants(
-	children_by_ppid: &HashMap<i32, Vec<&ProcessInfo>>,
+	children_by_ppid: &HashMap<i32, Vec<&ProcessSnapshot>>,
 ) -> HashMap<i32, usize> {
 	fn count_recursive(
 		pid: i32,
-		children_by_ppid: &HashMap<i32, Vec<&ProcessInfo>>,
+		children_by_ppid: &HashMap<i32, Vec<&ProcessSnapshot>>,
 		memo: &mut HashMap<i32, usize>,
 	) -> usize {
 		if let Some(&cached) = memo.get(&pid) {

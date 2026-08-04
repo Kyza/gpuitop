@@ -1,8 +1,8 @@
 use crate::data::config::Config;
 use crate::data::model::Filter;
 use crate::data::model::*;
-use crate::data::platform::system::InitSystem;
 use crate::data::processes::delegate::ProcessTableDelegate;
+use crate::data::service_manager::InitSystem;
 use crate::data::state::ViewState;
 use crate::ui::processes::tree::TreeData;
 use gpui::prelude::*;

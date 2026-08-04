@@ -1,8 +1,9 @@
 use crate::data::config::Config;
+use crate::data::gpu::detect_gpu;
+use crate::data::icons::DesktopEntryCache;
 use crate::data::model::{GpuBackend, SystemSnapshot};
-use crate::data::platform::process_icon::DesktopEntryCache;
-use crate::data::platform::system::InitSystem;
-use crate::data::platform::{detect_gpu, detect_init, SystemCollector};
+use crate::data::service_manager::{detect_init, InitSystem};
+use crate::data::snapshot::CollectorState;
 use crate::ui::assets::lucide::LucideIcon;
 use crate::ui::performance::PerformanceTab;
 use crate::ui::processes::ProcessesTab;
@@ -75,10 +76,9 @@ impl App {
 		let thread_refresh = refresh_ms.clone();
 
 		std::thread::spawn(move || {
-			let mut collector =
-				SystemCollector::new(gpu_backend, desktop_cache);
+			let mut state = CollectorState::new(gpu_backend, desktop_cache);
 			loop {
-				let snapshot = collector.tick();
+				let snapshot = SystemSnapshot::new(&mut state);
 				if tx.send(snapshot).is_err() {
 					break;
 				}

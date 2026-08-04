@@ -1,5 +1,5 @@
 #[derive(Debug, Clone)]
-pub struct ProcessInfo {
+pub struct ProcessSnapshot {
 	pub pid: i32,
 	pub ppid: i32,
 	pub name: String,
@@ -82,7 +82,7 @@ impl SystemSnapshot {
 
 #[derive(Debug, Clone)]
 pub struct SystemSnapshot {
-	pub processes: Vec<ProcessInfo>,
+	pub processes: Vec<ProcessSnapshot>,
 	pub cpu: CpuInfo,
 	pub memory: MemoryInfo,
 	pub disks: Vec<DiskInfo>,
@@ -359,7 +359,7 @@ pub fn state_label(c: char) -> &'static str {
 }
 
 impl Filter {
-	pub fn label(&self, processes: &[ProcessInfo]) -> String {
+	pub fn label(&self, processes: &[ProcessSnapshot]) -> String {
 		match self {
 			Self::Gui => "GUI".into(),
 			Self::User => "User".into(),
@@ -390,7 +390,7 @@ impl Filter {
 fn is_descendant_of_flat(
 	child_pid: i32,
 	ancestor: i32,
-	all: &[ProcessInfo],
+	all: &[ProcessSnapshot],
 ) -> bool {
 	if child_pid == ancestor {
 		return false;
@@ -428,8 +428,8 @@ impl std::fmt::Display for FilterMode {
 mod tests {
 	use super::*;
 
-	fn make_proc(pid: i32, ppid: i32) -> ProcessInfo {
-		ProcessInfo {
+	fn make_proc(pid: i32, ppid: i32) -> ProcessSnapshot {
+		ProcessSnapshot {
 			pid,
 			ppid,
 			name: "test".into(),
@@ -563,7 +563,7 @@ mod tests {
 	#[test]
 	fn filter_label_pid_flat_child_count() {
 		let procs = vec![
-			ProcessInfo {
+			ProcessSnapshot {
 				pid: 42,
 				ppid: 1,
 				name: "parentish".into(),
@@ -580,7 +580,7 @@ mod tests {
 
 	#[test]
 	fn filter_label_pid_no_children() {
-		let procs = vec![ProcessInfo {
+		let procs = vec![ProcessSnapshot {
 			pid: 7,
 			ppid: 1,
 			name: "lonely".into(),

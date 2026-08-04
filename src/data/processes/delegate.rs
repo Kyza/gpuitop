@@ -1,7 +1,7 @@
 use crate::data::config::ProcessesConfig;
 use crate::data::fuzzy::{best_fuzzy_score, fuzzy_match};
 use crate::data::model::*;
-use crate::data::platform::system::{
+use crate::data::service_manager::{
 	is_service, pids_of_runsv, pids_of_supervise_daemon, InitSystem,
 };
 use crate::data::state::{CumulativeResources, ViewState};
@@ -113,7 +113,7 @@ impl ProcessTableDelegate {
 			.unwrap_or(0)
 	}
 
-	pub fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessInfo> {
+	pub fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessSnapshot> {
 		let procs = &self.snapshot_cell.borrow().processes;
 		if self.pid_index.borrow().is_none() {
 			let mut map = HashMap::with_capacity(procs.len());
@@ -156,7 +156,7 @@ impl ProcessTableDelegate {
 
 		let mut cum: HashMap<i32, CumulativeResources> =
 			HashMap::with_capacity(procs.len());
-		let mut pid_map: HashMap<i32, &ProcessInfo> =
+		let mut pid_map: HashMap<i32, &ProcessSnapshot> =
 			HashMap::with_capacity(procs.len());
 		let mut pids: Vec<i32> = Vec::with_capacity(procs.len());
 
@@ -235,7 +235,7 @@ impl ProcessTableDelegate {
 	}
 
 	#[hotpath::measure]
-	pub fn filtered_sorted_rows(&self) -> Rc<Vec<ProcessInfo>> {
+	pub fn filtered_sorted_rows(&self) -> Rc<Vec<ProcessSnapshot>> {
 		let ts = self.snapshot_cell.borrow().timestamp;
 		{
 			let vs = self.view_state.borrow();
@@ -259,7 +259,7 @@ impl ProcessTableDelegate {
 
 		let mut matcher = nucleo::Matcher::new(nucleo::Config::DEFAULT);
 
-		let mut result: Vec<ProcessInfo> = all
+		let mut result: Vec<ProcessSnapshot> = all
 			.iter()
 			.filter(|p| {
 				if !search.is_empty() {
@@ -428,7 +428,11 @@ impl ProcessTableDelegate {
 	}
 
 	#[hotpath::measure]
-	pub fn proc_matches(&self, proc: &ProcessInfo, filter: &Filter) -> bool {
+	pub fn proc_matches(
+		&self,
+		proc: &ProcessSnapshot,
+		filter: &Filter,
+	) -> bool {
 		match filter {
 			Filter::Gui => proc.is_gui,
 			Filter::User => proc.is_owned_by_current_user && !proc.is_gui,
@@ -493,12 +497,12 @@ impl ProcessTableDelegate {
 mod tests {
 	use super::*;
 	use crate::data::config::ProcessesConfig;
-	use crate::data::platform::system::InitSystem;
+	use crate::data::service_manager::InitSystem;
 	use std::cell::RefCell;
 	use std::rc::Rc;
 
 	fn make_snapshot(
-		procs: Vec<ProcessInfo>,
+		procs: Vec<ProcessSnapshot>,
 	) -> Rc<RefCell<Rc<SystemSnapshot>>> {
 		let snap = SystemSnapshot {
 			processes: procs,
@@ -521,8 +525,8 @@ mod tests {
 		Rc::new(RefCell::new(Rc::new(snap)))
 	}
 
-	fn make_proc(pid: i32, ppid: i32) -> ProcessInfo {
-		ProcessInfo {
+	fn make_proc(pid: i32, ppid: i32) -> ProcessSnapshot {
+		ProcessSnapshot {
 			pid,
 			ppid,
 			name: format!("proc-{pid}"),
@@ -546,7 +550,7 @@ mod tests {
 		}
 	}
 
-	fn make_delegate(procs: Vec<ProcessInfo>) -> ProcessTableDelegate {
+	fn make_delegate(procs: Vec<ProcessSnapshot>) -> ProcessTableDelegate {
 		ProcessTableDelegate {
 			snapshot_cell: make_snapshot(procs),
 			cum_cache: Rc::new(RefCell::new(None)),
@@ -1291,7 +1295,7 @@ mod tests {
 		assert_eq!(r2[0].pid, 1);
 	}
 
-	fn make_proc_named(pid: i32, name: &str) -> ProcessInfo {
+	fn make_proc_named(pid: i32, name: &str) -> ProcessSnapshot {
 		let mut p = make_proc(pid, 0);
 		p.name = name.into();
 		p
@@ -1301,14 +1305,14 @@ mod tests {
 		pid: i32,
 		user: &str,
 		is_owned: bool,
-	) -> ProcessInfo {
+	) -> ProcessSnapshot {
 		let mut p = make_proc(pid, 0);
 		p.user = user.into();
 		p.is_owned_by_current_user = is_owned;
 		p
 	}
 
-	fn make_proc_with_cpu(pid: i32, cpu: f32) -> ProcessInfo {
+	fn make_proc_with_cpu(pid: i32, cpu: f32) -> ProcessSnapshot {
 		let mut p = make_proc(pid, 0);
 		p.cpu_percent = cpu;
 		p

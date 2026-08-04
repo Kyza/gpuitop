@@ -183,7 +183,7 @@ impl ProcessesTab {
 													std::thread::sleep(
 														std::time::Duration::from_millis(200),
 													);
-													if let Some(id) = crate::data::platform::get_focused_window_app_id() {
+													if let Some(id) = crate::data::window_picker::get_focused_window_app_id() {
 														*r2.lock().unwrap() = Some(id);
 														break;
 													}

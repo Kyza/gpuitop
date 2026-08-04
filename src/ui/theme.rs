@@ -1,5 +1,5 @@
-use crate::data::model::{Filter, ProcessInfo};
-use crate::data::platform::system::{is_service, InitSystem};
+use crate::data::model::{Filter, ProcessSnapshot};
+use crate::data::service_manager::{is_service, InitSystem};
 use crate::ui::assets::lucide::LucideIcon;
 use gpui::*;
 use gpui_component::ActiveTheme;
@@ -68,7 +68,7 @@ pub enum TagType {
 }
 
 pub fn tag_icons(
-	proc: &ProcessInfo,
+	proc: &ProcessSnapshot,
 	init_system: InitSystem,
 	cx: &App,
 ) -> Vec<(LucideIcon, Hsla)> {

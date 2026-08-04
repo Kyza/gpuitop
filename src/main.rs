@@ -8,7 +8,7 @@ mod built {
 	include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-use crate::data::platform::process_icon::DesktopEntryCache;
+use crate::data::icons::DesktopEntryCache;
 use crate::ui::app::app_view;
 use crate::ui::assets::{layered, lucide};
 use gpui::*;

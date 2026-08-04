@@ -8,8 +8,8 @@ fn make_process(
 	user: &str,
 	state: char,
 	command: &str,
-) -> ProcessInfo {
-	ProcessInfo {
+) -> ProcessSnapshot {
+	ProcessSnapshot {
 		pid,
 		ppid,
 		name: name.into(),
@@ -36,7 +36,7 @@ fn make_process(
 fn is_descendant_of(
 	pid: i32,
 	ancestor: i32,
-	processes: &[ProcessInfo],
+	processes: &[ProcessSnapshot],
 ) -> bool {
 	let mut current = pid;
 	for _ in 0..100 {
@@ -53,9 +53,9 @@ fn is_descendant_of(
 }
 
 fn proc_matches_standalone(
-	proc: &ProcessInfo,
+	proc: &ProcessSnapshot,
 	filter: &Filter,
-	processes: &[ProcessInfo],
+	processes: &[ProcessSnapshot],
 	pid_filter_mode: PidFilterMode,
 ) -> bool {
 	match filter {

@@ -20,7 +20,7 @@ pub struct ViewState {
 	pub sort_col: usize,
 	pub sort_dir: SortDirection,
 	pub resource_view_mode: ResourceViewMode,
-	pub cached: Option<(std::time::Instant, u64, Rc<Vec<ProcessInfo>>)>,
+	pub cached: Option<(std::time::Instant, u64, Rc<Vec<ProcessSnapshot>>)>,
 }
 
 impl ViewState {

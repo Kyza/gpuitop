@@ -1,6 +1,6 @@
-use crate::data::model::ProcessInfo;
+use crate::data::model::ProcessSnapshot;
 use crate::ui::assets::lucide::LucideIcon;
-use crate::ui::processes::properties_window::PropertiesWindow;
+use crate::ui::properties_window::PropertiesWindow;
 use gpui::*;
 use gpui_component::menu::PopupMenuItem;
 use std::rc::Rc;
@@ -31,7 +31,7 @@ fn menu_item(
 	}
 }
 
-pub fn build_process_menu(proc: &ProcessInfo) -> Vec<PopupMenuItem> {
+pub fn build_process_menu(proc: &ProcessSnapshot) -> Vec<PopupMenuItem> {
 	let pid = proc.pid;
 	let is_stopped = proc.state == 'T' || proc.state == 't';
 

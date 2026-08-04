@@ -1,4 +1,4 @@
-use crate::data::model::ProcessInfo;
+use crate::data::model::ProcessSnapshot;
 
 pub fn fuzzy_match(
 	needle: &str,
@@ -90,7 +90,7 @@ mod tests {
 
 	#[test]
 	fn test_best_fuzzy_score_returns_highest() {
-		let p = ProcessInfo {
+		let p = ProcessSnapshot {
 			pid: 1,
 			ppid: 0,
 			name: "firefox".into(),
@@ -119,7 +119,7 @@ mod tests {
 
 	#[test]
 	fn test_best_fuzzy_score_no_match_is_zero() {
-		let p = ProcessInfo {
+		let p = ProcessSnapshot {
 			pid: 1,
 			ppid: 0,
 			name: "bash".into(),
@@ -150,7 +150,7 @@ mod tests {
 #[hotpath::measure]
 pub fn best_fuzzy_score(
 	needle: &str,
-	p: &ProcessInfo,
+	p: &ProcessSnapshot,
 	matcher: &mut nucleo::Matcher,
 ) -> u32 {
 	let name_score =
