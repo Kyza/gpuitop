@@ -1,3 +1,7 @@
-pub fn get_focused_window_app_id() -> Option<String> {
+pub fn is_window_picker_available() -> bool {
+	false
+}
+
+pub fn pick_window() -> Option<super::PickedWindow> {
 	None
 }

@@ -5,9 +5,14 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
+pub enum PickedWindow {
+	AppId(String),
+	Pid(i32),
+}
+
 #[cfg(target_os = "linux")]
-pub use linux::get_focused_window_app_id;
+pub use linux::{is_window_picker_available, pick_window};
 #[cfg(target_os = "macos")]
-pub use macos::get_focused_window_app_id;
+pub use macos::{is_window_picker_available, pick_window};
 #[cfg(target_os = "windows")]
-pub use windows::get_focused_window_app_id;
+pub use windows::{is_window_picker_available, pick_window};

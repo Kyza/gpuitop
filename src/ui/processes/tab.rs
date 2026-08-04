@@ -44,7 +44,9 @@ pub struct ProcessesTab {
 	pub has_data: bool,
 	pub column_visibility: crate::data::config::ProcessesConfig,
 	pub is_picking: std::sync::Arc<std::sync::atomic::AtomicBool>,
-	pub pick_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+	pub pick_result: std::sync::Arc<
+		std::sync::Mutex<Option<crate::data::window_picker::PickedWindow>>,
+	>,
 	pub init_system: InitSystem,
 	pub show_filters: bool,
 	pub show_tree_view: bool,
@@ -185,11 +187,17 @@ impl Render for ProcessesTab {
 		self.has_data = !snapshot.processes.is_empty();
 		drop(snapshot);
 
-		if let Some(app_id) = self.pick_result.lock().unwrap().take() {
+		if let Some(picked) = self.pick_result.lock().unwrap().take() {
 			self.is_picking
 				.store(false, std::sync::atomic::Ordering::Relaxed);
-			let keyword =
-				app_id.rsplit('.').next().unwrap_or(&app_id).to_string();
+			let keyword = match picked {
+				crate::data::window_picker::PickedWindow::AppId(app_id) => {
+					app_id.rsplit('.').next().unwrap_or(&app_id).to_string()
+				}
+				crate::data::window_picker::PickedWindow::Pid(pid) => {
+					format!("{}", pid)
+				}
+			};
 			self.needs_set_input = Some(keyword);
 			cx.notify();
 		}

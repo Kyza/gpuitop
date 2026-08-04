@@ -133,10 +133,17 @@ impl
 	}
 }
 
-/// Query the compositor for the currently active (focused) toplevel's
-/// app_id. Skips gpuitop itself. Returns `None` if no other toplevel
-/// is focused.
-pub fn get_focused_window_app_id() -> Option<String> {
+pub fn pick_window() -> Option<super::super::PickedWindow> {
+	for _ in 0..50 {
+		if let Some(w) = try_get_active() {
+			return Some(w);
+		}
+		std::thread::sleep(std::time::Duration::from_millis(200));
+	}
+	None
+}
+
+fn try_get_active() -> Option<super::super::PickedWindow> {
 	let conn = Connection::connect_to_env().ok()?;
 	let (globals, mut event_queue) =
 		registry_queue_init::<AppData>(&conn).ok()?;
@@ -154,7 +161,7 @@ pub fn get_focused_window_app_id() -> Option<String> {
 			{
 				None
 			} else {
-				Some(info.app_id.clone())
+				Some(super::super::PickedWindow::AppId(info.app_id.clone()))
 			}
 		})
 }

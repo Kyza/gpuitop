@@ -66,33 +66,33 @@ impl ProcessesTab {
 					.flex_row()
 					.gap(px(8.0))
 					.items_center()
-				.child(
-					gpui_component::button::Toggle::new("toggle-filters")
-						.outline()
-						.checked(self.show_filters)
-						.icon(
-							LucideIcon::Menu.icon()
-								.size(px(16.0))
-								.text_color(
-									cx.theme()
-										.muted_foreground,
-								),
+					.child(
+						gpui_component::button::Toggle::new("toggle-filters")
+							.outline()
+							.checked(self.show_filters)
+							.icon(
+								LucideIcon::Menu
+									.icon()
+									.size(px(16.0))
+									.text_color(cx.theme().muted_foreground),
+							)
+							.tooltip(if self.show_filters {
+								"Hide filter bar."
+							} else {
+								"Show filter bar."
+							})
+							.on_click(cx.listener(
+								move |this, checked: &bool, _, cx| {
+									this.show_filters = *checked;
+									cx.notify();
+								},
+							)),
+					)
+					.child({
+						let show_tree = self.show_tree_view;
+						gpui_component::button::Button::new(
+							"toggle-view-mode",
 						)
-						.tooltip(if self.show_filters {
-							"Hide filter bar."
-						} else {
-							"Show filter bar."
-						})
-						.on_click(cx.listener(
-							move |this, checked: &bool, _, cx| {
-								this.show_filters = *checked;
-								cx.notify();
-							},
-						)),
-				)
-				.child({
-					let show_tree = self.show_tree_view;
-					gpui_component::button::Button::new("toggle-view-mode")
 						.outline()
 						.icon(
 							if show_tree {
@@ -101,23 +101,18 @@ impl ProcessesTab {
 								LucideIcon::Rows3.icon()
 							}
 							.size(px(16.0))
-							.text_color(
-								cx.theme().muted_foreground,
-							),
+							.text_color(cx.theme().muted_foreground),
 						)
 						.tooltip(if show_tree {
 							"Switch to list view."
 						} else {
 							"Switch to tree view."
 						})
-						.on_click(cx.listener(
-							|this, _, _, cx| {
-								this.show_tree_view =
-									!this.show_tree_view;
-								cx.notify();
-							},
-						))
-				})
+						.on_click(cx.listener(|this, _, _, cx| {
+							this.show_tree_view = !this.show_tree_view;
+							cx.notify();
+						}))
+					})
 					.child({
 						let pick_result = self.pick_result.clone();
 						let is_picking = self.is_picking.clone();
@@ -145,7 +140,8 @@ impl ProcessesTab {
 							div()
 								.flex()
 								.flex_row()
-								.child({
+								.when(crate::data::window_picker::is_window_picker_available(), |el| {
+									el.child({
 									let r = pick_result.clone();
 									let p = is_picking.clone();
 									gpui_component::button::Button::new(
@@ -179,15 +175,8 @@ impl ProcessesTab {
 											let r2 = r.clone();
 											let p2 = p.clone();
 											std::thread::spawn(move || {
-												for _ in 0..50 {
-													std::thread::sleep(
-														std::time::Duration::from_millis(200),
-													);
-													if let Some(id) = crate::data::window_picker::get_focused_window_app_id() {
-														*r2.lock().unwrap() = Some(id);
-														break;
-													}
-												}
+												*r2.lock().unwrap() =
+													crate::data::window_picker::pick_window();
 												p2.store(
 													false,
 													std::sync::atomic::Ordering::Relaxed,
@@ -197,6 +186,7 @@ impl ProcessesTab {
 										},
 									))
 									.into_any_element()
+								})
 								})
 								.when(has_text, |el| {
 									el.child(
@@ -374,9 +364,9 @@ impl ProcessesTab {
 					.outline();
 					for (i, u) in usernames.iter().enumerate() {
 						let uname = u.clone();
-						let t = gpui_component::button::Toggle::new(
-							format!("username-{uname}"),
-						)
+						let t = gpui_component::button::Toggle::new(format!(
+							"username-{uname}"
+						))
 						.checked(active[i])
 						.tooltip(format!("Processes owned by {uname}."))
 						.gap_1()
@@ -438,28 +428,28 @@ impl ProcessesTab {
 										},
 									)),
 							)
-						.child({
-							let view_label = self
-								.view_state
-								.borrow()
-								.resource_view_mode
-								.to_string();
-							gpui_component::button::Button::new(
-								"resource-view",
-							)
-							.label(view_label)
-							.small()
-							.tooltip(
-								"Toggle between per-process and \
-								 cumulative resource usage.",
-							)
-							.on_click(cx.listener(
-								|this, _, _, cx| {
-									this.toggle_resource_view_mode(cx)
-								},
-							))
-						}),
-					)
+							.child({
+								let view_label = self
+									.view_state
+									.borrow()
+									.resource_view_mode
+									.to_string();
+								gpui_component::button::Button::new(
+									"resource-view",
+								)
+								.label(view_label)
+								.small()
+								.tooltip(
+									"Toggle between per-process and \
+									 cumulative resource usage.",
+								)
+								.on_click(cx.listener(
+									|this, _, _, cx| {
+										this.toggle_resource_view_mode(cx)
+									},
+								))
+							}),
+						)
 						.child(
 							div()
 								.flex()

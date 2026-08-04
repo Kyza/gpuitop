@@ -17,10 +17,7 @@ Build/check in debug mode unless running `cargo test` — release builds take fo
 ## Features
 
 ```toml
-default = ["runtime-compositor"]
-runtime-compositor = []  # Auto-detect Wayland/X11 at runtime (default)
-x11 = []                 # X11 compositor only
-wayland = []             # Wayland compositor only
+default = []
 hotpath = ["hotpath/hotpath"]
 hotpath-cpu = ["hotpath/hotpath-cpu"]
 hotpath-alloc = ["hotpath/hotpath-alloc"]
@@ -63,9 +60,9 @@ src/
 │   │   └── macos.rs          # stub
 │   │
 │   ├── window_picker/        # Active window detection
-│   │   ├── mod.rs            # cfg + feature dispatch
+│   │   ├── mod.rs            # cfg dispatch + WINDOW_PICKER_AVAILABLE const
 │   │   ├── linux/
-│   │   │   ├── mod.rs        # runtime: WAYLAND_DISPLAY? wayland : x11
+│   │   │   ├── mod.rs        # runtime detection via WAYLAND_DISPLAY
 │   │   │   ├── wayland.rs    # Wayland foreign-toplevel focus
 │   │   │   └── x11.rs        # X11 stub
 │   │   ├── windows.rs        # stub

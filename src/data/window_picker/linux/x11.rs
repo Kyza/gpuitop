@@ -1,3 +1,3 @@
-pub fn get_focused_window_app_id() -> Option<String> {
+pub fn pick_window() -> Option<super::super::PickedWindow> {
 	None
 }
