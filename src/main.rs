@@ -11,6 +11,7 @@ mod built {
 use crate::data::icons::DesktopEntryCache;
 use crate::ui::app::app_view;
 use crate::ui::assets::{layered, lucide};
+use crate::ui::properties_window::PropertiesWindow;
 use gpui::*;
 use gpui_component::Root;
 use std::sync::Arc;
@@ -65,6 +66,47 @@ fn main() {
 			cx,
 			|_| {},
 		);
+
+		if let Some(pid) = cli.properties_pid {
+			if !gpui_component::theme::ThemeRegistry::global(cx)
+				.themes()
+				.contains_key(&config.general.interface.theme)
+			{
+				config.general.interface.theme =
+					SharedString::new_static("Default Dark");
+			}
+
+			cx.open_window(
+				WindowOptions {
+					window_bounds: Some(WindowBounds::Windowed(Bounds {
+						origin: point(px(100.0), px(100.0)),
+						size: size(px(win_width), px(win_height)),
+					})),
+					window_min_size: Some(size(px(480.0), px(320.0))),
+					titlebar: Some(TitlebarOptions {
+						title: Some(SharedString::new(format!(
+							"Properties — PID {pid}"
+						))),
+						appears_transparent: true,
+						..Default::default()
+					}),
+					window_decorations: Some(WindowDecorations::Client),
+					app_id: Some(GPUITOP_APP_ID.into()),
+					..Default::default()
+				},
+				move |window, cx| {
+					crate::data::themes::apply_theme_by_name(
+						&config.general.interface.theme.clone(),
+						Some(window),
+						cx,
+					);
+					let view = cx.new(|_cx| PropertiesWindow::new(pid, None));
+					cx.new(|cx| Root::new(view, window, cx))
+				},
+			)
+			.expect("Failed to open properties window");
+			return;
+		}
 
 		cx.open_window(
 			WindowOptions {

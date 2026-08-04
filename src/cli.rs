@@ -8,6 +8,7 @@ pub struct Cli {
 	pub overrides: Vec<String>,
 	pub page: Option<String>,
 	pub search: Option<String>,
+	pub properties_pid: Option<i32>,
 	pub print_version: bool,
 	pub print_help: bool,
 }
@@ -72,6 +73,8 @@ OPTIONS:
                                 settings.processes Settings > Processes
                                 settings.about     Settings > About
     -s, --search <TEXT>       Pre-fill the process search bar
+    --properties <PID>        Open the properties window for a PID
+                              (standalone, no main window)
     -v, --version             Print version and exit
     -h, --help                Print this help and exit
 
@@ -118,6 +121,12 @@ pub fn parse() -> Cli {
 					.value()
 					.ok()
 					.and_then(|v| v.to_str().map(|s| s.to_string()));
+			}
+			lexopt::Arg::Long("properties") => {
+				cli.properties_pid = parser
+					.value()
+					.ok()
+					.and_then(|v| v.to_str().and_then(|s| s.parse().ok()));
 			}
 			lexopt::Arg::Short('v') | lexopt::Arg::Long("version") => {
 				cli.print_version = true;

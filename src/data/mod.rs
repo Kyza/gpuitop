@@ -5,6 +5,7 @@ pub mod icons;
 pub mod merge;
 pub mod model;
 pub mod processes;
+pub mod properties;
 pub mod service_manager;
 pub mod settings;
 pub mod snapshot;

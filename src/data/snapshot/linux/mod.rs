@@ -31,6 +31,7 @@ impl SystemSnapshot {
 	}
 }
 
+#[allow(dead_code)]
 pub fn pid_alive(pid: i32) -> bool {
 	procfs::process::Process::new(pid).is_ok()
 }

@@ -60,11 +60,17 @@ src/
 │   │   └── macos.rs          # stub
 │   │
 │   ├── window_picker/        # Active window detection
-│   │   ├── mod.rs            # cfg dispatch + WINDOW_PICKER_AVAILABLE const
+│   │   ├── mod.rs            # cfg dispatch + is_window_picker_available
 │   │   ├── linux/
 │   │   │   ├── mod.rs        # runtime detection via WAYLAND_DISPLAY
 │   │   │   ├── wayland.rs    # Wayland foreign-toplevel focus
 │   │   │   └── x11.rs        # X11 stub
+│   │   ├── windows.rs        # stub
+│   │   │   └── macos.rs      # stub
+│   │
+│   ├── properties/            # Per-process detail collection (procfs)
+│   │   ├── mod.rs            # ProcessProperties struct + cfg dispatch
+│   │   ├── linux.rs          # collect(pid) via procfs
 │   │   ├── windows.rs        # stub
 │   │   └── macos.rs          # stub
 │   │
@@ -94,8 +100,8 @@ src/
 │   │   ├── network.rs        # Network I/O
 │   │   └── widgets.rs        # Shared UI helpers
 │   ├── properties_window/    # Process detail popup window
-│   │   ├── mod.rs            # PropertiesWindow struct + Render + cfg dispatch
-│   │   ├── linux.rs          # Linux body (WIP placeholder)
+│   │   ├── mod.rs            # PropertiesWindow struct + tick loop + cfg dispatch
+│   │   ├── linux.rs          # Linux body — tabbed DescriptionList
 │   │   ├── windows.rs        # stub
 │   │   └── macos.rs          # stub
 │   └── settings/

@@ -1,10 +1,20 @@
+use gpui::prelude::*;
 use gpui::*;
 
-pub fn body(_pid: i32) -> impl IntoElement {
+use crate::data::properties::ProcessProperties;
+use crate::ui::properties_window::PropertiesWindow;
+
+pub fn body(
+	_properties: Option<&ProcessProperties>,
+	_dead: bool,
+	_tab_index: usize,
+	cx: &mut Context<PropertiesWindow>,
+) -> impl IntoElement {
 	div()
 		.flex_1()
 		.flex()
 		.items_center()
 		.justify_center()
-		.child("WIP")
+		.text_color(cx.theme().muted_foreground)
+		.child("Process properties are not available on this platform.")
 }
