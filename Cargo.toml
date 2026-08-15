@@ -1,19 +1,23 @@
-[package]
-name = "gpuitop"
-version = "0.1.0"
-edition = "2021"
-description = "Linux-first process manager"
-license = "MIT"
-authors = ["Kyza"]
-repository = "https://github.com/Kyza/gpuitop"
+[workspace]
+resolver = "2"
+members = [
+	"crates/gpuitop",
+	"crates/core",
+	"crates/gpu",
+	"crates/icons",
+	"crates/snapshot",
+	"crates/properties",
+	"crates/window-picker",
+	"crates/ui",
+]
 
-[dependencies]
+[workspace.dependencies]
 gpui = { git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
-    "wayland",
-    "x11",
-    "font-kit",
-    "runtime_shaders",
+	"wayland",
+	"x11",
+	"font-kit",
+	"runtime_shaders",
 ] }
 gpui-component = { git = "https://github.com/longbridge/gpui-component" }
 gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
@@ -34,13 +38,8 @@ open = "5"
 rust-embed = "8"
 wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
-
-[features]
-default = []
-hotpath = ["hotpath/hotpath"]
-hotpath-cpu = ["hotpath/hotpath-cpu"]
-hotpath-alloc = ["hotpath/hotpath-alloc"]
-hotpath-mcp = ["hotpath/hotpath-mcp"]
+oswap = "1"
+cargo_metadata = "0.19"
 
 [profile.release]
 lto = "thin"
@@ -48,6 +47,3 @@ strip = "symbols"
 
 [profile.dev.package."*"]
 opt-level = 2
-
-[build-dependencies]
-cargo_metadata = "0.19"

@@ -194,7 +194,7 @@ Multiple `--override` flags stack and later values win for overlapping keys.
 | SysV init | Supported, untested |
 | Unknown | Heuristic fallback (ppid 1) |
 
-The codebase uses platform abstraction (`src/data/platform/`) so each OS can swap the process collector, GPU queries, and window picker.
+The codebase is a Cargo workspace (`crates/`) where each OS-specific concern (process collector, GPU queries, window picker, icons, properties) is its own crate using [`oswap`](https://crates.io/crates/oswap) for platform dispatch.
 
 ### Profiling
 

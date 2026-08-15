@@ -16,6 +16,9 @@ Build/check in debug mode unless running `cargo test` — release builds take fo
 
 ## Features
 
+`hotpath` is declared per-crate and forwarded down the dependency chain. Each
+crate that uses `#[hotpath::measure]` (core, gpu, snapshot, ui) declares:
+
 ```toml
 default = []
 hotpath = ["hotpath/hotpath"]
@@ -24,108 +27,63 @@ hotpath-alloc = ["hotpath/hotpath-alloc"]
 hotpath-mcp = ["hotpath/hotpath-mcp"]
 ```
 
+`gpuitop-ui` forwards to its data-crate deps, and the `gpuitop` bin re-exposes
+the flags while forwarding to `gpuitop-core` + `gpuitop-ui` (only direct deps
+can be feature-gated):
+
+```toml
+# gpuitop-ui
+hotpath = ["hotpath/hotpath", "gpuitop-core/hotpath", "gpuitop-gpu/hotpath", "gpuitop-snapshot/hotpath"]
+# gpuitop bin
+hotpath = ["hotpath/hotpath", "gpuitop-core/hotpath", "gpuitop-ui/hotpath"]
+```
+
 ## Architecture
 
 ```
-src/
-├── data/                     # ZERO gpui/gpui_component imports. Pure Rust logic.
-│   ├── model.rs              # ProcessSnapshot, SystemSnapshot, Filter, SortColumn, enums
-│   ├── config.rs             # Config, load/save (RON format)
-│   ├── state.rs              # ViewState, CumulativeResources
-│   ├── fuzzy.rs              # nucleo fuzzy matching
-│   ├── settings.rs           # Settings mutations — no UI types
-│   │
-│   ├── snapshot/             # System tick + process collection
-│   │   ├── mod.rs            # cfg dispatch
-│   │   ├── linux/            # CollectorState, collect_*, SystemSnapshot::new(), electron
-│   │   ├── windows.rs        # stub
-│   │   └── macos.rs          # stub
-│   │
-│   ├── gpu/                  # GPU detection (nvml, AMD ROCm)
-│   │   ├── mod.rs            # cfg dispatch
-│   │   ├── linux.rs          # nvml + AMD, build_vram_map
-│   │   ├── windows.rs        # stub
-│   │   └── macos.rs          # stub
-│   │
-│   ├── icons/                # Desktop entry icon caching
-│   │   ├── mod.rs            # cfg dispatch
-│   │   ├── linux.rs          # parse .desktop files, resolve icon paths
-│   │   ├── windows.rs        # stub
-│   │   └── macos.rs          # stub
-│   │
-│   ├── service_manager/      # Init system / service detection
-│   │   ├── mod.rs            # InitSystem enum, cfg dispatch
-│   │   ├── linux.rs          # systemd/openrc/runit/dinit/sysv detection
-│   │   ├── windows.rs        # stub
-│   │   └── macos.rs          # stub
-│   │
-│   ├── window_picker/        # Active window detection
-│   │   ├── mod.rs            # cfg dispatch + is_window_picker_available
-│   │   ├── linux/
-│   │   │   ├── mod.rs        # runtime detection via WAYLAND_DISPLAY
-│   │   │   ├── wayland.rs    # Wayland foreign-toplevel focus
-│   │   │   └── x11.rs        # X11 stub
-│   │   ├── windows.rs        # stub
-│   │   │   └── macos.rs      # stub
-│   │
-│   ├── properties/            # Per-process detail collection (procfs)
-│   │   ├── mod.rs            # ProcessProperties struct + cfg dispatch
-│   │   ├── linux.rs          # collect(pid) via procfs
-│   │   ├── windows.rs        # stub
-│   │   └── macos.rs          # stub
-│   │
-│   └── processes/
-│       ├── delegate.rs       # ProcessTableDelegate (filtering, sorting, cumulative)
-│       ├── tree.rs           # Tree helpers (with_ancestors, ancestors_to_expand)
-│       └── tests.rs          # Standalone unit tests (cfg(test))
-│
-├── ui/                       # ALL gpui rendering. Depends on data/. Never reverse.
-│   ├── theme.rs              # Tag colors, icons (returns Hsla/IconName)
-│   ├── app/
-│   │   └── app_view.rs      # App struct, Render impl, background-collector thread
-│   ├── processes/
-│   │   ├── tab.rs            # ProcessesTab struct, subscriptions
-│   │   ├── table_delegate.rs # impl TableDelegate (data→UI bridge) + column rendering
-│   │   ├── toolbar.rs        # Search input, filter toggles
-│   │   ├── breadcrumbs.rs    # Pinned-PID breadcrumb row
-│   │   ├── status_bar.rs     # "Showing X of Y processes"
-│   │   ├── list_view.rs      # DataTable wrapper
-│   │   ├── tree_view.rs      # Tree widget + per-node content
-│   │   ├── chips.rs          # Filter chip renders
-│   │   └── context_menu.rs   # Right-click process menu
-│   ├── performance/
-│   │   ├── tab.rs            # PerformanceTab, Render
-│   │   ├── cpu.rs            # CPU gauges
-│   │   ├── disk.rs           # Disk I/O
-│   │   ├── network.rs        # Network I/O
-│   │   └── widgets.rs        # Shared UI helpers
-│   ├── properties_window/    # Process detail popup window
-│   │   ├── mod.rs            # PropertiesWindow struct + tick loop + cfg dispatch
-│   │   ├── linux.rs          # Linux body — tabbed DescriptionList
-│   │   ├── windows.rs        # stub
-│   │   └── macos.rs          # stub
-│   └── settings/
-│       ├── tab.rs            # SettingsTab, Render
-│       ├── general.rs        # General page (UI only)
-│       ├── processes.rs      # Processes page (UI only)
-│       └── about.rs          # About page
-│
-└── main.rs                   # Thin bootstrap (window creation, app launch)
+crates/                        # virtual workspace (root Cargo.toml has no [package])
+├── gpuitop/                   # binary — thin bootstrap (main.rs, cli.rs)
+├── core/                      # gpuitop-core — ZERO gpui/gpui_component. Pure logic.
+│   ├── model.rs               # ProcessSnapshot, SystemSnapshot, Filter, SortColumn, enums
+│   ├── config.rs              # Config, load/save (RON format)
+│   ├── state.rs               # ViewState, CumulativeResources
+│   ├── fuzzy.rs               # nucleo fuzzy matching
+│   ├── settings.rs            # Settings mutations — no UI types
+│   ├── merge.rs               # ron2 deep_merge
+│   ├── service_manager/       # InitSystem enum + oswap dispatch (detect_init, is_service, …)
+│   └── processes/             # ProcessTableDelegate (filtering, sorting, cumulative), tree helpers
+├── gpu/                       # gpuitop-gpu — nvml/ROCm detection via oswap
+├── icons/                     # gpuitop-icons — DesktopEntryCache + icon path resolution via oswap
+├── snapshot/                  # gpuitop-snapshot — CollectorState + collect_snapshot via oswap
+├── properties/                # gpuitop-properties — ProcessProperties collect(pid) via oswap
+├── window-picker/             # gpuitop-window-picker — PickedWindow, GPUITOP_APP_ID via oswap
+└── ui/                        # gpuitop-ui — ALL gpui rendering. Depends on the data crates.
+    ├── themes.rs              # built-in theme load/apply (gpui-component + rust-embed)
+    ├── theme.rs               # Tag colors, icons
+    ├── app/app_view.rs        # App struct, Render impl, background-collector thread
+    ├── processes/             # tab, table_delegate, delegate (newtype), tree, toolbar, …
+    ├── performance/           # PerformanceTab
+    ├── properties_window/     # Process detail popup window
+    └── settings/              # SettingsTab + General/Processes/About pages
 ```
+
+Dependency direction is one-way: `ui → {snapshot, properties, window-picker,
+gpu, icons} → core`, plus `bin → {ui, icons, window-picker, core}`.
 
 ### Hard rules
 
-1. **`data/` compiles without gpui.** If a file imports `gpui::*`, `gpui::prelude::*`, or `gpui_component::*`, it does not belong in `data/`.
-2. **`data/` never imports from `ui/`.** Dependencies flow one way: `ui/ → data/`.
-3. **Settings mutations in `data/settings.rs`.** `SettingsTab` in `ui/` calls into data methods; UI pages only build `SettingPage`/`SettingField` widgets and wire callbacks.
-4. **`ProcessTableDelegate` struct in `data/processes/delegate.rs`.** The `TableDelegate` trait impl (gpui trait) lives in `ui/processes/table_delegate.rs`. Rust allows trait impls across modules — the struct stays data-pure.
-5. **Per-feature platform dispatch.** Each feature (gpu, icons, service_manager, snapshot, window_picker, properties_window) has its own module with `mod.rs` doing `#[cfg(target_os = "...")]` dispatch. Platform implementations live in sub-modules (`linux.rs`, `windows.rs`, `macos.rs`). The `window_picker` module adds runtime compositor dispatch on Linux (`linux/mod.rs` checks `WAYLAND_DISPLAY`).
-6. **`CollectionState` + `SystemSnapshot::new()` pattern.** The platform module provides a `CollectorState` struct (mutable tick state) and `impl SystemSnapshot { pub fn new(state: &mut CollectorState) -> Self }`. The background thread creates state once, calls `SystemSnapshot::new(&mut state)` each tick.
+1. **Data crates compile without gpui.** `core`, `gpu`, `icons`, `snapshot`, `properties`, and `window-picker` must not import `gpui::*`, `gpui::prelude::*`, or `gpui_component::*`. Only `ui` (and the bin) may depend on gpui.
+2. **No reverse imports.** Data crates never import from `ui`. The bin may import from both.
+3. **Settings mutations in `core/settings.rs`.** `SettingsTab` in `ui/` calls into core methods; UI pages only build `SettingPage`/`SettingField` widgets and wire callbacks.
+4. **`ProcessTableDelegate` struct stays in `core/processes/delegate.rs` (data-pure).** The `TableDelegate` impl and `build_tree` live on a newtype in `ui/processes/delegate.rs` (`pub struct ProcessTableDelegate(pub CoreDelegate)` + `Deref`/`DerefMut`) — the orphan rule forbids impl'ing a foreign trait (gpui_component's `TableDelegate`) for a foreign type.
+5. **Per-feature platform dispatch via `oswap`.** Each platform feature (gpu, icons, service_manager, snapshot, window_picker, properties) calls `define_interface!` (marker struct + trait + re-exported free fns) and `define_platforms!` (cfg-gated `linux.rs`/`macos.rs`/`windows.rs`). Platform files implement the trait with `impl_interface!`. Keep the marker struct crate-private (bare `Platform`) so `impl_interface!` is not `#[macro_export]`ed.
+6. **`CollectorState` + `collect_snapshot` pattern.** `CollectorState` (mutable tick state) lives in `snapshot/src/lib.rs`. The interface exposes `collect_snapshot(&mut CollectorState) -> SystemSnapshot` (a free function, not an inherent `SystemSnapshot::new`). The background thread creates state once and calls `collect_snapshot(&mut state)` each tick.
 
 ## Gotchas
 
 - **`set_items()` wipes expand state.** Creates fresh `TreeItem` objects per call. Preserve expand state externally via `TreeData::preserve_expand_from` — walks old cached items by PID-based ID and re-applies `.expanded(true)` on new items before `set_items()`.
-- **Collector runs on background thread.** `SystemSnapshot::new(&mut CollectorState)` looped via `mpsc::channel`. Snapshots drained in `App::render` each frame. UI never reads /proc directly.
+- **Collector runs on background thread.** `collect_snapshot(&mut CollectorState)` looped via `mpsc::channel`. Snapshots drained in `App::render` each frame. UI never reads /proc directly.
+- **`oswap` interfaces functions only.** Shared types (`CollectorState`, `DesktopEntryCache`) live in the crate's `lib.rs`; constructors/associated fns become interface fns (`collect_snapshot`, `load_cache`). `define_platforms!` emits single-file modules (`linux.rs`), so directory-based platform code (snapshot, window-picker) uses a `linux.rs` entry that declares `#[path = "linux/*.rs"]` submodules.
 - **Cumulative cache** (`cum_cache`) computed once per snapshot, reused by filtering and rendering. Invalidate by setting to `None` on new snapshot.
 - **`[profile.dev.package."*"]` opt-level = 2** — dependencies optimized even in debug. Startup fast, incremental `cargo check` still fast.
 - **`procfs` crate** — all Linux /proc reads go through `procfs` (0.16). No raw `fs::read_to_string("/proc/...")`. `Meminfo::current()`, `KernelStats::current()`, `diskstats()`, `net::dev_status()`, `Process::stat()`, `Process::status()`, `Process::io()`, `Process::cmdline()`, `Process::cgroups()`, `Process::environ()`, `Process::exe()`, `Process::cwd()`, `Process::fd()`, `Process::limits()`.
@@ -152,4 +110,4 @@ format_macro_matchers = true
 - No linter beyond rustfmt.
 - No comments unless explicitly requested.
 - **Files should never be thousands of lines long.** Target ~200-300 lines per file. If a file exceeds ~400 lines, split into separate concepts: extract helper functions, split related behavior into sub-modules, or componentize UI into smaller elements. Rarely go beyond 500 lines.
-- **Write unit tests for data/ modules** when the logic is testable (filtering, sorting, fuzzy matching, cumulative computation, settings mutations). UI files may also have tests for pure helper functions extracted from rendering.
+- **Write unit tests for data crates** when the logic is testable (filtering, sorting, fuzzy matching, cumulative computation, settings mutations). UI files may also have tests for pure helper functions extracted from rendering.

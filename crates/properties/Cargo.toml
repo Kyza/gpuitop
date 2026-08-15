@@ -1,0 +1,11 @@
+[package]
+name = "gpuitop-properties"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+gpuitop-core = { path = "../core" }
+procfs = { workspace = true }
+users = { workspace = true }
+oswap = { workspace = true }

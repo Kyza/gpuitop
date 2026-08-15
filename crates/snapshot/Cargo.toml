@@ -1,0 +1,23 @@
+[package]
+name = "gpuitop-snapshot"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+gpuitop-core = { path = "../core" }
+gpuitop-gpu = { path = "../gpu" }
+gpuitop-icons = { path = "../icons" }
+procfs = { workspace = true }
+users = { workspace = true }
+libc = { workspace = true }
+num_cpus = { workspace = true }
+hotpath = { workspace = true }
+oswap = { workspace = true }
+
+[features]
+default = []
+hotpath = ["hotpath/hotpath"]
+hotpath-cpu = ["hotpath/hotpath-cpu"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]
+hotpath-mcp = ["hotpath/hotpath-mcp"]

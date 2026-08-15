@@ -1,0 +1,43 @@
+[package]
+name = "gpuitop"
+version = "0.1.0"
+edition = "2021"
+description = "Linux-first process manager"
+license = "MIT"
+authors = ["Kyza"]
+repository = "https://github.com/Kyza/gpuitop"
+
+[dependencies]
+gpuitop-core = { path = "../core" }
+gpuitop-icons = { path = "../icons" }
+gpuitop-ui = { path = "../ui" }
+gpuitop-window-picker = { path = "../window-picker" }
+gpui = { workspace = true }
+gpui_platform = { workspace = true }
+gpui-component = { workspace = true }
+gpui-component-assets = { workspace = true }
+lexopt = { workspace = true }
+hotpath = { workspace = true }
+
+[features]
+default = []
+hotpath = [
+	"hotpath/hotpath",
+	"gpuitop-core/hotpath",
+	"gpuitop-ui/hotpath",
+]
+hotpath-cpu = [
+	"hotpath/hotpath-cpu",
+	"gpuitop-core/hotpath-cpu",
+	"gpuitop-ui/hotpath-cpu",
+]
+hotpath-alloc = [
+	"hotpath/hotpath-alloc",
+	"gpuitop-core/hotpath-alloc",
+	"gpuitop-ui/hotpath-alloc",
+]
+hotpath-mcp = [
+	"hotpath/hotpath-mcp",
+	"gpuitop-core/hotpath-mcp",
+	"gpuitop-ui/hotpath-mcp",
+]

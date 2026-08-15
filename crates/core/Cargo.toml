@@ -1,0 +1,21 @@
+[package]
+name = "gpuitop-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+serde = { workspace = true }
+ron = { workspace = true }
+ron2 = { workspace = true }
+anyhow = { workspace = true }
+nucleo = { workspace = true }
+hotpath = { workspace = true }
+oswap = { workspace = true }
+
+[features]
+default = []
+hotpath = ["hotpath/hotpath"]
+hotpath-cpu = ["hotpath/hotpath-cpu"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]
+hotpath-mcp = ["hotpath/hotpath-mcp"]

@@ -1,0 +1,52 @@
+[package]
+name = "gpuitop-ui"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+gpuitop-core = { path = "../core" }
+gpuitop-gpu = { path = "../gpu" }
+gpuitop-icons = { path = "../icons" }
+gpuitop-snapshot = { path = "../snapshot" }
+gpuitop-properties = { path = "../properties" }
+gpuitop-window-picker = { path = "../window-picker" }
+gpui = { workspace = true }
+gpui-component = { workspace = true }
+rust-embed = { workspace = true }
+anyhow = { workspace = true }
+bytesize = { workspace = true }
+libc = { workspace = true }
+nucleo = { workspace = true }
+open = { workspace = true }
+hotpath = { workspace = true }
+
+[build-dependencies]
+cargo_metadata = { workspace = true }
+
+[features]
+default = []
+hotpath = [
+	"hotpath/hotpath",
+	"gpuitop-core/hotpath",
+	"gpuitop-gpu/hotpath",
+	"gpuitop-snapshot/hotpath",
+]
+hotpath-cpu = [
+	"hotpath/hotpath-cpu",
+	"gpuitop-core/hotpath-cpu",
+	"gpuitop-gpu/hotpath-cpu",
+	"gpuitop-snapshot/hotpath-cpu",
+]
+hotpath-alloc = [
+	"hotpath/hotpath-alloc",
+	"gpuitop-core/hotpath-alloc",
+	"gpuitop-gpu/hotpath-alloc",
+	"gpuitop-snapshot/hotpath-alloc",
+]
+hotpath-mcp = [
+	"hotpath/hotpath-mcp",
+	"gpuitop-core/hotpath-mcp",
+	"gpuitop-gpu/hotpath-mcp",
+	"gpuitop-snapshot/hotpath-mcp",
+]

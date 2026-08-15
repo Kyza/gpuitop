@@ -2839,26 +2839,100 @@ dependencies = [
 name = "gpuitop"
 version = "0.1.0"
 dependencies = [
+ "gpui",
+ "gpui-component",
+ "gpui-component-assets",
+ "gpui_platform",
+ "gpuitop-core",
+ "gpuitop-icons",
+ "gpuitop-ui",
+ "gpuitop-window-picker",
+ "hotpath",
+ "lexopt",
+]
+
+[[package]]
+name = "gpuitop-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hotpath",
+ "nucleo",
+ "oswap",
+ "ron",
+ "ron2",
+ "serde",
+]
+
+[[package]]
+name = "gpuitop-gpu"
+version = "0.1.0"
+dependencies = [
+ "gpuitop-core",
+ "hotpath",
+ "nvml-wrapper",
+ "oswap",
+]
+
+[[package]]
+name = "gpuitop-icons"
+version = "0.1.0"
+dependencies = [
+ "oswap",
+]
+
+[[package]]
+name = "gpuitop-properties"
+version = "0.1.0"
+dependencies = [
+ "gpuitop-core",
+ "oswap",
+ "procfs",
+ "users",
+]
+
+[[package]]
+name = "gpuitop-snapshot"
+version = "0.1.0"
+dependencies = [
+ "gpuitop-core",
+ "gpuitop-gpu",
+ "gpuitop-icons",
+ "hotpath",
+ "libc",
+ "num_cpus",
+ "oswap",
+ "procfs",
+ "users",
+]
+
+[[package]]
+name = "gpuitop-ui"
+version = "0.1.0"
+dependencies = [
  "anyhow",
  "bytesize",
  "cargo_metadata",
  "gpui",
  "gpui-component",
- "gpui-component-assets",
- "gpui_platform",
+ "gpuitop-core",
+ "gpuitop-gpu",
+ "gpuitop-icons",
+ "gpuitop-properties",
+ "gpuitop-snapshot",
+ "gpuitop-window-picker",
  "hotpath",
- "lexopt",
  "libc",
  "nucleo",
- "num_cpus",
- "nvml-wrapper",
  "open",
- "procfs",
- "ron",
- "ron2",
  "rust-embed",
- "serde",
- "users",
+]
+
+[[package]]
+name = "gpuitop-window-picker"
+version = "0.1.0"
+dependencies = [
+ "oswap",
  "wayland-client",
  "wayland-protocols-wlr",
 ]
@@ -4877,6 +4951,16 @@ checksum = "9aa2b01e1d916879f73a53d01d1d6cee68adbb31d6d9177a8cfce093cced1d50"
 dependencies = [
  "futures-core",
  "pin-project-lite",
+]
+
+[[package]]
+name = "oswap"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "783f268bf93535994b833ef83d688348f31ea4d3faaab4f1d62737cd84ff92ff"
+dependencies = [
+ "quote",
+ "syn 3.0.3",
 ]
 
 [[package]]
