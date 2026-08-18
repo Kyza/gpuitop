@@ -150,7 +150,7 @@ impl ProcessesTab {
 							vec![div().w(px(12.0)).into_any_element()]
 						};
 						children.extend(tags.into_iter().map(
-							|(icon, color)| {
+							|(icon, color, _)| {
 								icon.icon()
 									.w(px(12.0))
 									.h(px(12.0))

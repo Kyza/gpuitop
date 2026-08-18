@@ -24,7 +24,7 @@ pub struct App {
 	active_tab: usize,
 	pub config: Config,
 	snapshot: Rc<SystemSnapshot>,
-	gpu_backend: GpuBackend,
+	gpu_backends: Vec<GpuBackend>,
 	init_system: InitSystem,
 	rx: mpsc::Receiver<SystemSnapshot>,
 	processes_tab: Entity<ProcessesTab>,
@@ -43,7 +43,7 @@ impl App {
 		desktop_cache: Arc<DesktopEntryCache>,
 		cx: &mut Context<Self>,
 	) -> Self {
-		let gpu_backend = detect_gpu();
+		let gpu_backends = detect_gpu();
 		let init_system = detect_init();
 
 		let initial_snapshot = Rc::new(SystemSnapshot::empty());
@@ -74,9 +74,11 @@ impl App {
 
 		let (tx, rx) = mpsc::channel::<SystemSnapshot>();
 		let thread_refresh = refresh_ms.clone();
+		let thread_backends = gpu_backends.clone();
 
 		std::thread::spawn(move || {
-			let mut state = CollectorState::new(gpu_backend, desktop_cache);
+			let mut state =
+				CollectorState::new(thread_backends, desktop_cache);
 			loop {
 				let snapshot = collect_snapshot(&mut state);
 				if tx.send(snapshot).is_err() {
@@ -130,7 +132,7 @@ impl App {
 			active_tab,
 			config,
 			snapshot: initial_snapshot,
-			gpu_backend,
+			gpu_backends,
 			init_system,
 			rx,
 			processes_tab,
@@ -151,7 +153,7 @@ impl Render for App {
 		cx.on_next_frame(window, |_, _, cx| cx.notify());
 
 		while let Ok(new_snap) = self.rx.try_recv() {
-			self.gpu_backend = new_snap.gpu_backend;
+			self.gpu_backends = new_snap.gpu_backends.clone();
 			let snap = Rc::new(new_snap);
 			self.processes_tab
 				.update(cx, |tab, _| tab.set_snapshot(snap.clone()));
@@ -168,7 +170,7 @@ impl Render for App {
 			LucideIcon::Settings2,
 		];
 
-		let gpu = self.gpu_backend;
+		let gpu = self.gpu_backends.clone();
 		let init = self.init_system;
 
 		let tabs = labels
@@ -307,10 +309,17 @@ impl Render for App {
 			)
 			.child(div().flex_grow(1.0).size_full().child(content))
 			.child({
-				let gpu_label = match gpu {
-					GpuBackend::Nvidia => "NVIDIA",
-					GpuBackend::Amd => "ROCm",
-					_ => "None",
+				let gpu_label = if gpu.is_empty() {
+					"None".to_string()
+				} else {
+					gpu.iter()
+						.map(|b| match b {
+							GpuBackend::Nvidia => "NVIDIA",
+							GpuBackend::Amd => "ROCm",
+							GpuBackend::None => "None",
+						})
+						.collect::<Vec<_>>()
+						.join(" + ")
 				};
 				div()
 					.flex()

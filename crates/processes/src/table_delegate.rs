@@ -133,13 +133,30 @@ impl TableDelegate for ProcessTableDelegate {
 								.text_color(cx.theme().primary),
 						)
 					})
-					.children(tags.into_iter().map(|(icon, color)| {
-						icon.icon()
-							.w(px(12.0))
-							.h(px(12.0))
-							.text_color(color)
-							.into_any_element()
-					}))
+					.children(tags.into_iter().enumerate().map(
+						|(i, (icon, color, tip_label))| {
+							let el = div().child(
+								icon.icon()
+									.w(px(12.0))
+									.h(px(12.0))
+									.text_color(color),
+							);
+							let el = match tip_label {
+								Some(tip) => el
+									.id(format!("tag-{}-{}", proc.pid, i))
+									.tooltip(move |window, cx| {
+										gpui_component::tooltip::Tooltip::new(
+											tip,
+										)
+										.build(window, cx)
+									}),
+								None => {
+									el.id(format!("tag-{}-{}", proc.pid, i))
+								}
+							};
+							el.into_any_element()
+						},
+					))
 					.into_any()
 			}
 			1 => {
@@ -252,15 +269,27 @@ impl TableDelegate for ProcessTableDelegate {
 					.into_any()
 			}
 			7 => {
-				let vram_val =
-					cum.as_ref().and_then(|c| c.vram).or(proc.vram_bytes);
+				let vram = cum.as_ref().map_or(proc.vram, |c| c.vram);
+				let breakdown = format!(
+					"NVIDIA: {} · AMD: {}",
+					ByteSize::b(vram.nvidia),
+					ByteSize::b(vram.amd)
+				);
 				div()
 					.text_sm()
 					.text_color(cx.theme().muted_foreground)
 					.text_align(TextAlign::Right)
-					.child(match vram_val {
-						Some(b) => ByteSize::b(b).to_string(),
-						None => "—".into(),
+					.child(if vram.is_empty() {
+						"—".into()
+					} else {
+						ByteSize::b(vram.total()).to_string()
+					})
+					.id(format!("vram-{}", proc.pid))
+					.tooltip(move |window, cx| {
+						gpui_component::tooltip::Tooltip::new(
+							breakdown.clone(),
+						)
+						.build(window, cx)
 					})
 					.into_any()
 			}

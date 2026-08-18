@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use gpuitop_core::model::GpuBackend;
+use gpuitop_core::model::{GpuBackend, VramUsage};
 
-pub fn build_vram_map(_gpu_backend: GpuBackend) -> HashMap<i32, u64> {
+pub fn build_vram_usage(_backends: &[GpuBackend]) -> HashMap<i32, VramUsage> {
 	HashMap::new()
 }
 
-pub fn detect_gpu() -> GpuBackend {
-	GpuBackend::None
+pub fn detect_gpu() -> Vec<GpuBackend> {
+	Vec::new()
 }

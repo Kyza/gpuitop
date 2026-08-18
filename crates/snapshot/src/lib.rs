@@ -35,7 +35,7 @@ pub struct CollectorState {
 	pub current_uid: u32,
 	pub user_cache: HashMap<u32, String>,
 	pub desktop_cache: Arc<DesktopEntryCache>,
-	pub gpu_backend: GpuBackend,
+	pub gpu_backends: Vec<GpuBackend>,
 	pub core_history: HashMap<usize, Vec<f32>>,
 }
 
@@ -51,7 +51,7 @@ fn initial_uid() -> u32 {
 
 impl CollectorState {
 	pub fn new(
-		gpu_backend: GpuBackend,
+		gpu_backends: Vec<GpuBackend>,
 		desktop_cache: Arc<DesktopEntryCache>,
 	) -> Self {
 		Self {
@@ -63,7 +63,7 @@ impl CollectorState {
 			current_uid: initial_uid(),
 			user_cache: HashMap::new(),
 			desktop_cache,
-			gpu_backend,
+			gpu_backends,
 			core_history: HashMap::new(),
 		}
 	}

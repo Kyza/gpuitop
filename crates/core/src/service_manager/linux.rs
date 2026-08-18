@@ -100,7 +100,7 @@ pub fn is_service(
 mod tests {
 	use std::collections::HashSet;
 
-	use crate::model::ProcessSnapshot;
+	use crate::model::{ProcessSnapshot, VramUsage};
 	use crate::service_manager::{
 		detect_init, is_service, pids_of_runsv, pids_of_supervise_daemon,
 		InitSystem,
@@ -161,7 +161,7 @@ mod tests {
 			cpu_percent: 0.0,
 			mem_percent: 0.0,
 			mem_rss: 0,
-			vram_bytes: None,
+			vram: VramUsage::default(),
 			disk_read_bytes_per_sec: 0.0,
 			disk_write_bytes_per_sec: 0.0,
 			is_gui: false,

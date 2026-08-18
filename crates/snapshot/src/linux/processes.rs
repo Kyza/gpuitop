@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use gpuitop_core::model::*;
-use gpuitop_gpu::build_vram_map;
+use gpuitop_gpu::build_vram_usage;
 
 use crate::{CollectorState, PrevProc};
 
@@ -22,7 +22,7 @@ pub fn collect_processes(
 	let mut pid_to_proc: HashMap<i32, ProcessSnapshot> = HashMap::new();
 	let mut children_map: HashMap<i32, Vec<i32>> = HashMap::new();
 
-	let vram_map = build_vram_map(state.gpu_backend);
+	let vram_map = build_vram_usage(&state.gpu_backends);
 
 	for proc_result in procs {
 		let Ok(p) = proc_result else {
@@ -92,10 +92,10 @@ pub fn collect_processes(
 			0.0
 		};
 
-		let vram_bytes = if is_kthread {
-			None
+		let vram = if is_kthread {
+			VramUsage::default()
 		} else {
-			vram_map.get(&pid).copied()
+			vram_map.get(&pid).copied().unwrap_or_default()
 		};
 
 		cur_proc_data.insert(
@@ -142,7 +142,7 @@ pub fn collect_processes(
 				cpu_percent,
 				mem_percent,
 				mem_rss: vmrss,
-				vram_bytes,
+				vram,
 				disk_read_bytes_per_sec: 0.0,
 				disk_write_bytes_per_sec: 0.0,
 				is_gui,
@@ -365,8 +365,7 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_processes() {
-		let mut state =
-			CollectorState::new(GpuBackend::None, Default::default());
+		let mut state = CollectorState::new(vec![], Default::default());
 		let snap = collect_snapshot(&mut state);
 
 		assert!(
@@ -389,7 +388,7 @@ mod tests {
 				proc.state,
 				proc.cpu_percent,
 				proc.mem_percent,
-				proc.vram_bytes
+				proc.vram
 			);
 		}
 
@@ -402,8 +401,7 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_cpu_data() {
-		let mut state =
-			CollectorState::new(GpuBackend::None, Default::default());
+		let mut state = CollectorState::new(vec![], Default::default());
 
 		collect_snapshot(&mut state);
 		let snap = collect_snapshot(&mut state);
@@ -418,8 +416,7 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_memory_data() {
-		let mut state =
-			CollectorState::new(GpuBackend::None, Default::default());
+		let mut state = CollectorState::new(vec![], Default::default());
 		let snap = collect_snapshot(&mut state);
 
 		assert!(snap.memory.total > 0, "Total memory is 0");
@@ -434,8 +431,7 @@ mod tests {
 
 	#[test]
 	fn test_processes_flat_list() {
-		let mut state =
-			CollectorState::new(GpuBackend::None, Default::default());
+		let mut state = CollectorState::new(vec![], Default::default());
 		let snap = collect_snapshot(&mut state);
 
 		let total = snap.processes.len();
@@ -455,8 +451,7 @@ mod tests {
 
 	#[test]
 	fn test_gui_detection() {
-		let mut state =
-			CollectorState::new(GpuBackend::None, Default::default());
+		let mut state = CollectorState::new(vec![], Default::default());
 		let snap = collect_snapshot(&mut state);
 
 		let gui_count: usize = snap
@@ -559,7 +554,7 @@ mod tests {
 			cpu_percent: 0.0,
 			mem_percent: 0.0,
 			mem_rss: 0,
-			vram_bytes: None,
+			vram: VramUsage::default(),
 			disk_read_bytes_per_sec: 0.0,
 			disk_write_bytes_per_sec: 0.0,
 			is_gui: false,
@@ -635,8 +630,7 @@ mod tests {
 
 	#[test]
 	fn bench_collector_tick() {
-		let mut state =
-			CollectorState::new(GpuBackend::None, Default::default());
+		let mut state = CollectorState::new(vec![], Default::default());
 
 		collect_snapshot(&mut state);
 

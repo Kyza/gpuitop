@@ -20,7 +20,7 @@ fn make_process(
 		cpu_percent: 0.0,
 		mem_percent: 0.0,
 		mem_rss: 0,
-		vram_bytes: None,
+		vram: VramUsage::default(),
 		disk_read_bytes_per_sec: 0.0,
 		disk_write_bytes_per_sec: 0.0,
 		is_gui: false,
@@ -71,7 +71,9 @@ fn proc_matches_standalone(
 		Filter::Services => proc.ppid == 1,
 		Filter::Kernel => proc.is_kthread,
 		Filter::Parent => proc.has_children,
-		Filter::Vram => proc.vram_bytes.is_some(),
+		Filter::Vram => !proc.vram.is_empty(),
+		Filter::Nvidia => proc.vram.nvidia > 0,
+		Filter::Amd => proc.vram.amd > 0,
 		Filter::Electron => proc.is_electron,
 		Filter::ProcessState(c) => proc.state == *c,
 		Filter::Username(s) => proc.user == *s,
@@ -234,7 +236,7 @@ fn filter_parent() {
 #[test]
 fn filter_vram() {
 	let mut p = make_process(1, 0, "gpu_app", "alice", 'S', "gpu_app");
-	p.vram_bytes = Some(1024 * 1024);
+	p.vram.nvidia = 1024 * 1024;
 	assert!(proc_matches_standalone(
 		&p,
 		&Filter::Vram,

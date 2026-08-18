@@ -44,6 +44,7 @@ pub fn ancestors_to_expand(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::model::VramUsage;
 
 	fn make_proc(pid: i32, ppid: i32) -> ProcessSnapshot {
 		ProcessSnapshot {
@@ -57,7 +58,7 @@ mod tests {
 			cpu_percent: 0.0,
 			mem_percent: 0.0,
 			mem_rss: 0,
-			vram_bytes: None,
+			vram: VramUsage::default(),
 			disk_read_bytes_per_sec: 0.0,
 			disk_write_bytes_per_sec: 0.0,
 			is_gui: false,

@@ -10,7 +10,7 @@ pub struct ProcessSnapshot {
 	pub cpu_percent: f32,
 	pub mem_percent: f32,
 	pub mem_rss: u64,
-	pub vram_bytes: Option<u64>,
+	pub vram: VramUsage,
 	pub disk_read_bytes_per_sec: f64,
 	pub disk_write_bytes_per_sec: f64,
 	pub is_gui: bool,
@@ -75,7 +75,7 @@ impl SystemSnapshot {
 			disks: Vec::new(),
 			networks: Vec::new(),
 			timestamp: std::time::Instant::now(),
-			gpu_backend: GpuBackend::None,
+			gpu_backends: Vec::new(),
 		}
 	}
 }
@@ -88,7 +88,7 @@ pub struct SystemSnapshot {
 	pub disks: Vec<DiskInfo>,
 	pub networks: Vec<NetInfo>,
 	pub timestamp: std::time::Instant,
-	pub gpu_backend: GpuBackend,
+	pub gpu_backends: Vec<GpuBackend>,
 }
 
 #[derive(
@@ -286,6 +286,22 @@ pub enum GpuBackend {
 	Amd,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct VramUsage {
+	pub nvidia: u64,
+	pub amd: u64,
+}
+
+impl VramUsage {
+	pub fn total(&self) -> u64 {
+		self.nvidia + self.amd
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.nvidia == 0 && self.amd == 0
+	}
+}
+
 #[derive(
 	Debug,
 	Clone,
@@ -338,6 +354,8 @@ pub enum Filter {
 	Kernel,
 	Parent,
 	Vram,
+	Nvidia,
+	Amd,
 	Electron,
 	ProcessState(char),
 	Username(String),
@@ -368,6 +386,8 @@ impl Filter {
 			Self::Kernel => "Kernel".into(),
 			Self::Parent => "Parent".into(),
 			Self::Vram => "VRAM".into(),
+			Self::Nvidia => "NVIDIA".into(),
+			Self::Amd => "AMD".into(),
 			Self::Electron => "Electron".into(),
 			Self::ProcessState(c) => state_label(*c).into(),
 			Self::Username(s) => s.clone(),
@@ -440,7 +460,7 @@ mod tests {
 			cpu_percent: 0.0,
 			mem_percent: 0.0,
 			mem_rss: 0,
-			vram_bytes: None,
+			vram: VramUsage::default(),
 			disk_read_bytes_per_sec: 0.0,
 			disk_write_bytes_per_sec: 0.0,
 			is_gui: false,
@@ -538,6 +558,8 @@ mod tests {
 		assert_eq!(Filter::Kernel.label(&procs), "Kernel");
 		assert_eq!(Filter::Parent.label(&procs), "Parent");
 		assert_eq!(Filter::Vram.label(&procs), "VRAM");
+		assert_eq!(Filter::Nvidia.label(&procs), "NVIDIA");
+		assert_eq!(Filter::Amd.label(&procs), "AMD");
 		assert_eq!(Filter::Electron.label(&procs), "Electron");
 	}
 
@@ -676,6 +698,30 @@ mod tests {
 		assert_eq!(GpuBackend::None.to_string(), "None");
 		assert_eq!(GpuBackend::Nvidia.to_string(), "NVIDIA");
 		assert_eq!(GpuBackend::Amd.to_string(), "AMD");
+	}
+
+	#[test]
+	fn vram_usage_default_empty() {
+		let v = VramUsage::default();
+		assert_eq!(v.total(), 0);
+		assert!(v.is_empty());
+	}
+
+	#[test]
+	fn vram_usage_total_sums_vendors() {
+		let v = VramUsage {
+			nvidia: 2048,
+			amd: 1024,
+		};
+		assert_eq!(v.total(), 3072);
+		assert!(!v.is_empty());
+	}
+
+	#[test]
+	fn vram_usage_single_vendor_not_empty() {
+		let v = VramUsage { nvidia: 1, amd: 0 };
+		assert_eq!(v.total(), 1);
+		assert!(!v.is_empty());
 	}
 
 	#[test]

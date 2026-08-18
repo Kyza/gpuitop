@@ -161,7 +161,7 @@ impl ProcessTableDelegate {
 				CumulativeResources {
 					cpu: p.cpu_percent,
 					mem_rss: p.mem_rss,
-					vram: p.vram_bytes,
+					vram: p.vram,
 					disk_read: p.disk_read_bytes_per_sec,
 					disk_write: p.disk_write_bytes_per_sec,
 				},
@@ -213,11 +213,8 @@ impl ProcessTableDelegate {
 			if let Some(parent) = cum.get_mut(&ppid) {
 				parent.cpu += child_cpu;
 				parent.mem_rss += child_mem;
-				parent.vram = match (parent.vram, child_vram) {
-					(Some(a), Some(b)) => Some(a + b),
-					(a, None) => a,
-					(None, b) => b,
-				};
+				parent.vram.nvidia += child_vram.nvidia;
+				parent.vram.amd += child_vram.amd;
 				parent.disk_read += child_dr;
 				parent.disk_write += child_dw;
 			}
@@ -343,14 +340,14 @@ impl ProcessTableDelegate {
 				}
 				7 => {
 					let va = if use_cum {
-						cum_map.get(&a.pid).and_then(|c| c.vram)
+						cum_map.get(&a.pid).map_or(0, |c| c.vram.total())
 					} else {
-						a.vram_bytes
+						a.vram.total()
 					};
 					let vb = if use_cum {
-						cum_map.get(&b.pid).and_then(|c| c.vram)
+						cum_map.get(&b.pid).map_or(0, |c| c.vram.total())
 					} else {
-						b.vram_bytes
+						b.vram.total()
 					};
 					va.cmp(&vb)
 				}
@@ -447,10 +444,29 @@ impl ProcessTableDelegate {
 				if vs.resource_view_mode == ResourceViewMode::Cumulative {
 					self.compute_aggregate_cumulative_map()
 						.get(&proc.pid)
-						.and_then(|c| c.vram)
-						.is_some()
+						.map_or(false, |c| !c.vram.is_empty())
 				} else {
-					proc.vram_bytes.is_some()
+					!proc.vram.is_empty()
+				}
+			}
+			Filter::Nvidia => {
+				let vs = self.view_state.borrow();
+				if vs.resource_view_mode == ResourceViewMode::Cumulative {
+					self.compute_aggregate_cumulative_map()
+						.get(&proc.pid)
+						.map_or(false, |c| c.vram.nvidia > 0)
+				} else {
+					proc.vram.nvidia > 0
+				}
+			}
+			Filter::Amd => {
+				let vs = self.view_state.borrow();
+				if vs.resource_view_mode == ResourceViewMode::Cumulative {
+					self.compute_aggregate_cumulative_map()
+						.get(&proc.pid)
+						.map_or(false, |c| c.vram.amd > 0)
+				} else {
+					proc.vram.amd > 0
 				}
 			}
 			Filter::Electron => proc.is_electron,
@@ -513,7 +529,7 @@ mod tests {
 			disks: vec![],
 			networks: vec![],
 			timestamp: std::time::Instant::now(),
-			gpu_backend: GpuBackend::None,
+			gpu_backends: vec![],
 		};
 		Rc::new(RefCell::new(Rc::new(snap)))
 	}
@@ -530,7 +546,7 @@ mod tests {
 			cpu_percent: pid as f32,
 			mem_percent: 0.0,
 			mem_rss: pid as u64 * 1024,
-			vram_bytes: None,
+			vram: VramUsage::default(),
 			disk_read_bytes_per_sec: pid as f64,
 			disk_write_bytes_per_sec: pid as f64,
 			is_gui: false,
@@ -753,12 +769,12 @@ mod tests {
 		let new_snap = {
 			let borrowed = d.snapshot_cell.borrow();
 			let mut clone: SystemSnapshot = (**borrowed).clone();
-			clone.processes[1].vram_bytes = Some(4096);
+			clone.processes[1].vram.nvidia = 4096;
 			clone
 		};
 		*d.snapshot_cell.borrow_mut() = Rc::new(new_snap);
 		let map = d.compute_aggregate_cumulative_map();
-		assert_eq!(map[&1].vram, Some(4096));
+		assert_eq!(map[&1].vram.nvidia, 4096);
 	}
 
 	#[test]
@@ -767,12 +783,29 @@ mod tests {
 		let new_snap = {
 			let borrowed = d.snapshot_cell.borrow();
 			let mut clone: SystemSnapshot = (**borrowed).clone();
-			clone.processes[0].vram_bytes = Some(4096);
+			clone.processes[0].vram.nvidia = 4096;
 			clone
 		};
 		*d.snapshot_cell.borrow_mut() = Rc::new(new_snap);
 		let map = d.compute_aggregate_cumulative_map();
-		assert_eq!(map[&1].vram, Some(4096));
+		assert_eq!(map[&1].vram.nvidia, 4096);
+	}
+
+	#[test]
+	fn cum_map_vram_mixed_vendors_sum() {
+		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let new_snap = {
+			let borrowed = d.snapshot_cell.borrow();
+			let mut clone: SystemSnapshot = (**borrowed).clone();
+			clone.processes[0].vram.nvidia = 2048;
+			clone.processes[1].vram.amd = 1024;
+			clone
+		};
+		*d.snapshot_cell.borrow_mut() = Rc::new(new_snap);
+		let map = d.compute_aggregate_cumulative_map();
+		assert_eq!(map[&1].vram.nvidia, 2048);
+		assert_eq!(map[&1].vram.amd, 1024);
+		assert_eq!(map[&1].vram.total(), 3072);
 	}
 
 	#[test]
@@ -930,21 +963,35 @@ mod tests {
 		let d = make_delegate(vec![]);
 		let mut p = make_proc(1, 0);
 		assert!(!d.proc_matches(&p, &Filter::Vram));
-		p.vram_bytes = Some(4096);
+		p.vram.nvidia = 4096;
 		assert!(d.proc_matches(&p, &Filter::Vram));
 	}
 
 	#[test]
 	fn proc_matches_vram_cumulative() {
 		let mut parent = make_proc(1, 0);
-		parent.vram_bytes = Some(4096);
+		parent.vram.nvidia = 4096;
 		let mut child = make_proc(10, 1);
-		child.vram_bytes = Some(2048);
+		child.vram.nvidia = 2048;
 		let d = make_delegate(vec![parent, child.clone()]);
 		d.view_state.borrow_mut().resource_view_mode =
 			ResourceViewMode::Cumulative;
 		assert!(d.proc_matches(&child, &Filter::Vram));
 		assert!(d.proc_matches(&make_proc(1, 0), &Filter::Vram));
+	}
+
+	#[test]
+	fn proc_matches_nvidia_and_amd() {
+		let mut nvidia = make_proc(1, 0);
+		nvidia.vram.nvidia = 1024;
+		let mut amd = make_proc(2, 0);
+		amd.vram.amd = 1024;
+		let d = make_delegate(vec![nvidia.clone(), amd.clone()]);
+		assert!(d.proc_matches(&nvidia, &Filter::Nvidia));
+		assert!(!d.proc_matches(&nvidia, &Filter::Amd));
+		assert!(d.proc_matches(&amd, &Filter::Amd));
+		assert!(!d.proc_matches(&amd, &Filter::Nvidia));
+		assert!(d.proc_matches(&nvidia, &Filter::Vram));
 	}
 
 	#[test]

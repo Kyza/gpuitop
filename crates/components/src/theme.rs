@@ -46,6 +46,10 @@ pub fn tag_color(tag: TagType, dark: bool) -> Hsla {
 		(TagType::Kernel, false) => hsla(0.0 / 360.0, 0.0, 0.38, 1.0),
 		(TagType::Vram, true) => hsla(270.0 / 360.0, 0.60, 0.60, 1.0),
 		(TagType::Vram, false) => hsla(270.0 / 360.0, 0.55, 0.42, 1.0),
+		(TagType::Nvidia, true) => hsla(82.0 / 360.0, 0.75, 0.55, 1.0),
+		(TagType::Nvidia, false) => hsla(82.0 / 360.0, 0.65, 0.35, 1.0),
+		(TagType::Amd, true) => hsla(357.0 / 360.0, 0.80, 0.58, 1.0),
+		(TagType::Amd, false) => hsla(357.0 / 360.0, 0.70, 0.40, 1.0),
 		(TagType::Parent, true) => hsla(0.0 / 360.0, 0.0, 0.60, 1.0),
 		(TagType::Parent, false) => hsla(0.0 / 360.0, 0.0, 0.45, 1.0),
 		(TagType::Electron, true) => hsla(170.0 / 360.0, 0.70, 0.55, 1.0),
@@ -61,6 +65,8 @@ pub enum TagType {
 	Services,
 	Kernel,
 	Vram,
+	Nvidia,
+	Amd,
 	Parent,
 	Electron,
 }
@@ -69,31 +75,66 @@ pub fn tag_icons(
 	proc: &ProcessSnapshot,
 	init_system: InitSystem,
 	cx: &App,
-) -> Vec<(LucideIcon, Hsla)> {
+) -> Vec<(LucideIcon, Hsla, Option<&'static str>)> {
 	let dark = theme_dark_or_light(cx);
 	let mut tags = Vec::new();
 	if proc.is_gui {
-		tags.push((LucideIcon::AppWindow, tag_color(TagType::Gui, dark)));
+		tags.push((
+			LucideIcon::AppWindow,
+			tag_color(TagType::Gui, dark),
+			Some("GUI"),
+		));
 	}
 	if proc.is_owned_by_current_user && !proc.is_gui {
-		tags.push((LucideIcon::User, tag_color(TagType::User, dark)));
+		tags.push((
+			LucideIcon::User,
+			tag_color(TagType::User, dark),
+			Some("User"),
+		));
 	}
 	if !proc.is_kthread && !proc.is_owned_by_current_user && proc.ppid != 1 {
-		tags.push((LucideIcon::UserShield, tag_color(TagType::System, dark)));
+		tags.push((
+			LucideIcon::UserShield,
+			tag_color(TagType::System, dark),
+			Some("System"),
+		));
 	}
 	let is_svc =
 		is_service(proc, init_system, &HashSet::new(), &HashSet::new());
 	if is_svc {
-		tags.push((LucideIcon::Server, tag_color(TagType::Services, dark)));
+		tags.push((
+			LucideIcon::Server,
+			tag_color(TagType::Services, dark),
+			Some("Service"),
+		));
 	}
 	if proc.is_kthread {
-		tags.push((LucideIcon::Microchip, tag_color(TagType::Kernel, dark)));
+		tags.push((
+			LucideIcon::Microchip,
+			tag_color(TagType::Kernel, dark),
+			Some("Kernel"),
+		));
 	}
-	if proc.vram_bytes.is_some() {
-		tags.push((LucideIcon::Gpu, tag_color(TagType::Vram, dark)));
+	if proc.vram.nvidia > 0 {
+		tags.push((
+			LucideIcon::Gpu,
+			tag_color(TagType::Nvidia, dark),
+			Some("NVIDIA"),
+		));
+	}
+	if proc.vram.amd > 0 {
+		tags.push((
+			LucideIcon::Gpu,
+			tag_color(TagType::Amd, dark),
+			Some("AMD"),
+		));
 	}
 	if proc.is_electron {
-		tags.push((LucideIcon::Atom, tag_color(TagType::Electron, dark)));
+		tags.push((
+			LucideIcon::Atom,
+			tag_color(TagType::Electron, dark),
+			Some("Electron"),
+		));
 	}
 	tags
 }
@@ -107,6 +148,8 @@ pub fn filter_icon(filter: &Filter) -> Option<LucideIcon> {
 		Filter::Kernel => Some(LucideIcon::Microchip),
 		Filter::Parent => Some(LucideIcon::FolderTree),
 		Filter::Vram => Some(LucideIcon::Gpu),
+		Filter::Nvidia => Some(LucideIcon::Gpu),
+		Filter::Amd => Some(LucideIcon::Gpu),
 		Filter::Electron => Some(LucideIcon::Atom),
 		Filter::ProcessState(_) => Some(LucideIcon::Activity),
 		Filter::Username(_) => Some(LucideIcon::User),
@@ -123,6 +166,8 @@ pub fn filter_color(filter: &Filter, cx: &App) -> Hsla {
 		Filter::Services => tag_color(TagType::Services, dark),
 		Filter::Kernel => tag_color(TagType::Kernel, dark),
 		Filter::Vram => tag_color(TagType::Vram, dark),
+		Filter::Nvidia => tag_color(TagType::Nvidia, dark),
+		Filter::Amd => tag_color(TagType::Amd, dark),
 		Filter::Parent => tag_color(TagType::Parent, dark),
 		Filter::Electron => tag_color(TagType::Electron, dark),
 		Filter::ProcessState(_) => tag_color(TagType::Gui, dark),

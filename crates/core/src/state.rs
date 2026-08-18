@@ -6,7 +6,7 @@ use std::rc::Rc;
 pub struct CumulativeResources {
 	pub cpu: f32,
 	pub mem_rss: u64,
-	pub vram: Option<u64>,
+	pub vram: VramUsage,
 	pub disk_read: f64,
 	pub disk_write: f64,
 }
@@ -91,7 +91,7 @@ mod tests {
 		let cr = CumulativeResources::default();
 		assert_eq!(cr.cpu, 0.0);
 		assert_eq!(cr.mem_rss, 0);
-		assert_eq!(cr.vram, None);
+		assert_eq!(cr.vram, VramUsage::default());
 		assert_eq!(cr.disk_read, 0.0);
 		assert_eq!(cr.disk_write, 0.0);
 	}

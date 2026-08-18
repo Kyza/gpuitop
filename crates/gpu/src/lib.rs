@@ -6,8 +6,8 @@ mod macos;
 mod windows;
 
 #[cfg(target_os = "linux")]
-pub use linux::{build_vram_map, detect_gpu};
+pub use linux::{build_vram_usage, detect_gpu};
 #[cfg(target_os = "macos")]
-pub use macos::{build_vram_map, detect_gpu};
+pub use macos::{build_vram_usage, detect_gpu};
 #[cfg(target_os = "windows")]
-pub use windows::{build_vram_map, detect_gpu};
+pub use windows::{build_vram_usage, detect_gpu};

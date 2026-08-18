@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use gpuitop_core::model::GpuBackend;
+use gpuitop_core::model::{GpuBackend, VramUsage};
 
 #[hotpath::measure]
 fn build_nvidia_vram_map() -> HashMap<i32, u64> {
@@ -66,17 +66,30 @@ fn build_rocm_vram_map() -> HashMap<i32, u64> {
 }
 
 #[hotpath::measure]
-pub fn build_vram_map(gpu_backend: GpuBackend) -> HashMap<i32, u64> {
-	match gpu_backend {
-		GpuBackend::Nvidia => build_nvidia_vram_map(),
-		GpuBackend::Amd => build_rocm_vram_map(),
-		GpuBackend::None => HashMap::new(),
+pub fn build_vram_usage(backends: &[GpuBackend]) -> HashMap<i32, VramUsage> {
+	let mut map: HashMap<i32, VramUsage> = HashMap::new();
+	for backend in backends {
+		let per_vendor = match backend {
+			GpuBackend::Nvidia => build_nvidia_vram_map(),
+			GpuBackend::Amd => build_rocm_vram_map(),
+			GpuBackend::None => continue,
+		};
+		for (pid, bytes) in per_vendor {
+			let entry = map.entry(pid).or_default();
+			match backend {
+				GpuBackend::Nvidia => entry.nvidia += bytes,
+				GpuBackend::Amd => entry.amd += bytes,
+				GpuBackend::None => {}
+			}
+		}
 	}
+	map
 }
 
-pub fn detect_gpu() -> GpuBackend {
+pub fn detect_gpu() -> Vec<GpuBackend> {
+	let mut backends = Vec::new();
 	if nvml_wrapper::Nvml::init().is_ok() {
-		return GpuBackend::Nvidia;
+		backends.push(GpuBackend::Nvidia);
 	}
 	if std::process::Command::new("rocm-smi")
 		.arg("--showpids")
@@ -84,7 +97,7 @@ pub fn detect_gpu() -> GpuBackend {
 		.map(|o| o.status.success())
 		.unwrap_or(false)
 	{
-		return GpuBackend::Amd;
+		backends.push(GpuBackend::Amd);
 	}
-	GpuBackend::None
+	backends
 }

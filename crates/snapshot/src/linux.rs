@@ -27,7 +27,7 @@ pub fn collect_snapshot(state: &mut CollectorState) -> SystemSnapshot {
 		disks,
 		networks,
 		timestamp: now,
-		gpu_backend: state.gpu_backend,
+		gpu_backends: state.gpu_backends.clone(),
 	}
 }
 

@@ -24,6 +24,8 @@ impl ProcessesTab {
 			Filter::Kernel,
 			Filter::Parent,
 			Filter::Vram,
+			Filter::Nvidia,
+			Filter::Amd,
 			Filter::Electron,
 		];
 
@@ -263,6 +265,12 @@ impl ProcessesTab {
 									Filter::Vram => {
 										"Processes using GPU video memory."
 									}
+									Filter::Nvidia => {
+										"Processes using NVIDIA GPU memory."
+									}
+									Filter::Amd => {
+										"Processes using AMD GPU memory."
+									}
 									Filter::Electron => {
 										"Electron-based desktop applications."
 									}
@@ -276,6 +284,8 @@ impl ProcessesTab {
 									Filter::Kernel => "Kernel",
 									Filter::Parent => "Parent",
 									Filter::Vram => "VRAM",
+									Filter::Nvidia => "NVIDIA",
+									Filter::Amd => "AMD",
 									Filter::Electron => "Electron",
 									_ => "",
 								};
@@ -287,6 +297,8 @@ impl ProcessesTab {
 									Filter::Kernel => "kernel",
 									Filter::Parent => "parent",
 									Filter::Vram => "vram",
+									Filter::Nvidia => "nvidia",
+									Filter::Amd => "amd",
 									Filter::Electron => "electron",
 									_ => "filter",
 								};
