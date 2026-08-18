@@ -11,28 +11,17 @@ if [ ! -S "$SOCK" ]; then
 	exit 1
 fi
 
-capture() {
-	local output="$1"
-	local theme="$2"
-	shift 2
+BIN="$(cargo metadata --format-version 1 --no-deps \
+	| grep -oP '"target_directory":"[^"]+"' | cut -d'"' -f4)/debug/gpuitop"
 
+shot() {
+	local appid="$1"
+	local output="$2"
 	local abs
 	abs="$(realpath "$output")"
-
-	echo "  Launching gpuitop ($theme)..."
-
-	cargo run -- \
-		"--override" "(general: (interface: (theme: \"$theme\")))" \
-		"--override" "(window_size: (1100, 700))" \
-		"$@" &
-	local pid=$!
-
-	sleep 3
-
 	local reply
-	reply=$(echo "{\"Screenshot\":{\"target\":{\"Window\":{\"window\":\"gpuitop\"}},\"scale\":1.0,\"path\":\"$abs\"}}" \
+	reply=$(echo "{\"Screenshot\":{\"target\":{\"Window\":{\"window\":\"$appid\"}},\"scale\":1.0,\"path\":\"$abs\"}}" \
 		| socat -t3 - "UNIX-CONNECT:$SOCK" 2>&1)
-
 	if echo "$reply" | grep -q '"Ok"'; then
 		local dims
 		dims=$(echo "$reply" | grep -oP '"width":\d+,"height":\d+')
@@ -40,43 +29,53 @@ capture() {
 	else
 		echo "  ERROR: screenshot failed: $reply"
 	fi
-
-	kill $pid 2>/dev/null || true
-	wait $pid 2>/dev/null || true
-	sleep 0.5
 }
+
+# job = "appid|output|theme|extra args..."
+JOB_DARK="gpuitop-shot-dark|list-view-dark.png|Default Dark|--page|processes.list|--search|vesktop"
+JOB_TREE_DARK="gpuitop-shot-dark2|tree-view-dark.png|Default Dark|--page|processes.tree|--search|vesktop"
+JOB_ABOUT_DARK="gpuitop-shot-dark3|settings-about-dark.png|Default Dark|--page|settings.about"
+JOB_CPU_DARK="gpuitop-shot-dark4|perf-cpu-dark.png|Default Dark|--page|performance.cpu"
+
+JOB_LIGHT="gpuitop-shot-light|list-view-light.png|Default Light|--page|processes.list|--search|vesktop"
+JOB_TREE_LIGHT="gpuitop-shot-light2|tree-view-light.png|Default Light|--page|processes.tree|--search|vesktop"
+JOB_ABOUT_LIGHT="gpuitop-shot-light3|settings-about-light.png|Default Light|--page|settings.about"
+JOB_CPU_LIGHT="gpuitop-shot-light4|perf-cpu-light.png|Default Light|--page|performance.cpu"
+
+JOB_MOCHA="gpuitop-shot-mocha|settings-about-catppuccin-mocha.png|Catppuccin Mocha|--page|settings.about"
+
+JOBS=("$JOB_DARK" "$JOB_TREE_DARK" "$JOB_ABOUT_DARK" "$JOB_CPU_DARK" "$JOB_LIGHT" "$JOB_TREE_LIGHT" "$JOB_ABOUT_LIGHT" "$JOB_CPU_LIGHT" "$JOB_MOCHA")
 
 echo "=== Building (debug) ==="
 cargo build 2>&1 | tail -1
 
-for theme in "Default Dark" "Default Light"; do
-	suffix=""
-	case "$theme" in
-		"Default Dark") suffix="dark" ;;
-		"Default Light") suffix="light" ;;
-	esac
-
-	echo ""
-	echo "=== Theme: $theme ==="
-
-	capture "$SCREENSHOTS_DIR/list-view-$suffix.png" \
-		"$theme" \
-		"--page" "processes.list" "--search" "vesktop"
-
-	capture "$SCREENSHOTS_DIR/tree-view-$suffix.png" \
-		"$theme" \
-		"--page" "processes.tree" "--search" "vesktop"
-
-	capture "$SCREENSHOTS_DIR/settings-about-$suffix.png" \
-		"$theme" \
-		"--page" "settings.about"
+PIDS=()
+for jobstr in "${JOBS[@]}"; do
+	IFS='|' read -r -a job <<<"$jobstr"
+	appid="${job[0]}"
+	theme="${job[2]}"
+	echo "  Launching gpuitop ($theme, $appid)..."
+	"$BIN" \
+		"--app-id" "$appid" \
+		"--override" "(general: (interface: (theme: \"$theme\")))" \
+		"--override" "(window_size: (1100, 700))" \
+		"${job[@]:3}" &
+	PIDS+=("$!")
 done
 
-echo ""
-echo "=== Theme: Catppuccin Mocha (settings about) ==="
-capture "$SCREENSHOTS_DIR/settings-about-catppuccin-mocha.png" \
-	"Catppuccin Mocha" \
-	"--page" "settings.about"
+# Let every instance's collector run several ticks so the table and history
+# graph populate before screenshotting.
+sleep 10
+
+for jobstr in "${JOBS[@]}"; do
+	IFS='|' read -r -a job <<<"$jobstr"
+	shot "${job[0]}" "$SCREENSHOTS_DIR/${job[1]}"
+done
+
+for pid in "${PIDS[@]}"; do
+	kill "$pid" 2>/dev/null || true
+	wait "$pid" 2>/dev/null || true
+done
 
 echo ""
 echo "Done:"

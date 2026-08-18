@@ -10,6 +10,7 @@ pub struct Cli {
 	pub page: Option<String>,
 	pub search: Option<String>,
 	pub properties_pid: Option<i32>,
+	pub app_id: Option<String>,
 	pub print_version: bool,
 	pub print_help: bool,
 }
@@ -91,6 +92,8 @@ OPTIONS:
     -s, --search <TEXT>       Pre-fill the process search bar
     --properties <PID>        Open the properties window for a PID
                               (standalone, no main window)
+    --app-id <ID>             Override the Wayland/x11 app_id used by the
+                              window manager (default: com.github.kyza.gpuitop)
     -v, --version             Print version and exit
     -h, --help                Print this help and exit
 
@@ -142,6 +145,12 @@ pub fn parse() -> Cli {
 					.value()
 					.ok()
 					.and_then(|v| v.to_str().and_then(|s| s.parse().ok()));
+			}
+			lexopt::Arg::Long("app-id") => {
+				cli.app_id = parser
+					.value()
+					.ok()
+					.and_then(|v| v.to_str().map(|s| s.to_string()));
 			}
 			lexopt::Arg::Short('v') | lexopt::Arg::Long("version") => {
 				cli.print_version = true;

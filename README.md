@@ -8,6 +8,7 @@ A GPU-accelerated task manager with per-process VRAM tracking. It uses [GPUI](ht
 |------|-------|
 | ![List view — dark theme, searching "vesktop"](screenshots/list-view-dark.png) | ![List view — light theme, searching "vesktop"](screenshots/list-view-light.png) |
 | ![Tree view — dark theme, searching "vesktop"](screenshots/tree-view-dark.png) | ![Tree view — light theme, searching "vesktop"](screenshots/tree-view-light.png) |
+| ![CPU performance — dark theme](screenshots/perf-cpu-dark.png) | ![CPU performance — light theme](screenshots/perf-cpu-light.png) |
 | ![Settings about — dark theme](screenshots/settings-about-dark.png) | ![Settings about — light theme](screenshots/settings-about-light.png) |
 
 > Regenerate with `./screenshots/generate.sh` (requires [driftwm](https://github.com/malbiruk/driftwm)).

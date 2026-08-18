@@ -89,7 +89,12 @@ fn main() {
 							..Default::default()
 						}),
 						window_decorations: Some(WindowDecorations::Client),
-						app_id: Some(GPUITOP_APP_ID.into()),
+						app_id: Some(
+							cli.app_id
+								.clone()
+								.unwrap_or_else(|| GPUITOP_APP_ID.to_string())
+								.into(),
+						),
 						..Default::default()
 					},
 					move |window, cx| {
@@ -127,7 +132,12 @@ fn main() {
 						..Default::default()
 					}),
 					window_decorations: Some(WindowDecorations::Client),
-					app_id: Some(GPUITOP_APP_ID.into()),
+					app_id: Some(
+						cli.app_id
+							.clone()
+							.unwrap_or_else(|| GPUITOP_APP_ID.to_string())
+							.into(),
+					),
 					..Default::default()
 				},
 				|window, cx| {
