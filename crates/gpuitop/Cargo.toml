@@ -10,6 +10,7 @@ repository = "https://github.com/Kyza/gpuitop"
 [dependencies]
 gpuitop_core = { path = "../core" }
 gpuitop_gpu = { path = "../gpu" }
+gpuitop_elevation = { path = "../elevation" }
 gpuitop_icons = { path = "../icons" }
 gpuitop_snapshot = { path = "../snapshot" }
 gpuitop_window_picker = { path = "../window_picker" }
@@ -36,6 +37,9 @@ hotpath = [
 	"gpuitop_gpu/hotpath",
 	"gpuitop_snapshot/hotpath",
 	"gpuitop_processes/hotpath",
+	"gpuitop_performance/hotpath",
+	"gpuitop_settings/hotpath",
+	"gpuitop_properties/hotpath",
 ]
 hotpath-cpu = [
 	"hotpath/hotpath-cpu",
@@ -43,6 +47,9 @@ hotpath-cpu = [
 	"gpuitop_gpu/hotpath-cpu",
 	"gpuitop_snapshot/hotpath-cpu",
 	"gpuitop_processes/hotpath-cpu",
+	"gpuitop_performance/hotpath-cpu",
+	"gpuitop_settings/hotpath-cpu",
+	"gpuitop_properties/hotpath-cpu",
 ]
 hotpath-alloc = [
 	"hotpath/hotpath-alloc",
@@ -50,6 +57,9 @@ hotpath-alloc = [
 	"gpuitop_gpu/hotpath-alloc",
 	"gpuitop_snapshot/hotpath-alloc",
 	"gpuitop_processes/hotpath-alloc",
+	"gpuitop_performance/hotpath-alloc",
+	"gpuitop_settings/hotpath-alloc",
+	"gpuitop_properties/hotpath-alloc",
 ]
 hotpath-mcp = [
 	"hotpath/hotpath-mcp",
@@ -57,4 +67,7 @@ hotpath-mcp = [
 	"gpuitop_gpu/hotpath-mcp",
 	"gpuitop_snapshot/hotpath-mcp",
 	"gpuitop_processes/hotpath-mcp",
+	"gpuitop_performance/hotpath-mcp",
+	"gpuitop_settings/hotpath-mcp",
+	"gpuitop_properties/hotpath-mcp",
 ]

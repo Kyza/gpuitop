@@ -4,11 +4,12 @@ use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::menu::DropdownMenu;
 use gpui_component::tab::{Tab, TabBar};
-use gpui_component::{ActiveTheme, Sizable, TitleBar};
+use gpui_component::{ActiveTheme, Disableable, Sizable, TitleBar};
 use gpuitop_components::assets::lucide::LucideIcon;
 use gpuitop_core::config::Config;
 use gpuitop_core::model::{GpuBackend, SystemSnapshot};
 use gpuitop_core::service_manager::{detect_init, InitSystem};
+use gpuitop_elevation::relaunch_elevated;
 use gpuitop_gpu::detect_gpu;
 use gpuitop_icons::DesktopEntryCache;
 use gpuitop_performance::PerformanceTab;
@@ -31,6 +32,8 @@ pub struct App {
 	init_system: InitSystem,
 	rx: mpsc::Receiver<SystemSnapshot>,
 	paused: Arc<AtomicBool>,
+	elevated: bool,
+	elevation_error: Option<String>,
 	focus_handle: FocusHandle,
 	processes_tab: Entity<ProcessesTab>,
 	performance_tab: Entity<PerformanceTab>,
@@ -152,6 +155,8 @@ impl App {
 			init_system,
 			rx,
 			paused,
+			elevated: gpuitop_elevation::is_elevated(),
+			elevation_error: None,
 			focus_handle,
 			processes_tab,
 			performance_tab,
@@ -280,6 +285,51 @@ impl Render for App {
 						)
 						.child(div().flex_grow(1.0))
 						.child({
+							let elevated = self.elevated;
+							Button::new("elevate-btn")
+								.ghost()
+								.compact()
+								.small()
+								.disabled(elevated)
+								.icon(
+									(if elevated {
+										LucideIcon::ShieldCheck
+									} else {
+										LucideIcon::Shield
+									})
+									.icon()
+									.size(px(14.0))
+									.text_color(if elevated {
+										cx.theme().primary
+									} else {
+										cx.theme().muted_foreground
+									}),
+								)
+								.tooltip(if elevated {
+									"Running as root — system processes can \
+									 be managed."
+								} else {
+									"Not elevated. Click to relaunch as root \
+									 so system processes can be managed."
+								})
+								.on_click(cx.listener(
+									|this, _: &ClickEvent, _window, cx| {
+										if this.elevated {
+											return;
+										}
+										this.elevation_error = None;
+										match relaunch_elevated() {
+											Ok(()) => cx.quit(),
+											Err(e) => {
+												this.elevation_error =
+													Some(e);
+												cx.notify();
+											}
+										}
+									},
+								))
+						})
+						.child({
 							let config = self.config.clone();
 							let entity: Entity<App> = cx.entity().clone();
 							Button::new("theme-btn")
@@ -364,6 +414,11 @@ impl Render for App {
 					.child(format!("Init: {init}"))
 					.child(div().flex_grow(1.0))
 					.child(if paused { "Esc: Resume" } else { "Esc: Pause" })
+					.when_some(self.elevation_error.clone(), |el, msg| {
+						el.child(
+							div().text_color(cx.theme().danger).child(msg),
+						)
+					})
 			})
 			.when(paused, |el| {
 				el.child(

@@ -1,0 +1,11 @@
+[package]
+name = "gpuitop_elevation"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+libc = { workspace = true }
+
+[features]
+default = []

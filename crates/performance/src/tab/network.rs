@@ -9,6 +9,7 @@ use super::history::Sample;
 use super::widgets::{card, chart_box, format_rate, stat_tiles};
 use super::PerformanceTab;
 
+#[hotpath::measure]
 pub fn network_tab(
 	nets: &[NetInfo],
 	samples: Vec<Sample>,

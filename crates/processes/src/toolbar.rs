@@ -11,6 +11,7 @@ use gpuitop_core::model::*;
 use gpuitop_core::state::ViewState;
 
 impl ProcessesTab {
+	#[hotpath::measure]
 	pub fn render_toolbar(
 		&mut self,
 		_window: &mut Window,

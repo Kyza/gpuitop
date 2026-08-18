@@ -16,6 +16,7 @@ use super::history::Sample;
 use super::widgets::{card, chart_box, stat_tiles};
 use super::PerformanceTab;
 
+#[hotpath::measure]
 pub fn gpu_tab(
 	snapshot: &SystemSnapshot,
 	samples: Vec<Sample>,
@@ -245,6 +246,7 @@ fn fan_str(v: u32) -> String {
 	}
 }
 
+#[hotpath::measure]
 fn top_consumers(
 	top: Vec<&ProcessSnapshot>,
 	cx: &Context<PerformanceTab>,

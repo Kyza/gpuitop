@@ -48,6 +48,7 @@ impl PropertiesWindow {
 }
 
 impl Render for PropertiesWindow {
+	#[hotpath::measure]
 	fn render(
 		&mut self,
 		window: &mut Window,

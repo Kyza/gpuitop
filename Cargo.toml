@@ -1,9 +1,10 @@
 [workspace]
 resolver = "2"
-members = [
+	members = [
 	"crates/gpuitop",
 	"crates/core",
 	"crates/gpu",
+	"crates/elevation",
 	"crates/icons",
 	"crates/snapshot",
 	"crates/properties",

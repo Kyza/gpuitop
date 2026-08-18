@@ -40,6 +40,7 @@ impl SettingsTab {
 		}
 	}
 
+	#[hotpath::measure]
 	fn setting_pages(
 		&self,
 		_window: &mut Window,
@@ -58,6 +59,7 @@ impl SettingsTab {
 }
 
 impl Render for SettingsTab {
+	#[hotpath::measure]
 	fn render(
 		&mut self,
 		window: &mut Window,

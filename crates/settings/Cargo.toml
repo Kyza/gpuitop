@@ -12,3 +12,11 @@ gpuitop_components = { path = "../components" }
 gpui = { workspace = true }
 gpui-component = { workspace = true }
 open = { workspace = true }
+hotpath = { workspace = true }
+
+[features]
+default = []
+hotpath = ["hotpath/hotpath"]
+hotpath-cpu = ["hotpath/hotpath-cpu"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]
+hotpath-mcp = ["hotpath/hotpath-mcp"]

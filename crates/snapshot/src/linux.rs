@@ -9,6 +9,7 @@ use gpuitop_core::model::SystemSnapshot;
 
 use super::CollectorState;
 
+#[hotpath::measure]
 pub fn collect_snapshot(state: &mut CollectorState) -> SystemSnapshot {
 	let now = Instant::now();
 	let cpu = collector::collect_cpu(state);

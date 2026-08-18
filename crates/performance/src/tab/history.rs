@@ -25,6 +25,7 @@ impl History {
 		}
 	}
 
+	#[hotpath::measure]
 	pub fn push(&mut self, mut sample: Sample) {
 		self.tick += 1;
 		sample.label = self.tick.to_string();
@@ -34,6 +35,7 @@ impl History {
 		}
 	}
 
+	#[hotpath::measure]
 	pub fn samples(&self) -> Vec<Sample> {
 		self.samples.clone()
 	}

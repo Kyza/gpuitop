@@ -179,6 +179,7 @@ impl ProcessesTab {
 }
 
 impl Render for ProcessesTab {
+	#[hotpath::measure]
 	fn render(
 		&mut self,
 		window: &mut Window,

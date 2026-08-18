@@ -11,6 +11,7 @@ pub struct TreeData {
 }
 
 impl TreeData {
+	#[hotpath::measure]
 	pub fn preserve_expand_from(&mut self, old: &TreeData) {
 		let old_state = Self::collect_expand_state(&old.items);
 		self.items = Self::apply_expand_state(

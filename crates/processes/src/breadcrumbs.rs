@@ -7,6 +7,7 @@ use gpuitop_core::model::*;
 use gpuitop_core::state::ViewState;
 
 impl ProcessesTab {
+	#[hotpath::measure]
 	pub fn render_pid_breadcrumb(
 		&self,
 		_window: &mut Window,

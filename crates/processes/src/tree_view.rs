@@ -15,6 +15,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 impl ProcessesTab {
+	#[hotpath::measure]
 	pub fn render_tree_view(
 		&mut self,
 		_window: &mut Window,
@@ -91,6 +92,7 @@ impl ProcessesTab {
 			})
 	}
 
+	#[hotpath::measure]
 	fn render_tree_node(
 		ix: usize,
 		entry: &gpui_component::tree::TreeEntry,

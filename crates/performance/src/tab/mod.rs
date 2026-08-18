@@ -45,6 +45,7 @@ impl PerformanceTab {
 		}
 	}
 
+	#[hotpath::measure]
 	pub fn set_snapshot(&mut self, snapshot: Rc<SystemSnapshot>) {
 		let sample = Sample {
 			label: String::new(),
@@ -82,6 +83,7 @@ impl PerformanceTab {
 }
 
 impl Render for PerformanceTab {
+	#[hotpath::measure]
 	fn render(
 		&mut self,
 		_window: &mut Window,

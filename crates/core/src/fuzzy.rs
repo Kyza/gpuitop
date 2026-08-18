@@ -1,5 +1,6 @@
 use crate::model::ProcessSnapshot;
 
+#[hotpath::measure]
 pub fn fuzzy_match(
 	needle: &str,
 	haystack: &str,
@@ -8,6 +9,7 @@ pub fn fuzzy_match(
 	nucleo_fuzzy_score(needle, haystack, matcher).is_some()
 }
 
+#[hotpath::measure]
 pub fn nucleo_fuzzy_score(
 	needle: &str,
 	haystack: &str,

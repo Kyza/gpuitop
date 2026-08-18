@@ -10,6 +10,7 @@ use super::history::Sample;
 use super::widgets::{card, chart_box, stat_tiles};
 use super::PerformanceTab;
 
+#[hotpath::measure]
 pub fn cpu_tab(
 	cpu: &CpuInfo,
 	samples: Vec<Sample>,

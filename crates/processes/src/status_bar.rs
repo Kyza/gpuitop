@@ -4,6 +4,7 @@ use gpui::*;
 use gpui_component::ActiveTheme;
 
 impl ProcessesTab {
+	#[hotpath::measure]
 	pub fn render_status_bar(
 		&self,
 		_window: &mut Window,

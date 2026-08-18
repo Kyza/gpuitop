@@ -54,6 +54,7 @@ impl TableDelegate for ProcessTableDelegate {
 		}
 	}
 
+	#[hotpath::measure]
 	fn render_th(
 		&mut self,
 		col_ix: usize,
@@ -93,6 +94,7 @@ impl TableDelegate for ProcessTableDelegate {
 			.into_any_element()
 	}
 
+	#[hotpath::measure]
 	fn render_td(
 		&mut self,
 		row_ix: usize,

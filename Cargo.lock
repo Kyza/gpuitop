@@ -2846,6 +2846,7 @@ dependencies = [
  "gpui_platform",
  "gpuitop_components",
  "gpuitop_core",
+ "gpuitop_elevation",
  "gpuitop_gpu",
  "gpuitop_icons",
  "gpuitop_performance",
@@ -2882,6 +2883,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpuitop_elevation"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "gpuitop_gpu"
 version = "0.1.0"
 dependencies = [
@@ -2903,6 +2911,7 @@ dependencies = [
  "gpui-component",
  "gpuitop_components",
  "gpuitop_core",
+ "hotpath",
 ]
 
 [[package]]
@@ -2932,6 +2941,7 @@ dependencies = [
  "gpui-component",
  "gpuitop_components",
  "gpuitop_core",
+ "hotpath",
  "procfs",
  "users",
 ]
@@ -2944,6 +2954,7 @@ dependencies = [
  "gpui-component",
  "gpuitop_components",
  "gpuitop_core",
+ "hotpath",
  "open",
 ]
 

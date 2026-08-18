@@ -18,6 +18,7 @@ struct MemSlice {
 	color: Hsla,
 }
 
+#[hotpath::measure]
 pub fn memory_tab(
 	mem: &MemoryInfo,
 	samples: Vec<Sample>,

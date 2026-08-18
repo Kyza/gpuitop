@@ -10,6 +10,7 @@ fn limit_to_str(limit: &LimitValue) -> String {
 	}
 }
 
+#[hotpath::measure]
 pub fn collect(pid: i32) -> Option<ProcessProperties> {
 	let proc = procfs::process::Process::new(pid).ok()?;
 	let stat = proc.stat().ok()?;

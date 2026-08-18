@@ -4,6 +4,7 @@ use gpui::*;
 use gpui_component::{skeleton::Skeleton, table::DataTable};
 
 impl ProcessesTab {
+	#[hotpath::measure]
 	pub fn render_list_view(
 		&self,
 		_window: &mut Window,
