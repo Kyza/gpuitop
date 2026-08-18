@@ -17,6 +17,7 @@ pub fn collect_snapshot(state: &mut CollectorState) -> SystemSnapshot {
 	let disks = collector::collect_disks(state, now);
 	let networks = collector::collect_networks(state, now);
 	let processes = processes::collect_processes(state, total_mem, now);
+	let gpu_devices = gpuitop_gpu::collect_gpu_info(&state.gpu_backends);
 
 	state.prev_time = Some(now);
 
@@ -28,6 +29,7 @@ pub fn collect_snapshot(state: &mut CollectorState) -> SystemSnapshot {
 		networks,
 		timestamp: now,
 		gpu_backends: state.gpu_backends.clone(),
+		gpu_devices,
 	}
 }
 

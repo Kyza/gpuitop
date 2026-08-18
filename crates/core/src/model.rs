@@ -26,12 +26,15 @@ pub struct ProcessSnapshot {
 pub struct CpuCore {
 	pub index: usize,
 	pub usage_percent: f32,
+	pub frequency_mhz: u32,
 }
 
 #[derive(Debug, Clone)]
 pub struct CpuInfo {
 	pub cores: Vec<CpuCore>,
 	pub overall_percent: f32,
+	pub model_name: String,
+	pub temperature: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +67,8 @@ impl SystemSnapshot {
 			cpu: CpuInfo {
 				cores: Vec::new(),
 				overall_percent: 0.0,
+				model_name: String::new(),
+				temperature: 0.0,
 			},
 			memory: MemoryInfo {
 				total: 0,
@@ -76,6 +81,7 @@ impl SystemSnapshot {
 			networks: Vec::new(),
 			timestamp: std::time::Instant::now(),
 			gpu_backends: Vec::new(),
+			gpu_devices: Vec::new(),
 		}
 	}
 }
@@ -89,6 +95,7 @@ pub struct SystemSnapshot {
 	pub networks: Vec<NetInfo>,
 	pub timestamp: std::time::Instant,
 	pub gpu_backends: Vec<GpuBackend>,
+	pub gpu_devices: Vec<GpuDevice>,
 }
 
 #[derive(
@@ -284,6 +291,20 @@ pub enum GpuBackend {
 	None,
 	Nvidia,
 	Amd,
+}
+
+#[derive(Debug, Clone)]
+pub struct GpuDevice {
+	pub backend: GpuBackend,
+	pub name: String,
+	pub utilization: u32,
+	pub temperature: u32,
+	pub vram_total: u64,
+	pub vram_used: u64,
+	pub power_watts: f32,
+	pub core_clock_mhz: u32,
+	pub memory_clock_mhz: u32,
+	pub fan_percent: u32,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

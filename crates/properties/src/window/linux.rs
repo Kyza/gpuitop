@@ -5,6 +5,7 @@ use gpui_component::{
 	description_list::DescriptionItem,
 	input::{Input, InputState},
 	scroll::ScrollableElement,
+	tab::{Tab, TabBar},
 	ActiveTheme,
 };
 use gpuitop_components::assets::lucide::LucideIcon;
@@ -37,38 +38,24 @@ pub fn body(
 			.into_any_element();
 	};
 
-	let tab_bar = TAB_LABELS
+	let tabs = TAB_LABELS
 		.iter()
-		.enumerate()
-		.map(|(i, label)| {
-			let is_active = i == tab_index;
-			let border = if is_active {
-				cx.theme().primary
-			} else {
-				Hsla::default()
-			};
-			let fg = if is_active {
-				cx.theme().foreground
-			} else {
-				cx.theme().muted_foreground
-			};
-			div()
-				.id(ElementId::Name(format!("prop-tab-{i}").into()))
-				.px(px(12.0))
-				.py(px(6.0))
-				.cursor(CursorStyle::PointingHand)
-				.text_size(px(13.0))
-				.text_color(fg)
-				.border_b_2()
-				.border_color(border)
-				.child(*label)
-				.on_click(cx.listener(move |this, _, _, cx| {
-					this.tab_index = i;
-					cx.notify();
-				}))
-				.into_any_element()
-		})
+		.map(|label| Tab::new().label(*label))
 		.collect::<Vec<_>>();
+
+	let tab_bar = TabBar::new("prop-tabs")
+		.underline()
+		.selected_index(tab_index)
+		.on_click({
+			let entity = cx.entity();
+			move |index, _window, cx| {
+				entity.update(cx, |this, cx| {
+					this.tab_index = *index;
+					cx.notify();
+				});
+			}
+		})
+		.children(tabs);
 
 	let content: gpui::AnyElement = match tab_index {
 		0 => overview(props, cx).into_any_element(),
@@ -86,16 +73,7 @@ pub fn body(
 		.flex_1()
 		.flex()
 		.flex_col()
-		.child(
-			div()
-				.flex()
-				.flex_row()
-				.gap(px(2.0))
-				.border_b_1()
-				.border_color(cx.theme().border)
-				.px(px(12.0))
-				.children(tab_bar),
-		)
+		.child(div().w_full().px(px(12.0)).child(tab_bar))
 		.when(tab_index == 3 && !props.environ.is_empty(), |el| {
 			el.child(search_bars(name_state, content_state, cx))
 		})

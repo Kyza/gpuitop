@@ -518,6 +518,8 @@ mod tests {
 			cpu: CpuInfo {
 				cores: vec![],
 				overall_percent: 0.0,
+				model_name: String::new(),
+				temperature: 0.0,
 			},
 			memory: MemoryInfo {
 				total: 0,
@@ -530,6 +532,7 @@ mod tests {
 			networks: vec![],
 			timestamp: std::time::Instant::now(),
 			gpu_backends: vec![],
+			gpu_devices: vec![],
 		};
 		Rc::new(RefCell::new(Rc::new(snap)))
 	}

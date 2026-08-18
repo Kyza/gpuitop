@@ -3,6 +3,7 @@ use gpui::App as GpuiApp;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::menu::DropdownMenu;
+use gpui_component::tab::{Tab, TabBar};
 use gpui_component::{ActiveTheme, Sizable, TitleBar};
 use gpuitop_components::assets::lucide::LucideIcon;
 use gpuitop_core::config::Config;
@@ -15,10 +16,12 @@ use gpuitop_processes::ProcessesTab;
 use gpuitop_settings::SettingsTab;
 use gpuitop_snapshot::{collect_snapshot, CollectorState};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
+
+const PAUSE_KEY: &str = "escape";
 
 pub struct App {
 	active_tab: usize,
@@ -27,6 +30,8 @@ pub struct App {
 	gpu_backends: Vec<GpuBackend>,
 	init_system: InitSystem,
 	rx: mpsc::Receiver<SystemSnapshot>,
+	paused: Arc<AtomicBool>,
+	focus_handle: FocusHandle,
 	processes_tab: Entity<ProcessesTab>,
 	performance_tab: Entity<PerformanceTab>,
 	settings_tab: Entity<SettingsTab>,
@@ -37,6 +42,7 @@ impl App {
 	pub fn new(
 		active_tab: usize,
 		initial_settings_page: Option<usize>,
+		performance_tab: Option<usize>,
 		search: Option<String>,
 		override_view: Option<bool>,
 		config: Config,
@@ -45,6 +51,7 @@ impl App {
 	) -> Self {
 		let gpu_backends = detect_gpu();
 		let init_system = detect_init();
+		let focus_handle = cx.focus_handle();
 
 		let initial_snapshot = Rc::new(SystemSnapshot::empty());
 
@@ -58,8 +65,13 @@ impl App {
 				cx,
 			)
 		});
-		let performance_tab =
-			cx.new(|cx| PerformanceTab::new(initial_snapshot.clone(), cx));
+		let performance_tab = cx.new(|cx| {
+			PerformanceTab::new(
+				initial_snapshot.clone(),
+				performance_tab.unwrap_or(0),
+				cx,
+			)
+		});
 		let refresh_ms =
 			Arc::new(AtomicU64::new(config.general.interface.refresh_ms));
 		let settings_tab = cx.new(|cx| {
@@ -75,14 +87,18 @@ impl App {
 		let (tx, rx) = mpsc::channel::<SystemSnapshot>();
 		let thread_refresh = refresh_ms.clone();
 		let thread_backends = gpu_backends.clone();
+		let paused = Arc::new(AtomicBool::new(false));
+		let thread_paused = paused.clone();
 
 		std::thread::spawn(move || {
 			let mut state =
 				CollectorState::new(thread_backends, desktop_cache);
 			loop {
-				let snapshot = collect_snapshot(&mut state);
-				if tx.send(snapshot).is_err() {
-					break;
+				if !thread_paused.load(Ordering::SeqCst) {
+					let snapshot = collect_snapshot(&mut state);
+					if tx.send(snapshot).is_err() {
+						break;
+					}
 				}
 				let ms = thread_refresh.load(Ordering::SeqCst);
 				std::thread::sleep(Duration::from_millis(ms));
@@ -135,11 +151,19 @@ impl App {
 			gpu_backends,
 			init_system,
 			rx,
+			paused,
+			focus_handle,
 			processes_tab,
 			performance_tab,
 			settings_tab,
 			_theme_observer: theme_observer,
 		}
+	}
+}
+
+impl Focusable for App {
+	fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
+		self.focus_handle.clone()
 	}
 }
 
@@ -152,7 +176,15 @@ impl Render for App {
 	) -> impl IntoElement {
 		cx.on_next_frame(window, |_, _, cx| cx.notify());
 
+		if window.focused(cx).is_none() {
+			let handle = self.focus_handle.clone();
+			window.focus(&handle, cx);
+		}
+
 		while let Ok(new_snap) = self.rx.try_recv() {
+			if self.paused.load(Ordering::SeqCst) {
+				continue;
+			}
 			self.gpu_backends = new_snap.gpu_backends.clone();
 			let snap = Rc::new(new_snap);
 			self.processes_tab
@@ -163,6 +195,7 @@ impl Render for App {
 		}
 
 		let active = self.active_tab;
+		let paused = self.paused.load(Ordering::SeqCst);
 		let labels = ["Processes", "Performance", "Settings"];
 		let icons = [
 			LucideIcon::List,
@@ -178,47 +211,14 @@ impl Render for App {
 			.enumerate()
 			.map(|(i, label)| {
 				let is_active = i == active;
-				let border = if is_active {
-					cx.theme().primary
-				} else {
-					transparent_white()
-				};
 				let fg = if is_active {
 					cx.theme().foreground
 				} else {
 					cx.theme().muted_foreground
 				};
-				div()
-					.id(ElementId::Name(format!("tab-{i}").into()))
-					.px(px(14.0))
-					.h(px(32.0))
-					.flex()
-					.flex_row()
-					.items_center()
-					.gap(px(6.0))
-					.cursor(CursorStyle::PointingHand)
-					.text_size(px(13.0))
-					.text_color(fg)
-					.border_b_2()
-					.border_color(border)
-					.child(
-						icons[i]
-							.icon()
-							.w(px(14.0))
-							.h(px(14.0))
-							.text_color(fg),
-					)
-					.child(*label)
-					.on_click(cx.listener(move |this, _, _, cx| {
-						this.active_tab = i;
-						if i == 0 {
-							this.processes_tab.update(cx, |tab, cx| {
-								tab.focus_input(cx);
-							});
-						}
-						cx.notify();
-					}))
-					.into_any_element()
+				Tab::new()
+					.label(*label)
+					.prefix(icons[i].icon().size(px(14.0)).text_color(fg))
 			})
 			.collect::<Vec<_>>();
 
@@ -233,7 +233,18 @@ impl Render for App {
 			.size_full()
 			.flex()
 			.flex_col()
+			.relative()
 			.bg(cx.theme().background)
+			.track_focus(&self.focus_handle)
+			.on_key_down(cx.listener(
+				|this, e: &KeyDownEvent, _window, cx| {
+					if e.keystroke.key == PAUSE_KEY {
+						let p = !this.paused.load(Ordering::SeqCst);
+						this.paused.store(p, Ordering::SeqCst);
+						cx.notify();
+					}
+				},
+			))
 			.child(
 				TitleBar::new().child(
 					div()
@@ -242,11 +253,29 @@ impl Render for App {
 						.items_center()
 						.w_full()
 						.child(
-							div()
-								.flex()
-								.flex_row()
-								.items_center()
-								.gap(px(2.0))
+							TabBar::new("main-tabs")
+								.underline()
+								.selected_index(active)
+								.on_click({
+									let entity = cx.entity();
+									move |index, window, cx| {
+										entity.update(cx, |this, cx| {
+											this.active_tab = *index;
+											let handle =
+												this.focus_handle.clone();
+											window.focus(&handle, cx);
+											if *index == 0 {
+												this.processes_tab.update(
+													cx,
+													|tab, cx| {
+														tab.focus_input(cx);
+													},
+												);
+											}
+											cx.notify();
+										});
+									}
+								})
 								.children(tabs),
 						)
 						.child(div().flex_grow(1.0))
@@ -333,6 +362,26 @@ impl Render for App {
 					.border_color(cx.theme().border)
 					.child(format!("GPU: {gpu_label}"))
 					.child(format!("Init: {init}"))
+					.child(div().flex_grow(1.0))
+					.child(if paused { "Esc: Resume" } else { "Esc: Pause" })
+			})
+			.when(paused, |el| {
+				el.child(
+					div()
+						.absolute()
+						.top_0()
+						.left_0()
+						.right_0()
+						.bottom_0()
+						.flex()
+						.items_center()
+						.justify_center()
+						.child(
+							LucideIcon::Pause.icon().size_32().text_color(
+								cx.theme().foreground.opacity(0.3),
+							),
+						),
+				)
 			})
 	}
 }

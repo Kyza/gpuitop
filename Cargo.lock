@@ -2901,6 +2901,7 @@ dependencies = [
  "bytesize",
  "gpui",
  "gpui-component",
+ "gpuitop_components",
  "gpuitop_core",
 ]
 

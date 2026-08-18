@@ -13,7 +13,24 @@ pub fn collect_cpu(state: &mut CollectorState) -> CpuInfo {
 		return CpuInfo {
 			cores: Vec::new(),
 			overall_percent: 0.0,
+			model_name: String::new(),
+			temperature: 0.0,
 		};
+	};
+	let cpuinfo = procfs::CpuInfo::current().ok();
+	let model_name = cpuinfo
+		.as_ref()
+		.and_then(|ci| ci.model_name(0))
+		.unwrap_or_default()
+		.to_string();
+	let temperature = read_cpu_temp();
+	let core_freq_mhz = |cidx: usize| -> u32 {
+		cpuinfo
+			.as_ref()
+			.and_then(|ci| ci.get_field(cidx, "cpu MHz"))
+			.and_then(|s| s.parse::<f32>().ok())
+			.map(|f| f as u32)
+			.unwrap_or(0)
 	};
 
 	let mut cur_totals: Vec<(u64, u64)> = Vec::new();
@@ -33,6 +50,7 @@ pub fn collect_cpu(state: &mut CollectorState) -> CpuInfo {
 	}
 
 	let mut cores = Vec::new();
+	let mut overall = 0.0f32;
 
 	if let Some(ref prev) = state.prev_cpu {
 		for (i, (total, idle)) in cur_totals.iter().enumerate() {
@@ -49,10 +67,7 @@ pub fn collect_cpu(state: &mut CollectorState) -> CpuInfo {
 			};
 
 			if i == 0 {
-				cores.push(CpuCore {
-					index: 0,
-					usage_percent: usage,
-				});
+				overall = usage;
 			} else {
 				let cidx = i - 1;
 				let history = state.core_history.entry(cidx).or_default();
@@ -63,6 +78,7 @@ pub fn collect_cpu(state: &mut CollectorState) -> CpuInfo {
 				cores.push(CpuCore {
 					index: cidx,
 					usage_percent: usage,
+					frequency_mhz: core_freq_mhz(cidx),
 				});
 			}
 		}
@@ -74,18 +90,62 @@ pub fn collect_cpu(state: &mut CollectorState) -> CpuInfo {
 			cores.push(CpuCore {
 				index: i,
 				usage_percent: 0.0,
+				frequency_mhz: core_freq_mhz(i),
 			});
 		}
 	}
-
-	let overall = cores.first().map(|c| c.usage_percent).unwrap_or(0.0);
 
 	state.prev_cpu = Some(PrevCpu { totals: cur_totals });
 
 	CpuInfo {
 		cores,
 		overall_percent: overall,
+		model_name,
+		temperature,
 	}
+}
+
+fn read_cpu_temp() -> f32 {
+	let Ok(entries) = std::fs::read_dir("/sys/class/thermal") else {
+		return 0.0;
+	};
+	let mut candidates: Vec<(String, f32)> = Vec::new();
+	for entry in entries.flatten() {
+		let name = entry.file_name();
+		let name = name.to_string_lossy();
+		if !name.starts_with("thermal_zone") {
+			continue;
+		}
+		let base = entry.path();
+		let zone_type = std::fs::read_to_string(base.join("type"))
+			.unwrap_or_default()
+			.trim()
+			.to_lowercase();
+		let Ok(temp_str) = std::fs::read_to_string(base.join("temp")) else {
+			continue;
+		};
+		let Ok(milli) = temp_str.trim().parse::<f32>() else {
+			continue;
+		};
+		let temp = milli / 1000.0;
+		if temp > 0.0 {
+			candidates.push((zone_type, temp));
+		}
+	}
+	let is_cpu = |t: &str| {
+		t.contains("cpu")
+			|| t.contains("pkg")
+			|| t.contains("coretemp")
+			|| t.contains("k10temp")
+			|| t.contains("x86")
+			|| t.contains("soc")
+	};
+	candidates
+		.iter()
+		.find(|(t, _)| is_cpu(t))
+		.or_else(|| candidates.first())
+		.map(|(_, t)| *t)
+		.unwrap_or(0.0)
 }
 
 #[hotpath::measure]

@@ -18,9 +18,25 @@ impl Cli {
 	pub fn active_tab(&self) -> usize {
 		match self.page.as_deref() {
 			Some(s) if s == "processes" || s.starts_with("processes.") => 0,
-			Some("performance") => 1,
+			Some(s)
+				if s == "performance" || s.starts_with("performance.") =>
+			{
+				1
+			}
 			Some(s) if s == "settings" || s.starts_with("settings.") => 2,
 			_ => 0,
+		}
+	}
+
+	pub fn performance_tab_index(&self) -> Option<usize> {
+		match self.page.as_deref() {
+			Some("performance") => None,
+			Some("performance.cpu") => Some(0),
+			Some("performance.memory") => Some(1),
+			Some("performance.gpu") => Some(2),
+			Some("performance.disks") => Some(3),
+			Some("performance.network") => Some(4),
+			_ => None,
 		}
 	}
 
@@ -63,6 +79,11 @@ OPTIONS:
                                 processes.tree  Processes tab, tree view
                                 processes.list  Processes tab, list view
                                 performance     Performance tab
+                                performance.cpu      Performance > CPU
+                                performance.memory   Performance > Memory
+                                performance.gpu      Performance > GPU
+                                performance.disks    Performance > Disks
+                                performance.network  Performance > Network
                                 settings        Settings tab
                                 settings.general   Settings > General
                                 settings.processes Settings > Processes
@@ -274,6 +295,53 @@ mod tests {
 			..Default::default()
 		};
 		assert_eq!(c.override_view(), Some(true));
+	}
+
+	#[test]
+	fn test_performance_tab_index_root() {
+		let c = Cli {
+			page: Some("performance".into()),
+			..Default::default()
+		};
+		assert_eq!(c.active_tab(), 1);
+		assert_eq!(c.performance_tab_index(), None);
+	}
+
+	#[test]
+	fn test_performance_tab_index_cpu() {
+		let c = Cli {
+			page: Some("performance.cpu".into()),
+			..Default::default()
+		};
+		assert_eq!(c.active_tab(), 1);
+		assert_eq!(c.performance_tab_index(), Some(0));
+	}
+
+	#[test]
+	fn test_performance_tab_index_gpu() {
+		let c = Cli {
+			page: Some("performance.gpu".into()),
+			..Default::default()
+		};
+		assert_eq!(c.performance_tab_index(), Some(2));
+	}
+
+	#[test]
+	fn test_performance_tab_index_network() {
+		let c = Cli {
+			page: Some("performance.network".into()),
+			..Default::default()
+		};
+		assert_eq!(c.performance_tab_index(), Some(4));
+	}
+
+	#[test]
+	fn test_performance_tab_index_none_for_other() {
+		let c = Cli {
+			page: Some("processes".into()),
+			..Default::default()
+		};
+		assert_eq!(c.performance_tab_index(), None);
 	}
 
 	#[test]

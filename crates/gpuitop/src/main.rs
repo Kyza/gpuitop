@@ -30,6 +30,7 @@ fn main() {
 
 	let active_tab = cli.active_tab();
 	let settings_page = cli.settings_page_index();
+	let performance_tab = cli.performance_tab_index();
 	let search = cli.search.clone();
 	let override_view = cli.override_view();
 
@@ -143,6 +144,7 @@ fn main() {
 						app_view::App::new(
 							active_tab,
 							settings_page,
+							performance_tab,
 							search,
 							override_view,
 							config.clone(),
