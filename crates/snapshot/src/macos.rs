@@ -1,12 +1,11 @@
-use super::{CollectorState, Platform, SnapshotInterface};
 use gpuitop_core::model::SystemSnapshot;
 
-impl_interface! {
-	fn collect_snapshot(_state: &mut CollectorState) -> SystemSnapshot {
-		SystemSnapshot::empty()
-	}
+use super::CollectorState;
 
-	fn pid_alive(_pid: i32) -> bool {
-		false
-	}
+pub fn collect_snapshot(_state: &mut CollectorState) -> SystemSnapshot {
+	SystemSnapshot::empty()
+}
+
+pub fn pid_alive(_pid: i32) -> bool {
+	false
 }

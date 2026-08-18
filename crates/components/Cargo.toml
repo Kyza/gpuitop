@@ -1,0 +1,12 @@
+[package]
+name = "gpuitop_components"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+gpuitop_core = { path = "../core" }
+gpui = { workspace = true }
+gpui-component = { workspace = true }
+rust-embed = { workspace = true }
+anyhow = { workspace = true }

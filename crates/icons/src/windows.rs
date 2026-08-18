@@ -1,13 +1,11 @@
 use std::path::PathBuf;
 
-use super::{DesktopEntryCache, IconsInterface, Platform};
+use super::{DesktopEntry, DesktopEntryCache};
 
-impl_interface! {
-	fn load_cache() -> DesktopEntryCache {
-		DesktopEntryCache::default()
-	}
+pub fn load_cache() -> DesktopEntryCache {
+	DesktopEntryCache::default()
+}
 
-	fn resolve_icon_path(_icon_name: &str) -> Option<PathBuf> {
-		None
-	}
+pub fn resolve_icon_path(_icon_name: &str) -> Option<PathBuf> {
+	None
 }

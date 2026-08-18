@@ -1,19 +1,18 @@
 [package]
-name = "gpuitop-snapshot"
+name = "gpuitop_snapshot"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
 [dependencies]
-gpuitop-core = { path = "../core" }
-gpuitop-gpu = { path = "../gpu" }
-gpuitop-icons = { path = "../icons" }
+gpuitop_core = { path = "../core" }
+gpuitop_gpu = { path = "../gpu" }
+gpuitop_icons = { path = "../icons" }
 procfs = { workspace = true }
 users = { workspace = true }
 libc = { workspace = true }
 num_cpus = { workspace = true }
 hotpath = { workspace = true }
-oswap = { workspace = true }
 
 [features]
 default = []

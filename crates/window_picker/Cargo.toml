@@ -1,0 +1,10 @@
+[package]
+name = "gpuitop_window_picker"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+wayland-client = { workspace = true }
+wayland-protocols-wlr = { workspace = true }
+x11rb = { workspace = true }

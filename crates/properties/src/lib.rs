@@ -1,15 +1,3 @@
-use oswap::{define_interface, define_platforms};
-
-define_interface! { Platform, PropertiesInterface, impl_interface,
-	pub fn collect(pid: i32) -> Option<ProcessProperties>;
-}
-
-define_platforms![
-	{ file: "linux", cfg: target_os = "linux" },
-	{ file: "macos", cfg: target_os = "macos" },
-	{ file: "windows", cfg: target_os = "windows" },
-];
-
 #[derive(Debug, Clone)]
 pub struct ProcessProperties {
 	pub pid: i32,
@@ -80,3 +68,21 @@ pub struct SmapsSummary {
 	pub referenced: Option<u64>,
 	pub anonymous: Option<u64>,
 }
+
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
+
+pub mod window;
+
+#[cfg(target_os = "linux")]
+pub use linux::collect;
+#[cfg(target_os = "macos")]
+pub use macos::collect;
+#[cfg(target_os = "windows")]
+pub use windows::collect;
+
+pub use window::PropertiesWindow;

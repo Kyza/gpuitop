@@ -29,16 +29,21 @@ impl ProcessTableDelegate {
 			.unwrap_or(false)
 	}
 
+	fn ensure_pid_index(&self, procs: &[ProcessSnapshot]) {
+		if self.pid_index.borrow().is_some() {
+			return;
+		}
+		let mut map = HashMap::with_capacity(procs.len());
+		for (i, p) in procs.iter().enumerate() {
+			map.insert(p.pid, i);
+		}
+		*self.pid_index.borrow_mut() = Some(map);
+	}
+
 	#[hotpath::measure]
 	pub fn is_descendant_of(&self, child_pid: i32, ancestor: i32) -> bool {
 		let procs = &self.snapshot_cell.borrow().processes;
-		if self.pid_index.borrow().is_none() {
-			let mut map = HashMap::with_capacity(procs.len());
-			for (i, p) in procs.iter().enumerate() {
-				map.insert(p.pid, i);
-			}
-			*self.pid_index.borrow_mut() = Some(map);
-		}
+		self.ensure_pid_index(procs);
 		let idx_map = self.pid_index.borrow();
 		let idx_map = idx_map.as_ref().unwrap();
 		if child_pid == ancestor {
@@ -68,13 +73,7 @@ impl ProcessTableDelegate {
 			return cached.clone();
 		}
 		let procs = &self.snapshot_cell.borrow().processes;
-		if self.pid_index.borrow().is_none() {
-			let mut map = HashMap::with_capacity(procs.len());
-			for (i, p) in procs.iter().enumerate() {
-				map.insert(p.pid, i);
-			}
-			*self.pid_index.borrow_mut() = Some(map);
-		}
+		self.ensure_pid_index(procs);
 		let idx_map = self.pid_index.borrow();
 		let idx_map = idx_map.as_ref().unwrap();
 
@@ -115,13 +114,7 @@ impl ProcessTableDelegate {
 
 	pub fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessSnapshot> {
 		let procs = &self.snapshot_cell.borrow().processes;
-		if self.pid_index.borrow().is_none() {
-			let mut map = HashMap::with_capacity(procs.len());
-			for (i, p) in procs.iter().enumerate() {
-				map.insert(p.pid, i);
-			}
-			*self.pid_index.borrow_mut() = Some(map);
-		}
+		self.ensure_pid_index(procs);
 		let idx_map = self.pid_index.borrow();
 		let idx_map = idx_map.as_ref().unwrap();
 		let mut chain = Vec::new();

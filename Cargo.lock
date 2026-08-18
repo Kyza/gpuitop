@@ -2839,102 +2839,134 @@ dependencies = [
 name = "gpuitop"
 version = "0.1.0"
 dependencies = [
+ "cargo_metadata",
  "gpui",
  "gpui-component",
  "gpui-component-assets",
  "gpui_platform",
- "gpuitop-core",
- "gpuitop-icons",
- "gpuitop-ui",
- "gpuitop-window-picker",
+ "gpuitop_components",
+ "gpuitop_core",
+ "gpuitop_gpu",
+ "gpuitop_icons",
+ "gpuitop_performance",
+ "gpuitop_processes",
+ "gpuitop_properties",
+ "gpuitop_settings",
+ "gpuitop_snapshot",
+ "gpuitop_window_picker",
  "hotpath",
  "lexopt",
 ]
 
 [[package]]
-name = "gpuitop-core"
+name = "gpuitop_components"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gpui",
+ "gpui-component",
+ "gpuitop_core",
+ "rust-embed",
+]
+
+[[package]]
+name = "gpuitop_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "hotpath",
  "nucleo",
- "oswap",
  "ron",
  "ron2",
  "serde",
 ]
 
 [[package]]
-name = "gpuitop-gpu"
+name = "gpuitop_gpu"
 version = "0.1.0"
 dependencies = [
- "gpuitop-core",
+ "gpuitop_core",
  "hotpath",
  "nvml-wrapper",
- "oswap",
 ]
 
 [[package]]
-name = "gpuitop-icons"
+name = "gpuitop_icons"
 version = "0.1.0"
-dependencies = [
- "oswap",
-]
 
 [[package]]
-name = "gpuitop-properties"
+name = "gpuitop_performance"
 version = "0.1.0"
 dependencies = [
- "gpuitop-core",
- "oswap",
- "procfs",
- "users",
-]
-
-[[package]]
-name = "gpuitop-snapshot"
-version = "0.1.0"
-dependencies = [
- "gpuitop-core",
- "gpuitop-gpu",
- "gpuitop-icons",
- "hotpath",
- "libc",
- "num_cpus",
- "oswap",
- "procfs",
- "users",
-]
-
-[[package]]
-name = "gpuitop-ui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
  "bytesize",
- "cargo_metadata",
  "gpui",
  "gpui-component",
- "gpuitop-core",
- "gpuitop-gpu",
- "gpuitop-icons",
- "gpuitop-properties",
- "gpuitop-snapshot",
- "gpuitop-window-picker",
+ "gpuitop_core",
+]
+
+[[package]]
+name = "gpuitop_processes"
+version = "0.1.0"
+dependencies = [
+ "bytesize",
+ "gpui",
+ "gpui-component",
+ "gpuitop_components",
+ "gpuitop_core",
+ "gpuitop_icons",
+ "gpuitop_properties",
+ "gpuitop_snapshot",
+ "gpuitop_window_picker",
  "hotpath",
  "libc",
  "nucleo",
- "open",
- "rust-embed",
 ]
 
 [[package]]
-name = "gpuitop-window-picker"
+name = "gpuitop_properties"
 version = "0.1.0"
 dependencies = [
- "oswap",
+ "bytesize",
+ "gpui",
+ "gpui-component",
+ "gpuitop_components",
+ "gpuitop_core",
+ "procfs",
+ "users",
+]
+
+[[package]]
+name = "gpuitop_settings"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "gpui-component",
+ "gpuitop_components",
+ "gpuitop_core",
+ "open",
+]
+
+[[package]]
+name = "gpuitop_snapshot"
+version = "0.1.0"
+dependencies = [
+ "gpuitop_core",
+ "gpuitop_gpu",
+ "gpuitop_icons",
+ "hotpath",
+ "libc",
+ "num_cpus",
+ "procfs",
+ "users",
+]
+
+[[package]]
+name = "gpuitop_window_picker"
+version = "0.1.0"
+dependencies = [
  "wayland-client",
  "wayland-protocols-wlr",
+ "x11rb",
 ]
 
 [[package]]
@@ -4951,16 +4983,6 @@ checksum = "9aa2b01e1d916879f73a53d01d1d6cee68adbb31d6d9177a8cfce093cced1d50"
 dependencies = [
  "futures-core",
  "pin-project-lite",
-]
-
-[[package]]
-name = "oswap"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "783f268bf93535994b833ef83d688348f31ea4d3faaab4f1d62737cd84ff92ff"
-dependencies = [
- "quote",
- "syn 3.0.3",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@
 
 ```bash
 cargo check                               # Fast compile check
-cargo test                                # Run all 249 tests
+cargo test                                # Run all 250 tests
 cargo test -- <test_name>                 # Single test
 cargo build --release                     # Release (LTO thin, strip=symbols)
 ```
@@ -17,7 +17,7 @@ Build/check in debug mode unless running `cargo test` — release builds take fo
 ## Features
 
 `hotpath` is declared per-crate and forwarded down the dependency chain. Each
-crate that uses `#[hotpath::measure]` (core, gpu, snapshot, ui) declares:
+crate that uses `#[hotpath::measure]` (core, gpu, snapshot, processes) declares:
 
 ```toml
 default = []
@@ -27,67 +27,76 @@ hotpath-alloc = ["hotpath/hotpath-alloc"]
 hotpath-mcp = ["hotpath/hotpath-mcp"]
 ```
 
-`gpuitop-ui` forwards to its data-crate deps, and the `gpuitop` bin re-exposes
-the flags while forwarding to `gpuitop-core` + `gpuitop-ui` (only direct deps
-can be feature-gated):
+The `gpuitop` bin re-exposes the flags while forwarding to the crates that use
+`#[hotpath::measure]` (only direct deps can be feature-gated):
 
 ```toml
-# gpuitop-ui
-hotpath = ["hotpath/hotpath", "gpuitop-core/hotpath", "gpuitop-gpu/hotpath", "gpuitop-snapshot/hotpath"]
 # gpuitop bin
-hotpath = ["hotpath/hotpath", "gpuitop-core/hotpath", "gpuitop-ui/hotpath"]
+hotpath = [
+	"hotpath/hotpath",
+	"gpuitop_core/hotpath",
+	"gpuitop_gpu/hotpath",
+	"gpuitop_snapshot/hotpath",
+	"gpuitop_processes/hotpath",
+]
 ```
 
 ## Architecture
 
 ```
 crates/                        # virtual workspace (root Cargo.toml has no [package])
-├── gpuitop/                   # binary — thin bootstrap (main.rs, cli.rs)
-├── core/                      # gpuitop-core — ZERO gpui/gpui_component. Pure logic.
+├── gpuitop/                   # binary — bootstrap + app shell (main.rs, cli.rs, app_view.rs)
+├── core/                      # gpuitop_core — ZERO gpui/gpui_component. Pure logic.
 │   ├── model.rs               # ProcessSnapshot, SystemSnapshot, Filter, SortColumn, enums
 │   ├── config.rs              # Config, load/save (RON format)
 │   ├── state.rs               # ViewState, CumulativeResources
 │   ├── fuzzy.rs               # nucleo fuzzy matching
-│   ├── settings.rs            # Settings mutations — no UI types
 │   ├── merge.rs               # ron2 deep_merge
-│   ├── service_manager/       # InitSystem enum + oswap dispatch (detect_init, is_service, …)
+│   ├── service_manager/       # InitSystem enum + cfg dispatch (detect_init, is_service, …)
 │   └── processes/             # ProcessTableDelegate (filtering, sorting, cumulative), tree helpers
-├── gpu/                       # gpuitop-gpu — nvml/ROCm detection via oswap
-├── icons/                     # gpuitop-icons — DesktopEntryCache + icon path resolution via oswap
-├── snapshot/                  # gpuitop-snapshot — CollectorState + collect_snapshot via oswap
-├── properties/                # gpuitop-properties — ProcessProperties collect(pid) via oswap
-├── window-picker/             # gpuitop-window-picker — PickedWindow, GPUITOP_APP_ID via oswap
-└── ui/                        # gpuitop-ui — ALL gpui rendering. Depends on the data crates.
-    ├── themes.rs              # built-in theme load/apply (gpui-component + rust-embed)
-    ├── theme.rs               # Tag colors, icons
-    ├── app/app_view.rs        # App struct, Render impl, background-collector thread
-    ├── processes/             # tab, table_delegate, delegate (newtype), tree, toolbar, …
-    ├── performance/           # PerformanceTab
-    ├── properties_window/     # Process detail popup window
-    └── settings/              # SettingsTab + General/Processes/About pages
+├── gpu/                       # gpuitop_gpu — nvml/ROCm detection via cfg
+├── icons/                     # gpuitop_icons — DesktopEntryCache + icon path resolution via cfg
+├── snapshot/                  # gpuitop_snapshot — CollectorState + collect_snapshot via cfg
+├── window_picker/             # gpuitop_window_picker — PickedWindow, GPUITOP_APP_ID via cfg
+├── components/                # gpuitop_components — shared UI building blocks
+│   ├── selectable_text.rs     # SelectableText — verbatim text that is selectable/copyable
+│   ├── themes.rs              # built-in theme load/apply (gpui-component + rust-embed)
+│   ├── theme.rs               # Tag colors, state/filter icons + colors
+│   ├── theme_menu.rs          # build_theme_menu (shared by titlebar + settings)
+│   └── assets/                # lucide (LucideIcon), layered (LayeredAssets)
+├── properties/                # gpuitop_properties — ProcessProperties collect(pid) + PropertiesWindow UI
+│   └── window/                # Process detail popup window
+├── processes/                 # gpuitop_processes — ProcessesTab + table/tree/toolbar UI
+├── performance/               # gpuitop_performance — PerformanceTab
+└── settings/                  # gpuitop_settings — SettingsTab + General/Processes/About pages
+    └── mutations.rs           # Settings mutations (moved from core/settings.rs)
 ```
 
-Dependency direction is one-way: `ui → {snapshot, properties, window-picker,
-gpu, icons} → core`, plus `bin → {ui, icons, window-picker, core}`.
+Dependency direction is one-way: panels → components → core, with data crates
+(`gpu`, `icons`, `snapshot`, `window_picker`) → core. The `gpuitop` bin depends
+on everything and hosts the `App` shell (`app_view.rs`).
 
 ### Hard rules
 
-1. **Data crates compile without gpui.** `core`, `gpu`, `icons`, `snapshot`, `properties`, and `window-picker` must not import `gpui::*`, `gpui::prelude::*`, or `gpui_component::*`. Only `ui` (and the bin) may depend on gpui.
-2. **No reverse imports.** Data crates never import from `ui`. The bin may import from both.
-3. **Settings mutations in `core/settings.rs`.** `SettingsTab` in `ui/` calls into core methods; UI pages only build `SettingPage`/`SettingField` widgets and wire callbacks.
-4. **`ProcessTableDelegate` struct stays in `core/processes/delegate.rs` (data-pure).** The `TableDelegate` impl and `build_tree` live on a newtype in `ui/processes/delegate.rs` (`pub struct ProcessTableDelegate(pub CoreDelegate)` + `Deref`/`DerefMut`) — the orphan rule forbids impl'ing a foreign trait (gpui_component's `TableDelegate`) for a foreign type.
-5. **Per-feature platform dispatch via `oswap`.** Each platform feature (gpu, icons, service_manager, snapshot, window_picker, properties) calls `define_interface!` (marker struct + trait + re-exported free fns) and `define_platforms!` (cfg-gated `linux.rs`/`macos.rs`/`windows.rs`). Platform files implement the trait with `impl_interface!`. Keep the marker struct crate-private (bare `Platform`) so `impl_interface!` is not `#[macro_export]`ed.
+1. **Data crates compile without gpui.** `core`, `gpu`, `icons`, `snapshot`, and `window_picker` must not import `gpui::*`, `gpui::prelude::*`, or `gpui_component::*`. Only `components`, `processes`, `performance`, `settings`, `properties` (which now hosts the UI window), and the bin may depend on gpui.
+2. **No reverse imports.** Data crates never import from panel/component crates. The bin may import from all.
+3. **Settings mutations in `settings/mutations.rs`.** `SettingsTab` calls into those methods; UI pages only build `SettingPage`/`SettingField` widgets and wire callbacks.
+4. **`ProcessTableDelegate` struct stays in `core/processes/delegate.rs` (data-pure).** The `TableDelegate` impl and `build_tree` live on a newtype in `processes/delegate.rs` (`pub struct ProcessTableDelegate(pub CoreDelegate)` + `Deref`/`DerefMut`) — the orphan rule forbids impl'ing a foreign trait (gpui_component's `TableDelegate`) for a foreign type.
+5. **Per-feature platform dispatch via `#[cfg(target_os)]` modules.** Each platform feature (gpu, icons, service_manager, snapshot, window_picker, properties) declares `#[cfg(target_os)] mod linux/macos/windows;` and `pub use`s the free functions from the matching platform. Platform files (`linux.rs`, `macos.rs`, `windows.rs`) define plain `pub fn`s; shared types live in the crate's `lib.rs`.
 6. **`CollectorState` + `collect_snapshot` pattern.** `CollectorState` (mutable tick state) lives in `snapshot/src/lib.rs`. The interface exposes `collect_snapshot(&mut CollectorState) -> SystemSnapshot` (a free function, not an inherent `SystemSnapshot::new`). The background thread creates state once and calls `collect_snapshot(&mut state)` each tick.
 
 ## Gotchas
 
 - **`set_items()` wipes expand state.** Creates fresh `TreeItem` objects per call. Preserve expand state externally via `TreeData::preserve_expand_from` — walks old cached items by PID-based ID and re-applies `.expanded(true)` on new items before `set_items()`.
 - **Collector runs on background thread.** `collect_snapshot(&mut CollectorState)` looped via `mpsc::channel`. Snapshots drained in `App::render` each frame. UI never reads /proc directly.
-- **`oswap` interfaces functions only.** Shared types (`CollectorState`, `DesktopEntryCache`) live in the crate's `lib.rs`; constructors/associated fns become interface fns (`collect_snapshot`, `load_cache`). `define_platforms!` emits single-file modules (`linux.rs`), so directory-based platform code (snapshot, window-picker) uses a `linux.rs` entry that declares `#[path = "linux/*.rs"]` submodules.
+- **`#[cfg(target_os)]` interfaces functions only.** Shared types (`CollectorState`, `DesktopEntryCache`) live in the crate's `lib.rs`; constructors/associated fns become free fns (`collect_snapshot`, `load_cache`) re-exported from the platform modules. Directory-based platform code (snapshot, window_picker) uses a `linux.rs` entry that declares `#[path = "linux/*.rs"]` submodules.
 - **Cumulative cache** (`cum_cache`) computed once per snapshot, reused by filtering and rendering. Invalidate by setting to `None` on new snapshot.
 - **`[profile.dev.package."*"]` opt-level = 2** — dependencies optimized even in debug. Startup fast, incremental `cargo check` still fast.
 - **`procfs` crate** — all Linux /proc reads go through `procfs` (0.16). No raw `fs::read_to_string("/proc/...")`. `Meminfo::current()`, `KernelStats::current()`, `diskstats()`, `net::dev_status()`, `Process::stat()`, `Process::status()`, `Process::io()`, `Process::cmdline()`, `Process::cgroups()`, `Process::environ()`, `Process::exe()`, `Process::cwd()`, `Process::fd()`, `Process::limits()`.
 - **`target_os = "macos"`** — not `"darwin"`. Rust uses `macos` for the target triple. Module files are named `macos.rs` accordingly.
+- **Selectable text = `SelectableText`** (`components/selectable_text.rs`). gpui has no built-in selectable text, and gpui-component's `TextView` only parses Markdown/HTML (so it mangles values containing markup). `SelectableText` HTML-escapes the input and wraps `TextView::html`, so text renders verbatim while selection/copy stays exact. Each instance needs a stable unique id.
+- **`settings/about.rs` uses `env!("CARGO_PKG_*")`** — those resolve to the *settings* crate's metadata, so `settings/Cargo.toml` must mirror the bin's `description`/`authors`/`version` or the About page shows empty strings.
+- **About-page dependency list comes from the bin.** `gpuitop/build.rs` emits `built.rs` (`DIRECT_DEPS: &[gpuitop_core::about::DepInfo]`) from the *bin's* direct deps, `main.rs` `include!`s it, and `app_view` passes it into `SettingsTab::new`. Keep `build.rs` in the bin — the `DepInfo` type lives in `core/src/about.rs` so both sides share it.
 
 ## Committing
 

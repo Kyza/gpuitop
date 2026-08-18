@@ -1,5 +1,13 @@
 use ron2::Value;
 
+// `deep_merge` runs on `ron2::Value`, not `ron::Value`: ron::Value is lossy
+// for this round-trip and would corrupt the merged config. It collapses named
+// struct fields into an unordered `Map` (re-serializing `(a: 1)` as
+// `{ "a": 1 }`), turns tuples into sequences (`(1100, 700)` -> `[1100, 700]`),
+// and drops bare unit-variant names (`Auto` -> `()`). Any of those breaks
+// re-deserializing the result into `Config`. `ron2::Value` keeps the
+// `Struct` / `Tuple` / `Named` variants, so the config's shape survives (see
+// `test_ron2_preserves_shape_but_ron_is_lossy`).
 pub fn deep_merge(base: &mut Value, overlay: &Value) {
 	if let Value::Struct(b_vals) = &mut *base {
 		if let Value::Struct(o_vals) = overlay {
@@ -68,5 +76,34 @@ mod tests {
 		let overlay = parse("5");
 		deep_merge(&mut base, &overlay);
 		assert_eq!(base, parse("5"));
+	}
+
+	#[test]
+	fn test_ron2_preserves_shape_but_ron_is_lossy() {
+		let input = "(window_size: (1100, 700), vram_polling: Auto)";
+
+		// ron2 keeps the tuple and the bare unit-variant name, so the merged
+		// config still deserializes.
+		let r2: ron2::Value = input.parse().unwrap();
+		match &r2 {
+			ron2::Value::Struct(fields) => {
+				assert!(fields.iter().any(|(k, v)| {
+					k == "window_size" && matches!(v, ron2::Value::Tuple(_))
+				}));
+				assert!(fields.iter().any(|(k, v)| {
+					k == "vram_polling"
+						&& matches!(v, ron2::Value::Named { name, .. }
+							if name == "Auto")
+				}));
+			}
+			other => panic!("expected Struct, got {other:?}"),
+		}
+
+		// ron::Value collapses the tuple into a seq and the variant `Auto`
+		// into `()`, so it cannot round-trip config RON.
+		let r: ron::Value = input.parse().unwrap();
+		let out = ron::to_string(&r).unwrap();
+		assert_ne!(out, input);
+		assert!(out.contains("()"), "bare variant name lost: {out}");
 	}
 }

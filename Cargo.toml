@@ -7,8 +7,11 @@ members = [
 	"crates/icons",
 	"crates/snapshot",
 	"crates/properties",
-	"crates/window-picker",
-	"crates/ui",
+	"crates/window_picker",
+	"crates/components",
+	"crates/processes",
+	"crates/performance",
+	"crates/settings",
 ]
 
 [workspace.dependencies]
@@ -38,7 +41,7 @@ open = "5"
 rust-embed = "8"
 wayland-client = "0.31"
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
-oswap = "1"
+x11rb = "0.13"
 cargo_metadata = "0.19"
 
 [profile.release]

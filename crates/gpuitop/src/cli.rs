@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
 #[derive(Debug, Default)]
 pub struct Cli {
@@ -18,13 +19,7 @@ impl Cli {
 		match self.page.as_deref() {
 			Some(s) if s == "processes" || s.starts_with("processes.") => 0,
 			Some("performance") => 1,
-			Some(s)
-				if s == "settings"
-					|| s.starts_with("settings.")
-					|| s.starts_with("settings.") =>
-			{
-				2
-			}
+			Some(s) if s == "settings" || s.starts_with("settings.") => 2,
 			_ => 0,
 		}
 	}
@@ -54,7 +49,7 @@ fn print_version() {
 
 fn print_help() {
 	print!(
-		r"gpuitop {} — Linux process manager
+		r"gpuitop {VERSION} — {DESCRIPTION}
 
 USAGE:
     gpuitop [OPTIONS]
@@ -82,8 +77,7 @@ EXAMPLES:
     gpuitop --page settings.about
     gpuitop --config ~/gaming.ron --override '(general: (interface: (refresh_ms: 500)))'
     gpuitop -p processes.tree -s firefox
-",
-		VERSION
+"
 	);
 }
 

@@ -1,11 +1,14 @@
 [package]
-name = "gpuitop-properties"
+name = "gpuitop_properties"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
 [dependencies]
-gpuitop-core = { path = "../core" }
+gpuitop_core = { path = "../core" }
+gpuitop_components = { path = "../components" }
 procfs = { workspace = true }
 users = { workspace = true }
-oswap = { workspace = true }
+gpui = { workspace = true }
+gpui-component = { workspace = true }
+bytesize = { workspace = true }

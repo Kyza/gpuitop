@@ -1,9 +1,4 @@
-use std::collections::HashSet;
 use std::fmt;
-
-use oswap::{define_interface, define_platforms};
-
-use crate::model::ProcessSnapshot;
 
 #[derive(
 	Debug,
@@ -38,15 +33,22 @@ impl fmt::Display for InitSystem {
 	}
 }
 
-define_interface! { Platform, ServiceManagerInterface, impl_interface,
-	pub fn detect_init() -> InitSystem;
-	pub fn pids_of_runsv(processes: &[ProcessSnapshot]) -> HashSet<i32>;
-	pub(crate) fn pids_of_supervise_daemon(processes: &[ProcessSnapshot]) -> HashSet<i32>;
-	pub fn is_service(proc: &ProcessSnapshot, init: InitSystem, runsv_pids: &HashSet<i32>, supervise_pids: &HashSet<i32>) -> bool;
-}
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
-define_platforms![
-	{ file: "linux", cfg: target_os = "linux" },
-	{ file: "macos", cfg: target_os = "macos" },
-	{ file: "windows", cfg: target_os = "windows" },
-];
+#[cfg(target_os = "linux")]
+pub(crate) use linux::pids_of_supervise_daemon;
+#[cfg(target_os = "linux")]
+pub use linux::{detect_init, is_service, pids_of_runsv};
+#[cfg(target_os = "macos")]
+pub(crate) use macos::pids_of_supervise_daemon;
+#[cfg(target_os = "macos")]
+pub use macos::{detect_init, is_service, pids_of_runsv};
+#[cfg(target_os = "windows")]
+pub(crate) use windows::pids_of_supervise_daemon;
+#[cfg(target_os = "windows")]
+pub use windows::{detect_init, is_service, pids_of_runsv};

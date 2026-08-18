@@ -2,9 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use gpuitop_core::model::{GpuBackend, SystemSnapshot};
+use gpuitop_core::model::GpuBackend;
 use gpuitop_icons::DesktopEntryCache;
-use oswap::{define_interface, define_platforms};
 
 pub struct PrevCpu {
 	pub totals: Vec<(u64, u64)>,
@@ -70,13 +69,16 @@ impl CollectorState {
 	}
 }
 
-define_interface! { Platform, SnapshotInterface, impl_interface,
-	pub fn collect_snapshot(state: &mut CollectorState) -> SystemSnapshot;
-	pub fn pid_alive(pid: i32) -> bool;
-}
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
-define_platforms![
-	{ file: "linux", cfg: target_os = "linux" },
-	{ file: "macos", cfg: target_os = "macos" },
-	{ file: "windows", cfg: target_os = "windows" },
-];
+#[cfg(target_os = "linux")]
+pub use linux::{collect_snapshot, pid_alive};
+#[cfg(target_os = "macos")]
+pub use macos::{collect_snapshot, pid_alive};
+#[cfg(target_os = "windows")]
+pub use windows::{collect_snapshot, pid_alive};

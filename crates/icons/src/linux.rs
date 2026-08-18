@@ -1,9 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{
-	DesktopEntry, DesktopEntryCache, IconsInterface, Platform,
-};
+use super::{DesktopEntry, DesktopEntryCache};
 
 fn desktop_dirs() -> Vec<PathBuf> {
 	let mut dirs = vec![PathBuf::from("/usr/share/applications")];
@@ -89,54 +87,52 @@ fn scan_dir(cache: &mut DesktopEntryCache, dir: &Path) {
 	}
 }
 
-impl_interface! {
-	fn load_cache() -> DesktopEntryCache {
-		let mut cache = DesktopEntryCache::default();
-		for dir in desktop_dirs() {
-			scan_dir(&mut cache, &dir);
+pub fn load_cache() -> DesktopEntryCache {
+	let mut cache = DesktopEntryCache::default();
+	for dir in desktop_dirs() {
+		scan_dir(&mut cache, &dir);
+	}
+	cache
+}
+
+pub fn resolve_icon_path(icon_name: &str) -> Option<PathBuf> {
+	if icon_name.is_empty() {
+		return None;
+	}
+	if icon_name.starts_with('/') {
+		let p = PathBuf::from(icon_name);
+		if p.exists() {
+			return Some(p);
 		}
-		cache
+		return None;
 	}
 
-	fn resolve_icon_path(icon_name: &str) -> Option<PathBuf> {
-		if icon_name.is_empty() {
-			return None;
-		}
-		if icon_name.starts_with('/') {
-			let p = PathBuf::from(icon_name);
-			if p.exists() {
-				return Some(p);
-			}
-			return None;
-		}
+	let sizes = [256, 128, 96, 64, 48, 32, 24, 22, 16];
+	let exts = ["png", "svg", "xpm"];
 
-		let sizes = [256, 128, 96, 64, 48, 32, 24, 22, 16];
-		let exts = ["png", "svg", "xpm"];
-
-		for size in &sizes {
-			for ext in &exts {
-				let p = PathBuf::from(format!(
-					"/usr/share/icons/hicolor/{}x{}/apps/{}.{}",
-					size, size, icon_name, ext
-				));
-				if p.exists() {
-					return Some(p);
-				}
-			}
-		}
-
+	for size in &sizes {
 		for ext in &exts {
 			let p = PathBuf::from(format!(
-				"/usr/share/pixmaps/{}.{}",
-				icon_name, ext
+				"/usr/share/icons/hicolor/{}x{}/apps/{}.{}",
+				size, size, icon_name, ext
 			));
 			if p.exists() {
 				return Some(p);
 			}
 		}
-
-		None
 	}
+
+	for ext in &exts {
+		let p = PathBuf::from(format!(
+			"/usr/share/pixmaps/{}.{}",
+			icon_name, ext
+		));
+		if p.exists() {
+			return Some(p);
+		}
+	}
+
+	None
 }
 
 #[cfg(test)]

@@ -1,7 +1,4 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
-
-use oswap::{define_interface, define_platforms};
 
 #[derive(Debug, Clone)]
 pub struct DesktopEntry {
@@ -35,13 +32,16 @@ impl DesktopEntryCache {
 	}
 }
 
-define_interface! { Platform, IconsInterface, impl_interface,
-	pub fn load_cache() -> DesktopEntryCache;
-	pub fn resolve_icon_path(icon_name: &str) -> Option<PathBuf>;
-}
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
-define_platforms![
-	{ file: "linux", cfg: target_os = "linux" },
-	{ file: "macos", cfg: target_os = "macos" },
-	{ file: "windows", cfg: target_os = "windows" },
-];
+#[cfg(target_os = "linux")]
+pub use linux::{load_cache, resolve_icon_path};
+#[cfg(target_os = "macos")]
+pub use macos::{load_cache, resolve_icon_path};
+#[cfg(target_os = "windows")]
+pub use windows::{load_cache, resolve_icon_path};

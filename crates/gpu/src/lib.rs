@@ -1,15 +1,13 @@
-use std::collections::HashMap;
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
-use gpuitop_core::model::GpuBackend;
-use oswap::{define_interface, define_platforms};
-
-define_interface! { Platform, GpuInterface, impl_interface,
-	pub fn build_vram_map(gpu_backend: GpuBackend) -> HashMap<i32, u64>;
-	pub fn detect_gpu() -> GpuBackend;
-}
-
-define_platforms![
-	{ file: "linux", cfg: target_os = "linux" },
-	{ file: "macos", cfg: target_os = "macos" },
-	{ file: "windows", cfg: target_os = "windows" },
-];
+#[cfg(target_os = "linux")]
+pub use linux::{build_vram_map, detect_gpu};
+#[cfg(target_os = "macos")]
+pub use macos::{build_vram_map, detect_gpu};
+#[cfg(target_os = "windows")]
+pub use windows::{build_vram_map, detect_gpu};

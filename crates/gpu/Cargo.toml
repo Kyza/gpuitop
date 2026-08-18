@@ -1,14 +1,13 @@
 [package]
-name = "gpuitop-gpu"
+name = "gpuitop_gpu"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
 [dependencies]
-gpuitop-core = { path = "../core" }
+gpuitop_core = { path = "../core" }
 nvml-wrapper = { workspace = true }
 hotpath = { workspace = true }
-oswap = { workspace = true }
 
 [features]
 default = []

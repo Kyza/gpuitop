@@ -1,7 +1,4 @@
-use super::{
-	LimitEntry, Platform, ProcessProperties, PropertiesInterface,
-	SmapsSummary,
-};
+use super::{LimitEntry, ProcessProperties, SmapsSummary};
 use procfs::process::LimitValue;
 
 use gpuitop_core::model;
@@ -13,8 +10,7 @@ fn limit_to_str(limit: &LimitValue) -> String {
 	}
 }
 
-impl_interface! {
-	fn collect(pid: i32) -> Option<ProcessProperties> {
+pub fn collect(pid: i32) -> Option<ProcessProperties> {
 	let proc = procfs::process::Process::new(pid).ok()?;
 	let stat = proc.stat().ok()?;
 	let status = proc.status().ok()?;
@@ -247,5 +243,4 @@ impl_interface! {
 		nonvoluntary_ctxt_switches: status.nonvoluntary_ctxt_switches,
 		smaps,
 	})
-	}
 }

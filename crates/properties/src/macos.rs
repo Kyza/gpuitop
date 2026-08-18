@@ -1,7 +1,5 @@
-use super::{Platform, ProcessProperties, PropertiesInterface};
+use super::ProcessProperties;
 
-impl_interface! {
-	fn collect(_pid: i32) -> Option<ProcessProperties> {
-		None
-	}
+pub fn collect(_pid: i32) -> Option<ProcessProperties> {
+	None
 }

@@ -1,8 +1,5 @@
 [package]
-name = "gpuitop-icons"
+name = "gpuitop_icons"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-
-[dependencies]
-oswap = { workspace = true }

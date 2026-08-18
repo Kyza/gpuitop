@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 use gpuitop_core::model::GpuBackend;
 
-use super::{GpuInterface, Platform};
-
 #[hotpath::measure]
 fn build_nvidia_vram_map() -> HashMap<i32, u64> {
 	let nvml = match nvml_wrapper::Nvml::init() {
@@ -67,28 +65,26 @@ fn build_rocm_vram_map() -> HashMap<i32, u64> {
 	map
 }
 
-impl_interface! {
-	#[hotpath::measure]
-	fn build_vram_map(gpu_backend: GpuBackend) -> HashMap<i32, u64> {
-		match gpu_backend {
-			GpuBackend::Nvidia => build_nvidia_vram_map(),
-			GpuBackend::Amd => build_rocm_vram_map(),
-			GpuBackend::None => HashMap::new(),
-		}
+#[hotpath::measure]
+pub fn build_vram_map(gpu_backend: GpuBackend) -> HashMap<i32, u64> {
+	match gpu_backend {
+		GpuBackend::Nvidia => build_nvidia_vram_map(),
+		GpuBackend::Amd => build_rocm_vram_map(),
+		GpuBackend::None => HashMap::new(),
 	}
+}
 
-	fn detect_gpu() -> GpuBackend {
-		if nvml_wrapper::Nvml::init().is_ok() {
-			return GpuBackend::Nvidia;
-		}
-		if std::process::Command::new("rocm-smi")
-			.arg("--showpids")
-			.output()
-			.map(|o| o.status.success())
-			.unwrap_or(false)
-		{
-			return GpuBackend::Amd;
-		}
-		GpuBackend::None
+pub fn detect_gpu() -> GpuBackend {
+	if nvml_wrapper::Nvml::init().is_ok() {
+		return GpuBackend::Nvidia;
 	}
+	if std::process::Command::new("rocm-smi")
+		.arg("--showpids")
+		.output()
+		.map(|o| o.status.success())
+		.unwrap_or(false)
+	{
+		return GpuBackend::Amd;
+	}
+	GpuBackend::None
 }

@@ -1,6 +1,6 @@
 # gpuitop
 
-A GPU-accelerated task manager for Linux. It uses [GPUI](https://www.gpui.rs/), the Rust UI framework that powers [Zed](https://zed.dev). Features: fuzzy search, window picking, per-process GPU VRAM tracking (NVIDIA + AMD), and a right-click signal menu.
+A GPU-accelerated task manager with per-process VRAM tracking. It uses [GPUI](https://www.gpui.rs/), the Rust UI framework that powers [Zed](https://zed.dev). Features: fuzzy search, window picking, per-process GPU VRAM tracking (NVIDIA + AMD), and a right-click signal menu.
 
 ## Screenshots
 
@@ -54,7 +54,7 @@ Switch themes from the palette icon in the titlebar (hierarchical dropdown with 
 
 Fuzzy search the process table, or click **Pick** and switch to any window to jump to its process. Toggle filters to narrow the list: GUI apps, kernel threads, Services, Electron apps, your user, process state (R/S/D/Z/T/I/X), parents, and processes that use VRAM. Filters combine with AND/OR logic.
 
-The window picker uses the `zwlr_foreign_toplevel_manager_v1` Wayland protocol. It does not work under X11. The Pick button will time out in an X11 session.
+The window picker uses the `zwlr_foreign_toplevel_manager_v1` Wayland protocol under Wayland and `_NET_ACTIVE_WINDOW` under X11.
 
 ### Tree View
 
@@ -180,7 +180,7 @@ Multiple `--override` flags stack and later values win for overlapping keys.
 |-----------|--------|
 | **Platform** | |
 | Linux Wayland | Supported, tested |
-| Linux X11 | Partial (no window picker), untested |
+| Linux X11 | Supported, untested |
 | Windows | Unsupported |
 | macOS | Unsupported |
 | **GPU Backend** | |
@@ -194,7 +194,7 @@ Multiple `--override` flags stack and later values win for overlapping keys.
 | SysV init | Supported, untested |
 | Unknown | Heuristic fallback (ppid 1) |
 
-The codebase is a Cargo workspace (`crates/`) where each OS-specific concern (process collector, GPU queries, window picker, icons, properties) is its own crate using [`oswap`](https://crates.io/crates/oswap) for platform dispatch.
+The codebase is a Cargo workspace (`crates/`) where each OS-specific concern (process collector, GPU queries, window picker, icons, properties) is its own crate using `#[cfg(target_os)]`-gated modules for platform dispatch.
 
 ### Profiling
 
