@@ -54,6 +54,11 @@ pub struct ProcessesTab {
 	pub tree_state: Entity<TreeState>,
 	pub tree_double_click: Rc<RefCell<Option<(Instant, String)>>>,
 	pub cached_tree_data: Option<((std::time::Instant, u64), Rc<TreeData>)>,
+	// Username list for the toolbar filter, cached per snapshot timestamp.
+	// Rebuilding it scans every process and clones every username every
+	// frame (hotpath: 77.7 KB/frame); a snapshot's usernames don't change
+	// between ticks, so recompute only when the snapshot changes.
+	pub cached_usernames: Option<(Instant, Vec<String>)>,
 }
 
 impl ProcessesTab {
@@ -117,6 +122,7 @@ impl ProcessesTab {
 			tree_state: cx.new(|cx| TreeState::new(cx)),
 			tree_double_click: Rc::new(RefCell::new(None)),
 			cached_tree_data: None,
+			cached_usernames: None,
 		}
 	}
 

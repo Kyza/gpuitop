@@ -42,14 +42,23 @@ impl ProcessesTab {
 				(f.clone(), label)
 			})
 			.collect();
-		let mut username_set = std::collections::BTreeSet::new();
-		for p in &snapshot.processes {
-			if !p.user.is_empty() {
-				username_set.insert(p.user.clone());
+		let unique_usernames: Vec<String> = match self.cached_usernames.take()
+		{
+			Some((ts, names)) if ts == snapshot.timestamp => names,
+			_ => {
+				// Recompute usernames only when the snapshot changed.
+				let mut username_set = std::collections::BTreeSet::new();
+				for p in &snapshot.processes {
+					if !p.user.is_empty() {
+						username_set.insert(p.user.clone());
+					}
+				}
+				let names: Vec<String> = username_set.into_iter().collect();
+				self.cached_usernames =
+					Some((snapshot.timestamp, names.clone()));
+				names
 			}
-		}
-		let unique_usernames: Vec<String> =
-			username_set.into_iter().collect();
+		};
 		drop(snapshot);
 
 		let mode = self.view_state.borrow().filter_mode;

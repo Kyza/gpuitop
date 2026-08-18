@@ -127,8 +127,9 @@ pub fn build_process_menu(proc: &ProcessSnapshot) -> Vec<PopupMenuItem> {
 			let _ = cx.open_window(opts, {
 				let icon = icon_name.clone();
 				move |window, cx| {
-					let view = cx
-						.new(|_cx| PropertiesWindow::new(pid, icon.clone()));
+					let view = cx.new(|cx| {
+						PropertiesWindow::new(pid, icon.clone(), cx)
+					});
 					cx.new(|cx| gpui_component::Root::new(view, window, cx))
 				}
 			});

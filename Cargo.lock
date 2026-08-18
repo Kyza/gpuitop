@@ -2839,6 +2839,7 @@ dependencies = [
 name = "gpuitop"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "cargo_metadata",
  "gpui",
  "gpui-component",
@@ -2936,6 +2937,7 @@ dependencies = [
 name = "gpuitop_properties"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "bytesize",
  "gpui",
  "gpui-component",

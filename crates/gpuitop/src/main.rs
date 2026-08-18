@@ -99,7 +99,7 @@ fn main() {
 							cx,
 						);
 						let view =
-							cx.new(|_cx| PropertiesWindow::new(pid, None));
+							cx.new(|cx| PropertiesWindow::new(pid, None, cx));
 						cx.new(|cx| Root::new(view, window, cx))
 					},
 				)

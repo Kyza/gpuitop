@@ -23,17 +23,37 @@ pub struct PropertiesWindow {
 }
 
 impl PropertiesWindow {
-	pub fn new(pid: i32, _icon_name: Option<String>) -> Self {
+	pub fn new(
+		pid: i32,
+		_icon_name: Option<String>,
+		cx: &mut Context<Self>,
+	) -> Self {
 		let (tx, rx) = mpsc::channel();
+		// Wake channel: the collector thread signals the UI after each
+		// snapshot so we re-render on new data instead of every frame.
+		let (wake_tx, wake_rx) = async_channel::unbounded::<()>();
 		std::thread::spawn(move || loop {
 			let result = crate::collect(pid);
 			let is_none = result.is_none();
 			let _ = tx.send(result);
+			let _ = wake_tx.try_send(());
 			if is_none {
 				break;
 			}
 			std::thread::sleep(Duration::from_millis(1500));
 		});
+
+		// Foreground task: on each wake, request a re-render. The entity
+		// isn't registered until new() returns, so we use a weak handle and
+		// detach the task (dropping a Task would cancel it).
+		cx.spawn(async move |this: gpui::WeakEntity<Self>, cx| {
+			while wake_rx.recv().await.is_ok() {
+				if this.update(cx, |_, cx| cx.notify()).is_err() {
+					break;
+				}
+			}
+		})
+		.detach();
 
 		Self {
 			pid,
@@ -54,8 +74,8 @@ impl Render for PropertiesWindow {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		cx.on_next_frame(window, |_, _, cx| cx.notify());
-
+		// No perpetual on_next_frame/notify loop: rendering is driven by
+		// cx.notify() from the wake task (new properties) and user interaction.
 		while let Ok(result) = self.rx.try_recv() {
 			match result {
 				Some(props) => {

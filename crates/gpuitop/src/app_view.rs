@@ -88,10 +88,14 @@ impl App {
 		});
 
 		let (tx, rx) = mpsc::channel::<SystemSnapshot>();
+		// Wake channel: the collector thread signals the UI after each
+		// snapshot so we re-render on new data instead of every frame.
+		let (wake_tx, wake_rx) = async_channel::unbounded::<()>();
 		let thread_refresh = refresh_ms.clone();
 		let thread_backends = gpu_backends.clone();
 		let paused = Arc::new(AtomicBool::new(false));
 		let thread_paused = paused.clone();
+		let thread_wake = wake_tx.clone();
 
 		std::thread::spawn(move || {
 			let mut state =
@@ -102,11 +106,25 @@ impl App {
 					if tx.send(snapshot).is_err() {
 						break;
 					}
+					// Wake the UI thread so render() drains the channel.
+					let _ = thread_wake.try_send(());
 				}
 				let ms = thread_refresh.load(Ordering::SeqCst);
 				std::thread::sleep(Duration::from_millis(ms));
 			}
 		});
+
+		// Foreground task: on each wake, request a re-render. The App entity
+		// isn't registered until new() returns, so we use a weak handle and
+		// detach the task (dropping a Task would cancel it).
+		cx.spawn(async move |this: gpui::WeakEntity<App>, cx| {
+			while wake_rx.recv().await.is_ok() {
+				if this.update(cx, |_, cx| cx.notify()).is_err() {
+					break;
+				}
+			}
+		})
+		.detach();
 
 		let theme_observer = cx
 			.observe_global::<gpui_component::theme::ThemeRegistry>(
@@ -179,8 +197,8 @@ impl Render for App {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		cx.on_next_frame(window, |_, _, cx| cx.notify());
-
+		// No perpetual on_next_frame/notify loop: rendering is driven by
+		// cx.notify() from the wake task (new snapshot) and user interaction.
 		if window.focused(cx).is_none() {
 			let handle = self.focus_handle.clone();
 			window.focus(&handle, cx);

@@ -12,6 +12,7 @@ users = { workspace = true }
 gpui = { workspace = true }
 gpui-component = { workspace = true }
 bytesize = { workspace = true }
+async-channel = { workspace = true }
 hotpath = { workspace = true }
 
 [features]

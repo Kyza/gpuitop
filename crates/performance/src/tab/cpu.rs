@@ -46,16 +46,13 @@ pub fn cpu_tab(
 		.flex()
 		.flex_col()
 		.gap(px(14.0))
-		.when(!cpu.model_name.is_empty(), |el| {
-			el.child(
-				div()
-					.text_size(px(12.0))
-					.text_color(cx.theme().muted_foreground)
-					.child(cpu.model_name.clone()),
-			)
-		})
-		.child(
-			card("CPU Usage", cx).child(
+		.child({
+			let title = if cpu.model_name.is_empty() {
+				"CPU Usage".to_string()
+			} else {
+				cpu.model_name.clone()
+			};
+			card(&title, cx).child(
 				div()
 					.flex()
 					.flex_row()
@@ -129,8 +126,8 @@ pub fn cpu_tab(
 								],
 							)),
 					),
-			),
-		)
+			)
+		})
 		.child(
 			card("Per-Core Usage", cx).child(
 				div()

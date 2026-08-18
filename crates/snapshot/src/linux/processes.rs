@@ -17,7 +17,7 @@ pub fn collect_processes(
 	};
 	let num_cpus = num_cpus::get() as f32;
 
-	let mut cur_proc_data: HashMap<i32, (u64, u64, u64, u64)> =
+	let mut cur_proc_data: HashMap<i32, (u64, u64, u64, u64, bool, u64)> =
 		HashMap::new();
 	let mut pid_to_proc: HashMap<i32, ProcessSnapshot> = HashMap::new();
 	let mut children_map: HashMap<i32, Vec<i32>> = HashMap::new();
@@ -32,24 +32,50 @@ pub fn collect_processes(
 
 		let Ok(stat) = p.stat() else { continue };
 		let Ok(status) = p.status() else { continue };
-		let cmdline = p.cmdline().unwrap_or_default();
-		let cgroup = p
-			.cgroups()
-			.map(|cg| {
-				cg.0.iter()
-					.map(|c| {
-						format!(
-							"{}:{}:{}",
-							c.hierarchy,
-							c.controllers.join(","),
-							c.pathname
-						)
-					})
-					.collect::<Vec<_>>()
-					.join("\n")
-			})
-			.unwrap_or_default();
-		let environ = p.environ().unwrap_or_default();
+
+		// Kernel threads have no cmdline/cgroup/environ (always empty) and
+		// can never be GUI. Skip those /proc reads entirely for them.
+		let is_kthread = stat.ppid == 2 || stat.comm.starts_with('[');
+
+		let cmdline = if is_kthread {
+			Vec::new()
+		} else {
+			p.cmdline().unwrap_or_default()
+		};
+		let cgroup = if is_kthread {
+			String::new()
+		} else {
+			p.cgroups()
+				.map(|cg| {
+					cg.0.iter()
+						.map(|c| {
+							format!(
+								"{}:{}:{}",
+								c.hierarchy,
+								c.controllers.join(","),
+								c.pathname
+							)
+						})
+						.collect::<Vec<_>>()
+						.join("\n")
+				})
+				.unwrap_or_default()
+		};
+
+		// GUI status is fixed at exec time (DISPLAY/WAYLAND_DISPLAY presence
+		// in the environment), so cache it across ticks. Reuse the previous
+		// value only when starttime matches — that guards against PID reuse.
+		let is_gui = if is_kthread {
+			false
+		} else {
+			match state.prev_proc.get(&pid) {
+				Some(prev) if prev.starttime == stat.starttime => prev.is_gui,
+				_ => p
+					.environ()
+					.map(|e| has_display_var_from_env(&e))
+					.unwrap_or(false),
+			}
+		};
 
 		let uid = status.ruid;
 		let vmrss = status.vmrss.unwrap_or(0) * 1024;
@@ -79,7 +105,6 @@ pub fn collect_processes(
 			.map(|de| de.icon_name.clone());
 
 		let is_kthread = stat.ppid == 2 || stat.comm.starts_with('[');
-		let is_gui = !is_kthread && has_display_var_from_env(&environ);
 		let is_owned = uid == state.current_uid;
 		let user = state
 			.user_cache
@@ -105,6 +130,8 @@ pub fn collect_processes(
 				stat.stime,
 				stat.cutime as u64,
 				stat.cstime as u64,
+				is_gui,
+				stat.starttime,
 			),
 		);
 
@@ -166,7 +193,7 @@ pub fn collect_processes(
 
 	state.prev_proc = cur_proc_data
 		.into_iter()
-		.map(|(pid, (u, s, cu, cs))| {
+		.map(|(pid, (u, s, cu, cs, is_gui, starttime))| {
 			(
 				pid,
 				PrevProc {
@@ -174,6 +201,8 @@ pub fn collect_processes(
 					stime: s,
 					cutime: cu,
 					cstime: cs,
+					is_gui,
+					starttime,
 				},
 			)
 		})
