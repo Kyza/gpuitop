@@ -13,6 +13,7 @@ pub struct ProcessGraph {
 }
 
 impl ProcessGraph {
+	#[hotpath::measure]
 	pub fn new(snapshot: Rc<SystemSnapshot>) -> Self {
 		let procs = &snapshot.processes;
 		let mut pid_to_idx = HashMap::with_capacity(procs.len());
@@ -77,11 +78,13 @@ impl ProcessGraph {
 			.map_or(&[], |c| c.as_slice())
 	}
 
+	#[hotpath::measure]
 	pub fn is_descendant_of(&self, child_pid: i32, ancestor: i32) -> bool {
 		child_pid != ancestor
 			&& self.ancestors_of(child_pid).contains(&ancestor)
 	}
 
+	#[hotpath::measure]
 	pub fn descendants_of(&self, pid: i32) -> Vec<i32> {
 		let mut out = Vec::new();
 		let mut stack = vec![pid];
@@ -123,6 +126,7 @@ impl ProcessGraph {
 		out
 	}
 
+	#[hotpath::measure]
 	pub fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessSnapshot> {
 		let Some(&target_idx) = self.pid_to_idx.get(&target_pid) else {
 			return Vec::new();
@@ -138,6 +142,7 @@ impl ProcessGraph {
 		chain
 	}
 
+	#[hotpath::measure]
 	pub fn with_ancestors(&self, matched: &HashSet<i32>) -> HashSet<i32> {
 		let mut display = matched.clone();
 		for &mpid in matched {
@@ -146,6 +151,7 @@ impl ProcessGraph {
 		display
 	}
 
+	#[hotpath::measure]
 	pub fn ancestors_to_expand(
 		&self,
 		matched: &HashSet<i32>,
@@ -159,6 +165,7 @@ impl ProcessGraph {
 
 	/// Descendant counts restricted to a display set: how many of each pid's
 	/// descendants are actually shown. Drives the tree's `(+shown/total)` badge.
+	#[hotpath::measure]
 	pub fn display_subtree_counts(
 		&self,
 		display: &HashSet<i32>,

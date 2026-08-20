@@ -204,6 +204,7 @@ impl ProcessEngine {
 	/// The tree's matched set: `match_set` restricted to the pins' full
 	/// descendant scopes (the tree always shows all descendants, ignoring
 	/// `pid_filter_mode`).
+	#[hotpath::measure]
 	pub fn tree_match_set(&self) -> Rc<HashSet<i32>> {
 		let matched = self.match_set();
 		let pid_filters = self.pid_filters();

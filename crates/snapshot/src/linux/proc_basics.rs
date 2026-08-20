@@ -16,6 +16,7 @@ pub struct ProcBasics {
 }
 
 impl ProcBasics {
+	#[hotpath::measure]
 	pub fn read(p: &Process) -> Result<ProcBasics, ReadError> {
 		let stat = p.stat().map_err(map_err)?;
 		let status = p.status().map_err(map_err)?;

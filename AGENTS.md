@@ -23,7 +23,8 @@ cargo test 2>&1 | rg "Building|Compiling|Running|test result:"
 ## Features
 
 `hotpath` is declared per-crate and forwarded down the dependency chain. Each
-crate that uses `#[hotpath::measure]` (core, gpu, snapshot, processes) declares:
+crate that uses `#[hotpath::measure]` (core, gpu, snapshot, processes,
+components, icons, performance, settings, properties) declares:
 
 ```toml
 default = []
@@ -44,6 +45,11 @@ hotpath = [
 	"gpuitop_gpu/hotpath",
 	"gpuitop_snapshot/hotpath",
 	"gpuitop_processes/hotpath",
+	"gpuitop_performance/hotpath",
+	"gpuitop_settings/hotpath",
+	"gpuitop_properties/hotpath",
+	"gpuitop_components/hotpath",
+	"gpuitop_icons/hotpath",
 ]
 ```
 

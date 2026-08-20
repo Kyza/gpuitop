@@ -41,6 +41,8 @@ hotpath = [
 	"gpuitop_performance/hotpath",
 	"gpuitop_settings/hotpath",
 	"gpuitop_properties/hotpath",
+	"gpuitop_components/hotpath",
+	"gpuitop_icons/hotpath",
 ]
 hotpath-cpu = [
 	"hotpath/hotpath-cpu",
@@ -51,6 +53,8 @@ hotpath-cpu = [
 	"gpuitop_performance/hotpath-cpu",
 	"gpuitop_settings/hotpath-cpu",
 	"gpuitop_properties/hotpath-cpu",
+	"gpuitop_components/hotpath-cpu",
+	"gpuitop_icons/hotpath-cpu",
 ]
 hotpath-alloc = [
 	"hotpath/hotpath-alloc",
@@ -61,6 +65,8 @@ hotpath-alloc = [
 	"gpuitop_performance/hotpath-alloc",
 	"gpuitop_settings/hotpath-alloc",
 	"gpuitop_properties/hotpath-alloc",
+	"gpuitop_components/hotpath-alloc",
+	"gpuitop_icons/hotpath-alloc",
 ]
 hotpath-mcp = [
 	"hotpath/hotpath-mcp",
@@ -71,4 +77,6 @@ hotpath-mcp = [
 	"gpuitop_performance/hotpath-mcp",
 	"gpuitop_settings/hotpath-mcp",
 	"gpuitop_properties/hotpath-mcp",
+	"gpuitop_components/hotpath-mcp",
+	"gpuitop_icons/hotpath-mcp",
 ]

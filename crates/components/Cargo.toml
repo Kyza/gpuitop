@@ -10,3 +10,11 @@ gpui = { workspace = true }
 gpui-component = { workspace = true }
 rust-embed = { workspace = true }
 anyhow = { workspace = true }
+hotpath = { workspace = true }
+
+[features]
+default = []
+hotpath = ["hotpath/hotpath"]
+hotpath-cpu = ["hotpath/hotpath-cpu"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]
+hotpath-mcp = ["hotpath/hotpath-mcp"]

@@ -71,6 +71,7 @@ pub enum TagType {
 	Electron,
 }
 
+#[hotpath::measure]
 pub fn tag_icons(
 	proc: &ProcessSnapshot,
 	init_system: InitSystem,

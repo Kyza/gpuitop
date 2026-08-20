@@ -20,8 +20,10 @@ impl CollectorState {
 		};
 		let num_cpus = gpuitop_core::cpu::cpu_count() as f32;
 
-		let mut cur_proc_data: HashMap<i32, (u64, u64, u64, u64, bool, u64)> =
-			HashMap::new();
+		let mut cur_proc_data: HashMap<
+			i32,
+			(u64, u64, u64, u64, bool, Option<String>, u64),
+		> = HashMap::new();
 		let mut pid_to_proc: HashMap<i32, ProcessSnapshot> = HashMap::new();
 		let mut children_map: HashMap<i32, Vec<i32>> = HashMap::new();
 
@@ -94,10 +96,22 @@ impl CollectorState {
 
 			let display_name = basics.name();
 
-			let icon_name = self
-				.desktop_cache
-				.lookup(&display_command, &display_name)
-				.map(|de| de.icon_name.clone());
+			// Icon name is fixed at exec time (desktop entry for the command),
+			// so cache it across ticks like GUI status, guarded by starttime
+			// against PID reuse. Kernel threads have no command to match.
+			let icon_name = if is_kthread {
+				None
+			} else {
+				match self.prev_proc.get(&pid) {
+					Some(prev) if prev.starttime == stat.starttime => {
+						prev.icon_name.clone()
+					}
+					_ => self
+						.desktop_cache
+						.lookup(&display_command, &display_name)
+						.map(|de| de.icon_name.clone()),
+				}
+			};
 
 			let is_owned = uid == self.current_uid;
 			let user = self
@@ -125,6 +139,7 @@ impl CollectorState {
 					stat.cutime as u64,
 					stat.cstime as u64,
 					is_gui,
+					icon_name.clone(),
 					stat.starttime,
 				),
 			);
@@ -185,10 +200,11 @@ impl CollectorState {
 		}
 
 		detect_electron_processes(&mut pid_to_proc);
+		propagate_icons(&mut pid_to_proc);
 
 		self.prev_proc = cur_proc_data
 			.into_iter()
-			.map(|(pid, (u, s, cu, cs, is_gui, starttime))| {
+			.map(|(pid, (u, s, cu, cs, is_gui, icon_name, starttime))| {
 				(
 					pid,
 					PrevProc {
@@ -197,6 +213,7 @@ impl CollectorState {
 						cutime: cu,
 						cstime: cs,
 						is_gui,
+						icon_name,
 						starttime,
 					},
 				)
@@ -275,6 +292,42 @@ fn detect_electron_processes(
 				let app_name =
 					extract_electron_app_name(&proc.command, &proc.name);
 				proc.electron_app_name = Some(app_name);
+			}
+		}
+	}
+}
+
+// Propagate icons down the process tree: a process without its own icon
+// inherits the nearest ancestor's; a child that does have one overrides for
+// its own subtree.
+fn propagate_icons(pid_to_proc: &mut HashMap<i32, ProcessSnapshot>) {
+	let mut children_map: HashMap<i32, Vec<i32>> = HashMap::new();
+	for (pid, proc) in pid_to_proc.iter() {
+		children_map.entry(proc.ppid).or_default().push(*pid);
+	}
+	let mut roots: Vec<i32> = pid_to_proc
+		.keys()
+		.filter(|pid| {
+			let ppid = pid_to_proc.get(pid).map(|p| p.ppid).unwrap_or(0);
+			ppid == 0 || !pid_to_proc.contains_key(&ppid)
+		})
+		.copied()
+		.collect();
+	roots.sort_unstable();
+
+	let mut stack: Vec<(i32, Option<String>)> =
+		roots.into_iter().map(|pid| (pid, None)).collect();
+	while let Some((pid, inherited)) = stack.pop() {
+		let own = pid_to_proc.get(&pid).and_then(|p| p.icon_name.clone());
+		let effective = own.or(inherited);
+		if let Some(proc) = pid_to_proc.get_mut(&pid) {
+			if proc.icon_name.is_none() {
+				proc.icon_name = effective.clone();
+			}
+		}
+		if let Some(kids) = children_map.get(&pid) {
+			for &kid in kids {
+				stack.push((kid, effective.clone()));
 			}
 		}
 	}
@@ -607,6 +660,69 @@ mod tests {
 			icon_name: None,
 			has_children: false,
 		}
+	}
+
+	#[test]
+	fn test_propagate_icons_inherits_parent_icon() {
+		let root = ProcessSnapshot {
+			icon_name: Some("firefox".into()),
+			..make_stub_proc(1, 0)
+		};
+		let child = make_stub_proc(2, 1);
+		let grandchild = make_stub_proc(3, 2);
+		let mut pids: HashMap<i32, ProcessSnapshot> =
+			[(1, root), (2, child), (3, grandchild)].into();
+		propagate_icons(&mut pids);
+		assert_eq!(pids[&1].icon_name.as_deref(), Some("firefox"));
+		assert_eq!(pids[&2].icon_name.as_deref(), Some("firefox"));
+		assert_eq!(pids[&3].icon_name.as_deref(), Some("firefox"));
+	}
+
+	#[test]
+	fn test_propagate_icons_child_overrides_subtree() {
+		let root = ProcessSnapshot {
+			icon_name: Some("bash".into()),
+			..make_stub_proc(1, 0)
+		};
+		let child = ProcessSnapshot {
+			icon_name: Some("gnome-terminal".into()),
+			..make_stub_proc(2, 1)
+		};
+		let grandchild = make_stub_proc(3, 2);
+		let mut pids: HashMap<i32, ProcessSnapshot> =
+			[(1, root), (2, child), (3, grandchild)].into();
+		propagate_icons(&mut pids);
+		assert_eq!(pids[&1].icon_name.as_deref(), Some("bash"));
+		assert_eq!(pids[&2].icon_name.as_deref(), Some("gnome-terminal"));
+		assert_eq!(pids[&3].icon_name.as_deref(), Some("gnome-terminal"));
+	}
+
+	#[test]
+	fn test_propagate_icons_orphan_keeps_own() {
+		let orphan = ProcessSnapshot {
+			icon_name: Some("vlc".into()),
+			..make_stub_proc(9, 999)
+		};
+		let mut pids: HashMap<i32, ProcessSnapshot> = [(9, orphan)].into();
+		propagate_icons(&mut pids);
+		assert_eq!(pids[&9].icon_name.as_deref(), Some("vlc"));
+	}
+
+	#[test]
+	fn test_propagate_icons_keeps_existing_icons() {
+		let root = ProcessSnapshot {
+			icon_name: Some("a".into()),
+			..make_stub_proc(1, 0)
+		};
+		let child = ProcessSnapshot {
+			icon_name: Some("b".into()),
+			..make_stub_proc(2, 1)
+		};
+		let mut pids: HashMap<i32, ProcessSnapshot> =
+			[(1, root), (2, child)].into();
+		propagate_icons(&mut pids);
+		assert_eq!(pids[&1].icon_name.as_deref(), Some("a"));
+		assert_eq!(pids[&2].icon_name.as_deref(), Some("b"));
 	}
 
 	#[test]

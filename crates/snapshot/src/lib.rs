@@ -19,8 +19,13 @@ pub struct PrevProc {
 	// WAYLAND_DISPLAY), which is fixed at exec time. Cache it per pid so we
 	// only read /proc/PID/environ for newly-seen or changed processes.
 	pub is_gui: bool,
+	// Icon name is derived from the process command line, also fixed at exec
+	// time; the desktop-file lookup (substring fallback) is the per-tick hot
+	// spot, so cache it the same way as is_gui.
+	pub icon_name: Option<String>,
 	// starttime distinguishes a reused PID from the same process, so the
-	// is_gui cache is never applied to a different process reusing a PID.
+	// is_gui/icon_name caches are never applied to a different process
+	// reusing a PID.
 	pub starttime: u64,
 }
 

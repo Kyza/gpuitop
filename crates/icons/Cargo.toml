@@ -3,3 +3,16 @@ name = "gpuitop_icons"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+
+[dependencies]
+hotpath = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+linicon = { workspace = true }
+
+[features]
+default = []
+hotpath = ["hotpath/hotpath"]
+hotpath-cpu = ["hotpath/hotpath-cpu"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]
+hotpath-mcp = ["hotpath/hotpath-mcp"]

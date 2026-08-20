@@ -44,6 +44,7 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 x11rb = "0.13"
 cargo_metadata = "0.19"
 async-channel = "2"
+linicon = "2.3"
 
 [profile.release]
 lto = "thin"

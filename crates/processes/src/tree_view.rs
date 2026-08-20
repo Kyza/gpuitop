@@ -10,6 +10,7 @@ use gpuitop_components::assets::lucide::LucideIcon;
 use gpuitop_components::theme;
 use gpuitop_core::model::*;
 use gpuitop_core::state::ViewState;
+use gpuitop_icons::resolve_icon_path;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
@@ -166,6 +167,25 @@ impl ProcessesTab {
 									.into_any_element()
 							},
 						));
+						if let Some(path) = proc
+							.icon_name
+							.as_deref()
+							.and_then(resolve_icon_path)
+						{
+							children.push(
+								div()
+									.w(px(16.0))
+									.h(px(16.0))
+									.flex()
+									.items_center()
+									.justify_center()
+									.child(
+										img(path)
+											.object_fit(ObjectFit::Contain),
+									)
+									.into_any_element(),
+							);
+						}
 						children
 					})
 					.child({

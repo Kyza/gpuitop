@@ -103,6 +103,7 @@ pub fn detect_gpu() -> Vec<GpuBackend> {
 	backends
 }
 
+#[hotpath::measure]
 fn collect_nvidia_devices() -> Vec<GpuDevice> {
 	let nvml = match nvml_wrapper::Nvml::init() {
 		Ok(n) => n,
@@ -150,6 +151,7 @@ fn collect_nvidia_devices() -> Vec<GpuDevice> {
 	devices
 }
 
+#[hotpath::measure]
 fn collect_rocm_devices() -> Vec<GpuDevice> {
 	let output = match std::process::Command::new("rocm-smi")
 		.args([
