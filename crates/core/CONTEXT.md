@@ -85,20 +85,16 @@ Whether GPU data (per-PID VRAM attribution and per-device telemetry) is collecte
 ### View state
 
 **ProcessEngine**:
-The shared process engine behind the process list: the snapshot (swapped only via `set_snapshot`), the config, the init system, and three private caches (rows + match set, cumulative map, the process graph). `rows()` is the single pipeline entry point — search, filters, sort, pin — cached on `ViewState.generation`. `set_snapshot` and `ViewState::mutate` are the only two invalidators. All methods take `&self`; the caches are inner `RefCell`s so callers can hold an immutable engine borrow while calling any method.
-_Avoid_: "the delegate's caches" (caches live in the engine, not the handle)
+The shared process engine behind the process list: the snapshot (swapped only via `set_snapshot`), the config, the init system, and three private caches (rows + match set, cumulative map, the process graph). `rows()` is the single pipeline entry point — search, filters, sort, pin — cached on `ViewState.generation`. `set_snapshot` and `ViewState::mutate` are the only two invalidators. All methods take `&self`; the caches are inner `RefCell`s so callers can hold an immutable engine borrow while calling any method. The processes crate's `ProcessTableDelegate` is a thin `Deref` newtype over the engine's `Rc<RefCell<…>>` (orphan-rule shim only).
+_Avoid_: "delegate-owned state" (all state and caches live in the engine)
 
 **match set**:
 The pipeline's filtered set: pids passing search + non-Pid filters, before any Pid scope. `match_set()` exposes it; `rows()` = `match_set ∩ list scope` (mode-aware) + sort + pin-to-top; `tree_match_set()` = `match_set ∩ full descendant scope` (the tree always shows all descendants, ignoring `pid_filter_mode`). The Pid filter is a *scope restriction*, never an Or alternative — the list and tree always show the same pids, just arranged differently.
 _Avoid_: "filtered rows" for the set (rows are the sorted, scoped view of it)
 
 **ProcessGraph**:
-The process tree derived from one snapshot: parent/child structure, full subtree counts, and ancestry walks (`is_descendant_of`, `descendants_of`, `subtree_count_of`, `ancestor_chain_of`, `with_ancestors`, `ancestors_to_expand`, `display_subtree_counts`). Built lazily once per snapshot, owned by the engine, cycle-guarded so a corrupted ppid chain can never loop. The single home for every graph walk.
+The process tree derived from one snapshot: parent/child structure, full subtree counts, and ancestry walks (`is_descendant_of`, `descendants_of`, `subtree_count_of`, `ancestor_chain_of`, `with_ancestors`, `ancestors_to_expand`, `display_subtree_counts`). Built lazily once per snapshot, owned by the engine, cycle-guarded so a corrupted ppid chain can never loop. The single home for every graph walk; the four ancestor walks share one internal `ancestors_of` helper.
 _Avoid_: "pid index", "descendant counts" as separate concepts (they are fields of the graph)
-
-**ProcessTableDelegate**:
-The public face of the engine: a thin handle holding one `Rc<RefCell<ProcessEngine>>` and forwarding every call. The tab hands out clones via `get_delegate()`.
-_Avoid_: "the delegate owns state" (all state and caches live in the engine)
 
 **ViewState**:
 Everything that determines how the current snapshot is displayed: filters, search, sort (keyed on `SortColumn`), resource view mode — plus a wrapping `generation` counter bumped by every mutation via `ViewState::mutate`, the universal cache invalidator.

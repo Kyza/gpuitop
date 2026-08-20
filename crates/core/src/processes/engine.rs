@@ -1,5 +1,5 @@
 use crate::config_store::ConfigStore;
-use crate::fuzzy::{best_fuzzy_score, fuzzy_match};
+use crate::fuzzy::FuzzyMatcher;
 use crate::model::*;
 use crate::processes::graph::ProcessGraph;
 use crate::service_manager::{
@@ -291,29 +291,23 @@ impl ProcessEngine {
 			.filter(|f| !matches!(f, Filter::Pid(_)))
 			.collect();
 
-		let mut matcher = nucleo::Matcher::new(nucleo::Config::DEFAULT);
+		let mut matcher = FuzzyMatcher::new();
 
 		let matched: HashSet<i32> = all
 			.iter()
 			.filter(|p| {
 				if !search.is_empty() {
-					if !fuzzy_match(
-						&search,
-						&p.name.to_lowercase(),
-						&mut matcher,
-					) && !p.pid.to_string().contains(&search)
-						&& !fuzzy_match(
+					if !matcher.matches(&search, &p.name.to_lowercase())
+						&& !p.pid.to_string().contains(&search)
+						&& !matcher
+							.matches(&search, &p.command.to_lowercase())
+						&& !matcher.matches(
 							&search,
-							&p.command.to_lowercase(),
-							&mut matcher,
-						) && !fuzzy_match(
-						&search,
-						&p.electron_app_name
-							.as_deref()
-							.unwrap_or_default()
-							.to_lowercase(),
-						&mut matcher,
-					) {
+							&p.electron_app_name
+								.as_deref()
+								.unwrap_or_default()
+								.to_lowercase(),
+						) {
 						return false;
 					}
 				}
@@ -349,8 +343,8 @@ impl ProcessEngine {
 
 		result.sort_by(|a, b| {
 			if !search.is_empty() {
-				let sa = best_fuzzy_score(&search, a, &mut matcher);
-				let sb = best_fuzzy_score(&search, b, &mut matcher);
+				let sa = matcher.best_score(&search, a);
+				let sb = matcher.best_score(&search, b);
 				match sb.cmp(&sa) {
 					std::cmp::Ordering::Equal => {}
 					other => return other,
@@ -519,16 +513,11 @@ impl ProcessEngine {
 		}
 	}
 
-	pub fn descendant_pids_of(&self, pid: i32) -> Vec<i32> {
-		self.graph().descendants_of(pid)
+	pub fn view_state(&self) -> Rc<RefCell<ViewState>> {
+		self.view_state.clone()
 	}
 
-	pub fn pid_to_ppid_map(&self) -> HashMap<i32, i32> {
-		self.snapshot
-			.borrow()
-			.processes
-			.iter()
-			.map(|p| (p.pid, p.ppid))
-			.collect()
+	pub fn init_system(&self) -> InitSystem {
+		self.init_system
 	}
 }

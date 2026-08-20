@@ -30,7 +30,7 @@ impl ProcessesTab {
 			Filter::Electron,
 		];
 
-		let snapshot = self.engine.borrow().snapshot();
+		let snapshot = self.engine.snapshot();
 		let delegate = self.get_delegate();
 		let pid_filters: Vec<(Filter, String)> = self
 			.view_state

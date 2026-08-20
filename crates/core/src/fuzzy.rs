@@ -1,16 +1,24 @@
 use crate::model::ProcessSnapshot;
 
-#[hotpath::measure]
-pub fn fuzzy_match(
-	needle: &str,
-	haystack: &str,
-	matcher: &mut nucleo::Matcher,
-) -> bool {
-	nucleo_fuzzy_score(needle, haystack, matcher).is_some()
+pub struct FuzzyMatcher(nucleo::Matcher);
+
+impl FuzzyMatcher {
+	pub fn new() -> Self {
+		Self(nucleo::Matcher::new(nucleo::Config::DEFAULT))
+	}
+
+	#[hotpath::measure]
+	pub fn matches(&mut self, needle: &str, haystack: &str) -> bool {
+		nucleo_fuzzy_score(needle, haystack, &mut self.0).is_some()
+	}
+
+	#[hotpath::measure]
+	pub fn best_score(&mut self, needle: &str, p: &ProcessSnapshot) -> u32 {
+		best_fuzzy_score(needle, p, &mut self.0)
+	}
 }
 
-#[hotpath::measure]
-pub fn nucleo_fuzzy_score(
+pub(crate) fn nucleo_fuzzy_score(
 	needle: &str,
 	haystack: &str,
 	matcher: &mut nucleo::Matcher,
@@ -25,69 +33,95 @@ pub fn nucleo_fuzzy_score(
 	pattern.score(hs.slice(..), matcher)
 }
 
+pub(crate) fn best_fuzzy_score(
+	needle: &str,
+	p: &ProcessSnapshot,
+	matcher: &mut nucleo::Matcher,
+) -> u32 {
+	let name_score =
+		nucleo_fuzzy_score(needle, &p.name.to_lowercase(), matcher)
+			.unwrap_or(0);
+	let cmd_score =
+		nucleo_fuzzy_score(needle, &p.command.to_lowercase(), matcher)
+			.unwrap_or(0);
+	let electron_score = nucleo_fuzzy_score(
+		needle,
+		&p.electron_app_name
+			.as_deref()
+			.unwrap_or_default()
+			.to_lowercase(),
+		matcher,
+	)
+	.unwrap_or(0);
+	name_score.max(cmd_score).max(electron_score)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::model::VramUsage;
 
+	fn matcher() -> FuzzyMatcher {
+		FuzzyMatcher::new()
+	}
+
 	#[test]
 	fn test_fuzzy_match_exact() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		assert!(fuzzy_match("bash", "bash", &mut m));
+		let mut m = matcher();
+		assert!(m.matches("bash", "bash"));
 	}
 
 	#[test]
 	fn test_fuzzy_match_substring() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		assert!(fuzzy_match("ba", "bash", &mut m));
-		assert!(fuzzy_match("sh", "bash", &mut m));
+		let mut m = matcher();
+		assert!(m.matches("ba", "bash"));
+		assert!(m.matches("sh", "bash"));
 	}
 
 	#[test]
 	fn test_fuzzy_match_case_insensitive() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		assert!(fuzzy_match("BASH", "bash", &mut m));
-		assert!(fuzzy_match("bash", "BASH", &mut m));
+		let mut m = matcher();
+		assert!(m.matches("BASH", "bash"));
+		assert!(m.matches("bash", "BASH"));
 	}
 
 	#[test]
 	fn test_fuzzy_match_no_match() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		assert!(!fuzzy_match("xyz", "bash", &mut m));
+		let mut m = matcher();
+		assert!(!m.matches("xyz", "bash"));
 	}
 
 	#[test]
 	fn test_fuzzy_match_empty_needle() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		let result = fuzzy_match("", "bash", &mut m);
-		assert!(result);
+		let mut m = matcher();
+		assert!(m.matches("", "bash"));
 	}
 
 	#[test]
 	fn test_nucleo_fuzzy_score_exact() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		let score = nucleo_fuzzy_score("firefox", "firefox", &mut m);
+		let mut m = matcher();
+		let score = nucleo_fuzzy_score("firefox", "firefox", &mut m.0);
 		assert!(score.is_some());
 	}
 
 	#[test]
 	fn test_nucleo_fuzzy_score_no_match() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		let score = nucleo_fuzzy_score("xyzabc", "firefox", &mut m);
+		let mut m = matcher();
+		let score = nucleo_fuzzy_score("xyzabc", "firefox", &mut m.0);
 		assert_eq!(score, None);
 	}
 
 	#[test]
 	fn test_nucleo_fuzzy_score_empty_needle() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		let score = nucleo_fuzzy_score("", "firefox", &mut m);
+		let mut m = matcher();
+		let score = nucleo_fuzzy_score("", "firefox", &mut m.0);
 		assert!(score.is_some());
 	}
 
 	#[test]
 	fn test_nucleo_fuzzy_score_empty_haystack() {
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		let score = nucleo_fuzzy_score("test", "", &mut m);
+		let mut m = matcher();
+		let score = nucleo_fuzzy_score("test", "", &mut m.0);
 		assert_eq!(score, None);
 	}
 
@@ -115,8 +149,8 @@ mod tests {
 			icon_name: None,
 			has_children: false,
 		};
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		let s = best_fuzzy_score("fire", &p, &mut m);
+		let mut m = matcher();
+		let s = m.best_score("fire", &p);
 		assert!(s > 0);
 	}
 
@@ -144,32 +178,8 @@ mod tests {
 			icon_name: None,
 			has_children: false,
 		};
-		let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
-		let s = best_fuzzy_score("firefox", &p, &mut m);
+		let mut m = matcher();
+		let s = m.best_score("firefox", &p);
 		assert_eq!(s, 0);
 	}
-}
-
-#[hotpath::measure]
-pub fn best_fuzzy_score(
-	needle: &str,
-	p: &ProcessSnapshot,
-	matcher: &mut nucleo::Matcher,
-) -> u32 {
-	let name_score =
-		nucleo_fuzzy_score(needle, &p.name.to_lowercase(), matcher)
-			.unwrap_or(0);
-	let cmd_score =
-		nucleo_fuzzy_score(needle, &p.command.to_lowercase(), matcher)
-			.unwrap_or(0);
-	let electron_score = nucleo_fuzzy_score(
-		needle,
-		&p.electron_app_name
-			.as_deref()
-			.unwrap_or_default()
-			.to_lowercase(),
-		matcher,
-	)
-	.unwrap_or(0);
-	name_score.max(cmd_score).max(electron_score)
 }

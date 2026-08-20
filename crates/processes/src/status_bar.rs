@@ -16,7 +16,7 @@ impl ProcessesTab {
 		} else {
 			delegate.rows().len()
 		};
-		let total_count = self.engine.borrow().snapshot().processes.len();
+		let total_count = self.engine.snapshot().processes.len();
 		let active_filters = self.view_state.borrow().filters.len();
 		let mode = self.view_state.borrow().filter_mode;
 

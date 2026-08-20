@@ -1,6 +1,6 @@
 # Processes
 
-The process list view — the main tab. Renders the filtered/sorted process set as either a tree or a flat list, plus toolbar, breadcrumbs, chips, and the per-process context menu. All the heavy lifting lives in the core delegate; this crate is the GPUI skin over it.
+The process list view — the main tab. Renders the filtered/sorted process set as either a tree or a flat list, plus toolbar, breadcrumbs, chips, and the per-process context menu. All the heavy lifting lives in the core `ProcessEngine`; this crate is the GPUI skin over it.
 
 ## Language
 
@@ -8,15 +8,15 @@ The process list view — the main tab. Renders the filtered/sorted process set 
 The GPUI view hosting the whole panel: the shared `Rc<RefCell<ProcessEngine>>`, the `ViewState` it wraps, table/tree state, and window-picking plumbing. Renders toolbar → tree-or-list → status bar.
 
 **engine**:
-The shared `ProcessEngine` (`core/processes/engine.rs`) holding the current snapshot and all derived caches; swapped each tick via `set_snapshot` (the tab forwards to `engine.borrow().set_snapshot`). Reads that need the snapshot go through `self.engine.borrow().snapshot()`.
+The shared `ProcessEngine` (`core/processes/engine.rs`) holding the current snapshot and all derived caches; swapped each tick via `set_snapshot` (the tab forwards to `self.engine.set_snapshot`). Reads that need the snapshot go through `self.engine.snapshot()`. Held as `Rc<ProcessEngine>` — no outer `RefCell`: the engine keeps all its state behind inner `RefCell`s and exposes `&self` methods only.
 _Avoid_: "snapshot cell" (the old `Rc<RefCell<Rc<SystemSnapshot>>>` field is gone; the engine owns the snapshot privately)
 
 **ProcessTableDelegate (UI)**:
-The thin newtype `ProcessTableDelegate(pub CoreDelegate)` that lets the data-pure core delegate implement gpui_component's `TableDelegate` (orphan rule). Not the same type as the core delegate of the same name — this one is just a deref wrapper.
-_Avoid_: confusing it with core's `ProcessTableDelegate` (the data engine)
+The newtype `ProcessTableDelegate(pub Rc<ProcessEngine>)` that lets the engine implement gpui_component's `TableDelegate` (orphan rule). A pure deref wrapper — no state of its own.
+_Avoid_: confusing it with the engine (all state lives in the engine)
 
 **Config store**:
-The shared `ConfigStore` held by the tab and the core delegate. Column visibility is read live from it (`is_col_hidden` → `store.get().processes`), so column edits in Settings apply to the running table without restart.
+The shared `ConfigStore` held by the tab and the engine. Column visibility is read live from it (`is_col_hidden` → `store.get().processes`), so column edits in Settings apply to the running table without restart.
 _Avoid_: "column_visibility" — the old per-tab `ProcessesConfig` clone is gone
 
 **rows**:

@@ -20,7 +20,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 pub struct ProcessesTab {
-	pub engine: Rc<RefCell<ProcessEngine>>,
+	pub engine: Rc<ProcessEngine>,
 	pub view_state: Rc<RefCell<ViewState>>,
 	pub table_state: Option<Entity<TableState<ProcessTableDelegate>>>,
 	pub input_state: Option<Entity<InputState>>,
@@ -79,12 +79,12 @@ impl ProcessesTab {
 			sort_dir,
 			resource_view_mode: pc.behaviour.resource_view_mode,
 		}));
-		let engine = Rc::new(RefCell::new(ProcessEngine::new(
+		let engine = Rc::new(ProcessEngine::new(
 			snapshot,
 			config.clone(),
 			init_system,
 			view_state.clone(),
-		)));
+		));
 		Self {
 			engine,
 			view_state,
@@ -113,7 +113,7 @@ impl ProcessesTab {
 	}
 
 	pub fn set_snapshot(&mut self, snapshot: Rc<SystemSnapshot>) {
-		self.engine.borrow().set_snapshot(snapshot);
+		self.engine.set_snapshot(snapshot);
 	}
 
 	pub fn pin_pid(&self, pid: i32, cx: &mut Context<Self>) {
@@ -203,7 +203,7 @@ impl Render for ProcessesTab {
 	) -> impl IntoElement {
 		self.apply_seed_changes();
 
-		let snapshot = self.engine.borrow().snapshot();
+		let snapshot = self.engine.snapshot();
 		self.has_data = !snapshot.processes.is_empty();
 		drop(snapshot);
 

@@ -18,7 +18,7 @@ impl CollectorState {
 		let Ok(procs) = procfs::process::all_processes() else {
 			return Vec::new();
 		};
-		let num_cpus = num_cpus::get() as f32;
+		let num_cpus = gpuitop_core::cpu::cpu_count() as f32;
 
 		let mut cur_proc_data: HashMap<i32, (u64, u64, u64, u64, bool, u64)> =
 			HashMap::new();

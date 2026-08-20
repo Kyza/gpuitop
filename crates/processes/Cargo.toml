@@ -14,7 +14,6 @@ gpuitop_properties = { path = "../properties" }
 gpui = { workspace = true }
 gpui-component = { workspace = true }
 bytesize = { workspace = true }
-nucleo = { workspace = true }
 libc = { workspace = true }
 procfs = { workspace = true }
 hotpath = { workspace = true }

@@ -2877,6 +2877,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "hotpath",
+ "libc",
  "nucleo",
  "ron",
  "ron2",
@@ -2930,7 +2931,6 @@ dependencies = [
  "gpuitop_window_picker",
  "hotpath",
  "libc",
- "nucleo",
  "procfs",
 ]
 
@@ -2971,7 +2971,6 @@ dependencies = [
  "gpuitop_icons",
  "hotpath",
  "libc",
- "num_cpus",
  "procfs",
  "users",
 ]

@@ -78,25 +78,8 @@ impl ProcessGraph {
 	}
 
 	pub fn is_descendant_of(&self, child_pid: i32, ancestor: i32) -> bool {
-		if child_pid == ancestor {
-			return false;
-		}
-		let mut current = child_pid;
-		let mut seen = HashSet::new();
-		while let Some(&idx) = self.pid_to_idx.get(&current) {
-			if !seen.insert(current) {
-				return false;
-			}
-			let ppid = self.snapshot.processes[idx].ppid;
-			if ppid == 0 || ppid == current {
-				return false;
-			}
-			if ppid == ancestor {
-				return true;
-			}
-			current = ppid;
-		}
-		false
+		child_pid != ancestor
+			&& self.ancestors_of(child_pid).contains(&ancestor)
 	}
 
 	pub fn descendants_of(&self, pid: i32) -> Vec<i32> {
@@ -123,39 +106,42 @@ impl ProcessGraph {
 		&self.subtree_counts
 	}
 
-	pub fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessSnapshot> {
-		let mut chain = Vec::new();
-		let mut current = target_pid;
+	fn ancestors_of(&self, pid: i32) -> Vec<i32> {
+		let mut out = Vec::new();
+		let mut current = pid;
 		let mut seen = HashSet::new();
+		seen.insert(pid);
 		while let Some(&idx) = self.pid_to_idx.get(&current) {
-			if !seen.insert(current) {
+			let ppid = self.snapshot.processes[idx].ppid;
+			if ppid == 0 || ppid == current || !seen.insert(ppid) {
 				break;
 			}
-			let proc = &self.snapshot.processes[idx];
-			chain.push(proc.clone());
-			let ppid = proc.ppid;
-			if ppid == 0 || ppid == current {
-				break;
-			}
+			out.push(ppid);
 			current = ppid;
 		}
-		chain.reverse();
+		out.reverse();
+		out
+	}
+
+	pub fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessSnapshot> {
+		let Some(&target_idx) = self.pid_to_idx.get(&target_pid) else {
+			return Vec::new();
+		};
+		let mut chain: Vec<ProcessSnapshot> = self
+			.ancestors_of(target_pid)
+			.iter()
+			.map(|&pid| {
+				self.snapshot.processes[self.pid_to_idx[&pid]].clone()
+			})
+			.collect();
+		chain.push(self.snapshot.processes[target_idx].clone());
 		chain
 	}
 
 	pub fn with_ancestors(&self, matched: &HashSet<i32>) -> HashSet<i32> {
 		let mut display = matched.clone();
 		for &mpid in matched {
-			let mut current = mpid;
-			let mut seen = HashSet::new();
-			while let Some(&idx) = self.pid_to_idx.get(&current) {
-				let ppid = self.snapshot.processes[idx].ppid;
-				if ppid == 0 || ppid == current || !seen.insert(ppid) {
-					break;
-				}
-				display.insert(ppid);
-				current = ppid;
-			}
+			display.extend(self.ancestors_of(mpid));
 		}
 		display
 	}
@@ -166,22 +152,7 @@ impl ProcessGraph {
 	) -> HashSet<i32> {
 		let mut expand = HashSet::new();
 		for &mpid in matched {
-			let Some(&idx) = self.pid_to_idx.get(&mpid) else {
-				continue;
-			};
-			let mut current = self.snapshot.processes[idx].ppid;
-			let mut seen = HashSet::new();
-			while let Some(&i) = self.pid_to_idx.get(&current) {
-				if !seen.insert(current) {
-					break;
-				}
-				expand.insert(current);
-				let ppid = self.snapshot.processes[i].ppid;
-				if ppid == 0 || ppid == current {
-					break;
-				}
-				current = ppid;
-			}
+			expand.extend(self.ancestors_of(mpid));
 		}
 		expand
 	}

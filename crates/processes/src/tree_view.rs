@@ -21,7 +21,7 @@ impl ProcessesTab {
 		_window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		let snapshot_ts = self.engine.borrow().snapshot().timestamp;
+		let snapshot_ts = self.engine.snapshot().timestamp;
 		let view_gen = self.view_state.borrow().generation;
 		let stamp = (snapshot_ts, view_gen);
 

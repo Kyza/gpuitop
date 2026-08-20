@@ -1,118 +1,11 @@
-use crate::config_store::ConfigStore;
-use crate::model::*;
-use crate::processes::engine::ProcessEngine;
-use crate::processes::graph::ProcessGraph;
-use crate::service_manager::InitSystem;
-use crate::state::{CumulativeResources, ViewState};
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
-
-/// The public face of the process engine: a thin handle forwarding every call
-/// to a shared [`ProcessEngine`]. All caches live inside the engine; the only
-/// invalidators are `set_snapshot` and `ViewState::mutate`.
-pub struct ProcessTableDelegate {
-	engine: Rc<RefCell<ProcessEngine>>,
-}
-
-impl ProcessTableDelegate {
-	pub fn from_engine(engine: Rc<RefCell<ProcessEngine>>) -> Self {
-		Self { engine }
-	}
-
-	pub fn engine(&self) -> Rc<RefCell<ProcessEngine>> {
-		self.engine.clone()
-	}
-
-	pub fn set_snapshot(&self, snapshot: Rc<SystemSnapshot>) {
-		self.engine.borrow().set_snapshot(snapshot);
-	}
-
-	pub fn snapshot(&self) -> Rc<SystemSnapshot> {
-		self.engine.borrow().snapshot()
-	}
-
-	pub fn rows(&self) -> Rc<Vec<ProcessSnapshot>> {
-		self.engine.borrow().rows()
-	}
-
-	pub fn match_set(&self) -> Rc<HashSet<i32>> {
-		self.engine.borrow().match_set()
-	}
-
-	pub fn tree_match_set(&self) -> Rc<HashSet<i32>> {
-		self.engine.borrow().tree_match_set()
-	}
-
-	pub fn graph(&self) -> Rc<ProcessGraph> {
-		self.engine.borrow().graph()
-	}
-
-	pub fn cum(&self, pid: i32) -> Option<CumulativeResources> {
-		self.engine.borrow().cum(pid)
-	}
-
-	pub fn cumulative_map(&self) -> HashMap<i32, CumulativeResources> {
-		self.engine.borrow().compute_cumulative_map()
-	}
-
-	pub fn count_descendants_of(&self, pid: i32) -> usize {
-		self.engine.borrow().count_descendants_of(pid)
-	}
-
-	pub fn ancestor_chain_of(&self, target_pid: i32) -> Vec<ProcessSnapshot> {
-		self.engine.borrow().ancestor_chain_of(target_pid)
-	}
-
-	pub fn is_descendant_of(&self, child_pid: i32, ancestor: i32) -> bool {
-		self.engine.borrow().is_descendant_of(child_pid, ancestor)
-	}
-
-	pub fn descendant_pids_of(&self, pid: i32) -> Vec<i32> {
-		self.engine.borrow().descendant_pids_of(pid)
-	}
-
-	pub fn pid_to_ppid_map(&self) -> HashMap<i32, i32> {
-		self.engine.borrow().pid_to_ppid_map()
-	}
-
-	pub fn proc_matches(
-		&self,
-		proc: &ProcessSnapshot,
-		filter: &Filter,
-	) -> bool {
-		self.engine.borrow().proc_matches(proc, filter)
-	}
-
-	pub fn pinned_pid(&self) -> Option<i32> {
-		self.engine.borrow().pinned_pid()
-	}
-
-	pub fn pid_filter_mode(&self) -> PidFilterMode {
-		self.engine.borrow().pid_filter_mode()
-	}
-
-	pub fn is_col_hidden(&self, col_ix: usize) -> bool {
-		self.engine.borrow().is_col_hidden(col_ix)
-	}
-
-	pub fn init_system(&self) -> InitSystem {
-		self.engine.borrow().init_system
-	}
-
-	pub fn view_state(&self) -> Rc<RefCell<ViewState>> {
-		self.engine.borrow().view_state.clone()
-	}
-
-	pub fn config(&self) -> ConfigStore {
-		self.engine.borrow().config.clone()
-	}
-}
-
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use crate::config::Config;
+	use crate::config_store::ConfigStore;
+	use crate::model::*;
+	use crate::processes::engine::ProcessEngine;
 	use crate::service_manager::InitSystem;
+	use crate::state::ViewState;
 	use std::cell::RefCell;
 	use std::rc::Rc;
 
@@ -167,7 +60,7 @@ mod tests {
 		}
 	}
 
-	fn make_delegate(procs: Vec<ProcessSnapshot>) -> ProcessTableDelegate {
+	fn make_engine(procs: Vec<ProcessSnapshot>) -> Rc<ProcessEngine> {
 		let snapshot = make_snapshot(procs);
 		let view_state = Rc::new(RefCell::new(ViewState {
 			generation: 0,
@@ -179,33 +72,32 @@ mod tests {
 			sort_dir: SortDirection::Ascending,
 			resource_view_mode: ResourceViewMode::SelfOnly,
 		}));
-		let engine = Rc::new(RefCell::new(ProcessEngine::new(
+		Rc::new(ProcessEngine::new(
 			snapshot,
-			ConfigStore::new(crate::config::Config::default()),
+			ConfigStore::new(Config::default()),
 			InitSystem::Unknown,
 			view_state,
-		)));
-		ProcessTableDelegate::from_engine(engine)
+		))
 	}
 
 	// ── is_col_hidden ──────────────────────────────────────────
 
 	#[test]
 	fn is_col_hidden_col_0_never_hidden() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		assert!(!d.is_col_hidden(0));
 	}
 
 	#[test]
 	fn is_col_hidden_name_visible_by_default() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		assert!(!d.is_col_hidden(1));
 	}
 
 	#[test]
 	fn is_col_hidden_after_hiding_name() {
-		let d = make_delegate(vec![]);
-		d.config().mutate(|cfg| {
+		let d = make_engine(vec![]);
+		d.config.mutate(|cfg| {
 			if let Some(entry) = cfg
 				.processes
 				.columns
@@ -220,7 +112,7 @@ mod tests {
 
 	#[test]
 	fn is_col_hidden_out_of_range_returns_false() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		assert!(!d.is_col_hidden(999));
 	}
 
@@ -228,13 +120,13 @@ mod tests {
 
 	#[test]
 	fn descendant_direct_child() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
 		assert!(d.is_descendant_of(10, 1));
 	}
 
 	#[test]
 	fn descendant_grandchild() {
-		let d = make_delegate(vec![
+		let d = make_engine(vec![
 			make_proc(1, 0),
 			make_proc(10, 1),
 			make_proc(100, 10),
@@ -244,25 +136,25 @@ mod tests {
 
 	#[test]
 	fn descendant_not_descendant() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 2)]);
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 2)]);
 		assert!(!d.is_descendant_of(10, 1));
 	}
 
 	#[test]
 	fn descendant_pid_eq_ancestor_returns_false() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
 		assert!(!d.is_descendant_of(1, 1));
 	}
 
 	#[test]
 	fn descendant_ppid_zero_terminates() {
-		let d = make_delegate(vec![make_proc(1, 0)]);
+		let d = make_engine(vec![make_proc(1, 0)]);
 		assert!(!d.is_descendant_of(1, 100));
 	}
 
 	#[test]
 	fn descendant_unknown_pid_returns_false() {
-		let d = make_delegate(vec![make_proc(1, 0)]);
+		let d = make_engine(vec![make_proc(1, 0)]);
 		assert!(!d.is_descendant_of(999, 1));
 	}
 
@@ -270,7 +162,7 @@ mod tests {
 
 	#[test]
 	fn count_descendants_parent_with_children() {
-		let d = make_delegate(vec![
+		let d = make_engine(vec![
 			make_proc(1, 0),
 			make_proc(10, 1),
 			make_proc(20, 1),
@@ -281,13 +173,13 @@ mod tests {
 
 	#[test]
 	fn count_descendants_leaf_has_none() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
 		assert_eq!(d.count_descendants_of(10), 0);
 	}
 
 	#[test]
 	fn count_descendants_nested() {
-		let d = make_delegate(vec![
+		let d = make_engine(vec![
 			make_proc(1, 0),
 			make_proc(10, 1),
 			make_proc(20, 10),
@@ -301,7 +193,7 @@ mod tests {
 
 	#[test]
 	fn ancestor_chain_leaf_to_root() {
-		let d = make_delegate(vec![
+		let d = make_engine(vec![
 			make_proc(1, 0),
 			make_proc(10, 1),
 			make_proc(100, 10),
@@ -313,7 +205,7 @@ mod tests {
 
 	#[test]
 	fn ancestor_chain_root_is_itself() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
 		let chain = d.ancestor_chain_of(1);
 		let pids: Vec<i32> = chain.iter().map(|p| p.pid).collect();
 		assert_eq!(pids, vec![1]);
@@ -321,7 +213,7 @@ mod tests {
 
 	#[test]
 	fn ancestor_chain_unknown_pid_empty() {
-		let d = make_delegate(vec![make_proc(1, 0)]);
+		let d = make_engine(vec![make_proc(1, 0)]);
 		let chain = d.ancestor_chain_of(999);
 		assert!(chain.is_empty());
 	}
@@ -330,8 +222,8 @@ mod tests {
 
 	#[test]
 	fn cum_map_parent_child_sum() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
-		let map = d.cumulative_map();
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let map = d.compute_cumulative_map();
 		assert_eq!(map[&1].cpu, 1.0 + 10.0);
 		assert_eq!(map[&1].mem_rss, 1024 + 10240);
 		assert_eq!(map[&10].cpu, 10.0);
@@ -339,13 +231,13 @@ mod tests {
 
 	#[test]
 	fn cum_map_multi_level_tree() {
-		let d = make_delegate(vec![
+		let d = make_engine(vec![
 			make_proc(1, 0),
 			make_proc(10, 1),
 			make_proc(100, 10),
 			make_proc(200, 10),
 		]);
-		let map = d.cumulative_map();
+		let map = d.compute_cumulative_map();
 		assert_eq!(map[&1].cpu, 1.0 + 10.0 + 100.0 + 200.0);
 		assert_eq!(map[&10].cpu, 10.0 + 100.0 + 200.0);
 		assert_eq!(map[&100].cpu, 100.0);
@@ -353,12 +245,12 @@ mod tests {
 
 	#[test]
 	fn cum_map_no_children_self_values() {
-		let d = make_delegate(vec![
+		let d = make_engine(vec![
 			make_proc(1, 0),
 			make_proc(10, 0),
 			make_proc(20, 0),
 		]);
-		let map = d.cumulative_map();
+		let map = d.compute_cumulative_map();
 		assert_eq!(map[&1].cpu, 1.0);
 		assert_eq!(map[&10].cpu, 10.0);
 		assert_eq!(map[&20].cpu, 20.0);
@@ -366,41 +258,41 @@ mod tests {
 
 	#[test]
 	fn cum_map_cache_hit_second_call() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
-		let map1 = d.cumulative_map();
-		let map2 = d.cumulative_map();
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let map1 = d.compute_cumulative_map();
+		let map2 = d.compute_cumulative_map();
 		assert_eq!(map1[&1].cpu, map2[&1].cpu);
 	}
 
 	#[test]
 	fn cum_map_vram_parent_none_child_some() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
 		let new_snap = {
 			let mut clone = d.snapshot().as_ref().clone();
 			clone.processes[1].vram.nvidia = 4096;
 			clone
 		};
 		d.set_snapshot(Rc::new(new_snap));
-		let map = d.cumulative_map();
+		let map = d.compute_cumulative_map();
 		assert_eq!(map[&1].vram.nvidia, 4096);
 	}
 
 	#[test]
 	fn cum_map_vram_child_none_parent_some() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
 		let new_snap = {
 			let mut clone = d.snapshot().as_ref().clone();
 			clone.processes[0].vram.nvidia = 4096;
 			clone
 		};
 		d.set_snapshot(Rc::new(new_snap));
-		let map = d.cumulative_map();
+		let map = d.compute_cumulative_map();
 		assert_eq!(map[&1].vram.nvidia, 4096);
 	}
 
 	#[test]
 	fn cum_map_vram_mixed_vendors_sum() {
-		let d = make_delegate(vec![make_proc(1, 0), make_proc(10, 1)]);
+		let d = make_engine(vec![make_proc(1, 0), make_proc(10, 1)]);
 		let new_snap = {
 			let mut clone = d.snapshot().as_ref().clone();
 			clone.processes[0].vram.nvidia = 2048;
@@ -408,7 +300,7 @@ mod tests {
 			clone
 		};
 		d.set_snapshot(Rc::new(new_snap));
-		let map = d.cumulative_map();
+		let map = d.compute_cumulative_map();
 		assert_eq!(map[&1].vram.nvidia, 2048);
 		assert_eq!(map[&1].vram.amd, 1024);
 		assert_eq!(map[&1].vram.total(), 3072);
@@ -416,8 +308,8 @@ mod tests {
 
 	#[test]
 	fn cum_map_empty() {
-		let d = make_delegate(vec![]);
-		let map = d.cumulative_map();
+		let d = make_engine(vec![]);
+		let map = d.compute_cumulative_map();
 		assert!(map.is_empty());
 	}
 
@@ -425,7 +317,7 @@ mod tests {
 
 	#[test]
 	fn rows_reflect_snapshot_swapped_mid_frame() {
-		let d = make_delegate(vec![
+		let d = make_engine(vec![
 			make_proc(1, 0),
 			make_proc(10, 1),
 			make_proc(100, 10),
@@ -443,21 +335,21 @@ mod tests {
 		assert_eq!(d.rows().len(), 1);
 		assert_eq!(d.rows()[0].pid, 1);
 		assert_eq!(d.count_descendants_of(1), 0);
-		assert_eq!(d.cumulative_map().len(), 1);
+		assert_eq!(d.compute_cumulative_map().len(), 1);
 	}
 
 	// ── pid_filter_mode ───────────────────────────────────────
 
 	#[test]
 	fn pid_filter_mode_all_descendants() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		assert_eq!(d.pid_filter_mode(), PidFilterMode::AllDescendants);
 	}
 
 	#[test]
 	fn pid_filter_mode_direct_children() {
-		let d = make_delegate(vec![]);
-		d.view_state().borrow_mut().pid_filter_mode =
+		let d = make_engine(vec![]);
+		d.view_state.borrow_mut().pid_filter_mode =
 			PidFilterMode::DirectChildren;
 		assert_eq!(d.pid_filter_mode(), PidFilterMode::DirectChildren);
 	}
@@ -466,82 +358,29 @@ mod tests {
 
 	#[test]
 	fn pinned_pid_none_when_no_pid_filter() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		assert_eq!(d.pinned_pid(), None);
 	}
 
 	#[test]
 	fn pinned_pid_returns_some() {
-		let d = make_delegate(vec![]);
-		d.view_state().borrow_mut().filters = vec![Filter::Pid(42)];
+		let d = make_engine(vec![]);
+		d.view_state.borrow_mut().filters = vec![Filter::Pid(42)];
 		assert_eq!(d.pinned_pid(), Some(42));
 	}
 
 	#[test]
 	fn pinned_pid_with_other_filters_returns_none() {
-		let d = make_delegate(vec![]);
-		d.view_state().borrow_mut().filters =
-			vec![Filter::Gui, Filter::Kernel];
+		let d = make_engine(vec![]);
+		d.view_state.borrow_mut().filters = vec![Filter::Gui, Filter::Kernel];
 		assert_eq!(d.pinned_pid(), None);
-	}
-
-	// ── descendant_pids_of ────────────────────────────────────
-
-	#[test]
-	fn descendant_pids_of_empty() {
-		let d = make_delegate(vec![make_proc(1, 0)]);
-		assert_eq!(d.descendant_pids_of(1), Vec::<i32>::new());
-	}
-
-	#[test]
-	fn descendant_pids_of_children() {
-		let d = make_delegate(vec![
-			make_proc(1, 0),
-			make_proc(10, 1),
-			make_proc(20, 1),
-			make_proc(30, 2),
-		]);
-		let mut pids = d.descendant_pids_of(1);
-		pids.sort();
-		assert_eq!(pids, vec![10, 20]);
-	}
-
-	// ── pid_to_ppid_map ───────────────────────────────────────
-
-	#[test]
-	fn pid_to_ppid_map_entries() {
-		let d = make_delegate(vec![
-			make_proc(1, 0),
-			make_proc(10, 1),
-			make_proc(100, 10),
-		]);
-		let map = d.pid_to_ppid_map();
-		assert_eq!(map[&1], 0);
-		assert_eq!(map[&10], 1);
-		assert_eq!(map[&100], 10);
-	}
-
-	#[test]
-	fn pid_to_ppid_map_size() {
-		let d = make_delegate(vec![
-			make_proc(1, 0),
-			make_proc(10, 1),
-			make_proc(20, 1),
-		]);
-		assert_eq!(d.pid_to_ppid_map().len(), 3);
-	}
-
-	#[test]
-	fn pid_to_ppid_map_empty() {
-		let d = make_delegate(vec![]);
-		assert!(d.pid_to_ppid_map().is_empty());
 	}
 
 	// ── proc_matches ────────────────────────────────────────────
 
 	#[test]
 	fn proc_matches_gui() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let mut p = make_proc(1, 0);
 		assert!(!d.proc_matches(&p, &Filter::Gui));
 		p.is_gui = true;
@@ -550,7 +389,7 @@ mod tests {
 
 	#[test]
 	fn proc_matches_user() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let mut p = make_proc(1, 0);
 		p.is_owned_by_current_user = true;
 		assert!(d.proc_matches(&p, &Filter::User));
@@ -560,14 +399,14 @@ mod tests {
 
 	#[test]
 	fn proc_matches_system() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let p = make_proc(2, 100);
 		assert!(d.proc_matches(&p, &Filter::System));
 	}
 
 	#[test]
 	fn proc_matches_system_excludes_kthread() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let mut p = make_proc(2, 100);
 		p.is_kthread = true;
 		assert!(!d.proc_matches(&p, &Filter::System));
@@ -575,7 +414,7 @@ mod tests {
 
 	#[test]
 	fn proc_matches_kernel() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let mut p = make_proc(2, 0);
 		p.is_kthread = true;
 		assert!(d.proc_matches(&p, &Filter::Kernel));
@@ -583,7 +422,7 @@ mod tests {
 
 	#[test]
 	fn proc_matches_parent() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let mut p = make_proc(1, 0);
 		assert!(!d.proc_matches(&p, &Filter::Parent));
 		p.has_children = true;
@@ -592,7 +431,7 @@ mod tests {
 
 	#[test]
 	fn proc_matches_vram_self_only() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let mut p = make_proc(1, 0);
 		assert!(!d.proc_matches(&p, &Filter::Vram));
 		p.vram.nvidia = 4096;
@@ -605,8 +444,8 @@ mod tests {
 		parent.vram.nvidia = 4096;
 		let mut child = make_proc(10, 1);
 		child.vram.nvidia = 2048;
-		let d = make_delegate(vec![parent, child.clone()]);
-		d.view_state().borrow_mut().resource_view_mode =
+		let d = make_engine(vec![parent, child.clone()]);
+		d.view_state.borrow_mut().resource_view_mode =
 			ResourceViewMode::Cumulative;
 		assert!(d.proc_matches(&child, &Filter::Vram));
 		assert!(d.proc_matches(&make_proc(1, 0), &Filter::Vram));
@@ -618,7 +457,7 @@ mod tests {
 		nvidia.vram.nvidia = 1024;
 		let mut amd = make_proc(2, 0);
 		amd.vram.amd = 1024;
-		let d = make_delegate(vec![nvidia.clone(), amd.clone()]);
+		let d = make_engine(vec![nvidia.clone(), amd.clone()]);
 		assert!(d.proc_matches(&nvidia, &Filter::Nvidia));
 		assert!(!d.proc_matches(&nvidia, &Filter::Amd));
 		assert!(d.proc_matches(&amd, &Filter::Amd));
@@ -628,7 +467,7 @@ mod tests {
 
 	#[test]
 	fn proc_matches_electron() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let mut p = make_proc(1, 0);
 		assert!(!d.proc_matches(&p, &Filter::Electron));
 		p.is_electron = true;
@@ -637,7 +476,7 @@ mod tests {
 
 	#[test]
 	fn proc_matches_process_state() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let p = make_proc(1, 0);
 		assert!(d.proc_matches(&p, &Filter::ProcessState('S')));
 		assert!(!d.proc_matches(&p, &Filter::ProcessState('R')));
@@ -645,7 +484,7 @@ mod tests {
 
 	#[test]
 	fn proc_matches_username() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let p = make_proc(1, 0);
 		assert!(d.proc_matches(&p, &Filter::Username("root".into())));
 		assert!(!d.proc_matches(&p, &Filter::Username("alice".into())));
@@ -653,28 +492,25 @@ mod tests {
 
 	#[test]
 	fn proc_matches_services_ppid_1() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let p = make_proc(10, 1);
 		assert!(d.proc_matches(&p, &Filter::Services));
 	}
 
 	#[test]
 	fn proc_matches_services_ppid_not_1() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let p = make_proc(20, 100);
 		assert!(!d.proc_matches(&p, &Filter::Services));
 	}
 
-	fn set_view_state(
-		d: &ProcessTableDelegate,
-		f: impl FnOnce(&mut ViewState),
-	) {
-		f(&mut d.view_state().borrow_mut());
+	fn set_view_state(d: &Rc<ProcessEngine>, f: impl FnOnce(&mut ViewState)) {
+		f(&mut d.view_state.borrow_mut());
 	}
 
 	#[test]
 	fn rows_empty() {
-		let d = make_delegate(vec![]);
+		let d = make_engine(vec![]);
 		let rows = d.rows();
 		assert!(rows.is_empty());
 	}
@@ -683,7 +519,7 @@ mod tests {
 	fn rows_no_search_no_filters_sort_by_pid() {
 		let procs =
 			vec![make_proc(30, 1), make_proc(10, 1), make_proc(20, 1)];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		let rows = d.rows();
 		assert_eq!(rows.len(), 3);
 		assert_eq!(rows[0].pid, 10);
@@ -698,7 +534,7 @@ mod tests {
 			make_proc_named(2, "a-process"),
 			make_proc_named(3, "b-process"),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.sort_col = SortColumn::Name;
 			s.sort_dir = SortDirection::Ascending;
@@ -716,7 +552,7 @@ mod tests {
 			make_proc_with_cpu(2, 50.0),
 			make_proc_with_cpu(3, 30.0),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.sort_col = SortColumn::Cpu;
 			s.sort_dir = SortDirection::Descending;
@@ -734,7 +570,7 @@ mod tests {
 			make_proc_named(2, "bash"),
 			make_proc_named(3, "firewalld"),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.search = "fire".into();
 		});
@@ -753,7 +589,7 @@ mod tests {
 			make_proc(100, 10),
 			make_proc(99, 10),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.search = "10".into();
 		});
@@ -767,7 +603,7 @@ mod tests {
 	fn rows_search_no_results() {
 		let procs =
 			vec![make_proc_named(1, "bash"), make_proc_named(2, "vim")];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.search = "zzz_nonexistent".into();
 		});
@@ -782,7 +618,7 @@ mod tests {
 			make_proc_with_user(2, "kyza", false),
 			make_proc_with_user(3, "root", true),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::User];
 		});
@@ -804,7 +640,7 @@ mod tests {
 			},
 			make_proc(2, 1),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Gui];
 		});
@@ -828,7 +664,7 @@ mod tests {
 				p
 			},
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Kernel, Filter::Parent];
 			s.filter_mode = FilterMode::And;
@@ -853,7 +689,7 @@ mod tests {
 			},
 			make_proc(3, 0),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Gui, Filter::User];
 			s.filter_mode = FilterMode::Or;
@@ -870,7 +706,7 @@ mod tests {
 			make_proc(90, 100),
 			make_proc(100, 1),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Pid(100)];
 			s.pid_filter_mode = PidFilterMode::AllDescendants;
@@ -890,7 +726,7 @@ mod tests {
 			make_proc(100, 10),
 			make_proc(50, 2),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Pid(1)];
 			s.pid_filter_mode = PidFilterMode::AllDescendants;
@@ -903,7 +739,7 @@ mod tests {
 	fn rows_pid_scope_direct_children() {
 		let procs =
 			vec![make_proc(1, 0), make_proc(10, 1), make_proc(100, 10)];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Pid(1)];
 			s.pid_filter_mode = PidFilterMode::DirectChildren;
@@ -927,7 +763,7 @@ mod tests {
 				p
 			},
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Pid(1), Filter::Gui];
 			s.filter_mode = FilterMode::Or;
@@ -943,7 +779,7 @@ mod tests {
 	fn tree_match_set_ignores_pid_filter_mode() {
 		let procs =
 			vec![make_proc(1, 0), make_proc(10, 1), make_proc(100, 10)];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Pid(1)];
 			s.pid_filter_mode = PidFilterMode::DirectChildren;
@@ -967,7 +803,7 @@ mod tests {
 			},
 			make_proc(3, 0),
 		];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.filters = vec![Filter::Gui];
 		});
@@ -997,7 +833,7 @@ mod tests {
 			p
 		};
 		let procs = vec![parent, child];
-		let d = make_delegate(procs);
+		let d = make_engine(procs);
 		set_view_state(&d, |s| {
 			s.sort_col = SortColumn::Cpu;
 			s.sort_dir = SortDirection::Descending;
@@ -1012,14 +848,14 @@ mod tests {
 	#[test]
 	fn rows_cache_invalidation_on_generation() {
 		let procs = vec![make_proc(1, 0), make_proc(2, 0)];
-		let d = make_delegate(procs.clone());
+		let d = make_engine(procs.clone());
 		set_view_state(&d, |s| {
 			s.sort_col = SortColumn::Pid;
 			s.sort_dir = SortDirection::Ascending;
 		});
 		let r1 = d.rows();
 		assert_eq!(r1[0].pid, 1);
-		d.view_state().borrow_mut().generation += 1;
+		d.view_state.borrow_mut().generation += 1;
 		let r2 = d.rows();
 		assert_eq!(r2[0].pid, 1);
 	}

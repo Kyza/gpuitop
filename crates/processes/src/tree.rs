@@ -83,19 +83,12 @@ impl ProcessTableDelegate {
 			}
 		}
 
-		let mut matcher = nucleo::Matcher::new(nucleo::Config::DEFAULT);
+		let mut matcher = gpuitop_core::fuzzy::FuzzyMatcher::new();
 		let fuzzy_scores: HashMap<i32, u32> = if has_search {
 			pid_lookup
 				.iter()
 				.map(|(pid, proc)| {
-					(
-						*pid,
-						gpuitop_core::fuzzy::best_fuzzy_score(
-							&search_term,
-							proc,
-							&mut matcher,
-						),
-					)
+					(*pid, matcher.best_score(&search_term, proc))
 				})
 				.collect()
 		} else {

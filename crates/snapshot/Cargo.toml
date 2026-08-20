@@ -11,7 +11,6 @@ gpuitop_icons = { path = "../icons" }
 procfs = { workspace = true }
 users = { workspace = true }
 libc = { workspace = true }
-num_cpus = { workspace = true }
 hotpath = { workspace = true }
 
 [features]

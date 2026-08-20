@@ -1,6 +1,7 @@
 pub mod about;
 pub mod config;
 pub mod config_store;
+pub mod cpu;
 pub mod fuzzy;
 pub mod merge;
 pub mod model;
