@@ -4,7 +4,7 @@ use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::menu::DropdownMenu;
 use gpui_component::tab::{Tab, TabBar};
-use gpui_component::{ActiveTheme, Disableable, Sizable, TitleBar};
+use gpui_component::{ActiveTheme, Disableable, Root, Sizable, TitleBar};
 use gpuitop_components::assets::lucide::LucideIcon;
 use gpuitop_core::config_store::ConfigStore;
 use gpuitop_core::model::{GpuBackend, GpuData, SystemSnapshot};
@@ -474,5 +474,7 @@ impl Render for App {
 						),
 				)
 			})
+			.children(Root::render_dialog_layer(window, cx))
+			.children(Root::render_notification_layer(window, cx))
 	}
 }

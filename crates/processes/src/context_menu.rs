@@ -1,14 +1,34 @@
 use gpui::*;
+use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::menu::PopupMenuItem;
+use gpui_component::notification::{Notification, NotificationType};
+use gpui_component::{Root, Sizable, WindowExt};
 use gpuitop_components::assets::lucide::LucideIcon;
 use gpuitop_core::model::ProcessSnapshot;
 use gpuitop_properties::PropertiesWindow;
 use std::rc::Rc;
 
+use crate::affinity;
+use crate::affinity_picker::AffinityPicker;
+
 fn send_signal(pid: i32, signal: i32) {
 	unsafe {
 		libc::kill(pid, signal);
 	}
+}
+
+fn push_error(window: &mut Window, cx: &mut App, message: &str) {
+	Root::update(window, cx, |root, window, cx| {
+		root.push_notification(
+			Notification::new()
+				.with_type(NotificationType::Error)
+				.title("Set CPU Affinity")
+				.message(message.to_owned())
+				.autohide(true),
+			window,
+			cx,
+		);
+	});
 }
 
 fn menu_item(
@@ -34,6 +54,7 @@ fn menu_item(
 pub fn build_process_menu(proc: &ProcessSnapshot) -> Vec<PopupMenuItem> {
 	let pid = proc.pid;
 	let is_stopped = proc.state == 'T' || proc.state == 't';
+	let name = proc.name.clone();
 
 	let mut items = vec![
 		menu_item(
@@ -99,6 +120,98 @@ pub fn build_process_menu(proc: &ProcessSnapshot) -> Vec<PopupMenuItem> {
 			cx.write_to_clipboard(ClipboardItem::new_string(pid.to_string()));
 		},
 	));
+	items.push(PopupMenuItem::Item {
+		icon: Some(
+			gpui_component::Icon::empty()
+				.path(LucideIcon::path(LucideIcon::Cpu))
+				.into(),
+		),
+		label: "Set CPU Affinity…".into(),
+		disabled: !proc.is_owned_by_current_user,
+		checked: false,
+		is_link: false,
+		action: None,
+		handler: Some(Rc::new(move |_, window, cx| {
+			let picker =
+				cx.new(|cx| AffinityPicker::new(pid, name.clone(), cx));
+			let title = SharedString::from(format!(
+				"Set CPU Affinity — {} (PID {})",
+				name, pid
+			));
+			let apply_name = name.clone();
+			window.open_dialog(cx, move |dialog, _window, _cx| {
+				let content_picker = picker.clone();
+				let ok_picker = picker.clone();
+				let apply_name = apply_name.clone();
+				let apply = move |window: &mut Window, cx: &mut App| {
+					let selected = ok_picker.read(cx).selected();
+					match affinity::set_affinity(pid, &selected) {
+						Ok(()) => {
+							Root::update(window, cx, |root, window, cx| {
+								root.push_notification(
+									Notification::new()
+										.with_type(NotificationType::Success)
+										.title("Set CPU Affinity")
+										.message(format!(
+											"Applied to {apply_name} (PID \
+											 {pid})"
+										))
+										.autohide(true),
+									window,
+									cx,
+								);
+							});
+							true
+						}
+						Err(err) => {
+							push_error(
+								window,
+								cx,
+								&format!("Failed to set CPU affinity: {err}"),
+							);
+							false
+						}
+					}
+				};
+				let apply_ok = apply.clone();
+				dialog
+					.title(title.clone())
+					.content(move |content, _window, _cx| {
+						content.child(content_picker.clone())
+					})
+					.on_ok(move |_, window, cx| apply_ok(window, cx))
+					.footer(
+						div()
+							.flex()
+							.justify_end()
+							.gap(px(8.0))
+							.w_full()
+							.child(
+								Button::new("affinity-cancel")
+									.ghost()
+									.compact()
+									.small()
+									.label("Cancel")
+									.on_click(move |_, window, cx| {
+										window.close_dialog(cx);
+									}),
+							)
+							.child(
+								Button::new("affinity-apply")
+									.primary()
+									.compact()
+									.small()
+									.label("Apply")
+									.on_click(move |_, window, cx| {
+										if apply(window, cx) {
+											window.close_dialog(cx);
+										}
+									}),
+							),
+					)
+			});
+		})),
+	});
 	items.push(PopupMenuItem::separator());
 	items.push(PopupMenuItem::Label(SharedString::from(format!(
 		"PID: {}  —  {}",

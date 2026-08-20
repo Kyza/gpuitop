@@ -1,5 +1,7 @@
 #![recursion_limit = "512"]
 
+pub mod affinity;
+pub mod affinity_picker;
 pub mod breadcrumbs;
 pub mod chips;
 pub mod context_menu;
