@@ -1,0 +1,53 @@
+# gpuitop
+
+The binary: bootstrap, CLI, and the `App` shell hosting everything — window, main tabs, the collector thread, elevation state, and the dependency list for the About page.
+
+## Language
+
+**App**:
+The root shell entity: active tab, the shared `ConfigStore`, the current snapshot, GPU backends, init system, the snapshot receiver, a paused flag, elevation state, and the three tab entities (processes, performance, settings).
+_Avoid_: "config" as an owned value (the App holds the shared store; the theme button and theme observer mutate through it — no mirror copies)
+
+**Collector thread**:
+A background thread owning `CollectorState`, looping `collect_snapshot` at the refresh interval; each snapshot goes over `mpsc` and a wake signal over `async_channel`. Event-driven rendering — no perpetual frame loop.
+**Wake channel**:
+The `async_channel` that triggers `cx.notify()` when a fresh snapshot arrives.
+
+**Pause**:
+The Esc toggle; sets a shared `Arc<AtomicBool>` that stops *collection*, not just display — with an overlay icon when paused.
+
+**Main tabs**:
+Processes / Performance / Settings — the app's top-level pages, distinct from each panel's internal sub-tabs.
+**CLI page paths**:
+Dotted paths mapping to tabs and sub-views: `processes`, `performance.<cpu|…|network>`, `settings.<general|processes|about>`, `processes.tree|list` as view-mode overrides.
+_Avoid_: "flags" for the page paths (flags are `--config`, `--override`, etc.)
+
+**--override**:
+A partial-RON string layered over the loaded config via `apply_override` → `deep_merge` (see ADR-0005).
+**--properties**:
+Opens the properties window in standalone mode, skipping the main UI.
+**--app-id**:
+Overrides the window app_id; defaults to `GPUITOP_APP_ID`.
+**--search**:
+Pre-fills the process search.
+
+**Elevation state**:
+`elevated` / `elevation_error` in the App; the shield button relaunches elevated and quits on success, errors surface in the status bar.
+
+**Status bar**:
+GPU backends, detected init system, Esc pause hint, elevation errors.
+
+**built**:
+The `include!`ed `built.rs` (`DIRECT_DEPS: &[DepInfo]`) emitted by `build.rs` from the bin's direct runtime deps, passed into `SettingsTab` for the About page.
+_Avoid_: "build.rs data" — `built` is the generated module
+
+**Theme observer**:
+Observes the theme registry; re-unpacks/loads builtins on change, and if the active theme vanished, falls back to "Default Dark" and persists the correction.
+
+## Relationships
+
+- **gpuitop → everything**: depends on all crates; wires the collector, tabs, theme, and CLI together.
+- **App → Snapshot**: owns the collector thread and drains the snapshot channel in render.
+- **App → Settings**: passes `DIRECT_DEPS` into `SettingsTab`; shares the refresh atomic with the collector.
+- **App → Components**: hosts the shared theme menu in the titlebar.
+- **Window**: config `window_size` clamped to min 640×400; client-side decorations, transparent titlebar, app_id.

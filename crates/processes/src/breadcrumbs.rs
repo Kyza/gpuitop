@@ -13,7 +13,7 @@ impl ProcessesTab {
 		_window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		let snapshot = self.snapshot_cell.borrow().clone();
+		let snapshot = self.engine.borrow().snapshot();
 		let pid_filters: Vec<(Filter, String)> = self
 			.view_state
 			.borrow()

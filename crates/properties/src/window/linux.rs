@@ -20,6 +20,7 @@ pub const TAB_LABELS: &[&str] =
 pub fn body(
 	properties: Option<&ProcessProperties>,
 	dead: bool,
+	degraded: bool,
 	tab_index: usize,
 	name_search: &str,
 	content_search: &str,
@@ -83,6 +84,23 @@ pub fn body(
 					div()
 						.px(px(12.0))
 						.py(px(8.0))
+						.when(degraded, |el| {
+							el.child(
+								div()
+									.mb(px(8.0))
+									.px(px(8.0))
+									.py(px(4.0))
+									.bg(rgba(0xffaa0050))
+									.rounded(px(4.0))
+									.text_color(rgb(0xff_cc66))
+									.text_size(px(13.0))
+									.child(
+										"The process data could not be read \
+										 (permissions?). Showing the last \
+										 snapshot; still updating.",
+									),
+							)
+						})
 						.when(dead, |el| {
 							el.child(
 								div()
@@ -154,18 +172,7 @@ fn overview(
 	props: &ProcessProperties,
 	cx: &Context<PropertiesWindow>,
 ) -> impl IntoElement {
-	let cmd = props
-		.command
-		.iter()
-		.map(|s| {
-			if s.contains(char::is_whitespace) {
-				format!("'{}'", s.replace('\'', "\\'"))
-			} else {
-				s.clone()
-			}
-		})
-		.collect::<Vec<_>>()
-		.join(" ");
+	let cmd = super::helpers::quote_command(&props.command);
 
 	let groups = props
 		.groups
@@ -371,22 +378,11 @@ fn environ(
 			.into_any_element();
 	}
 
-	let name_lower = name_search.to_lowercase();
-	let content_lower = content_search.to_lowercase();
-
-	let mut vars: Vec<(&str, &str)> = props
-		.environ
-		.iter()
-		.map(|(k, v)| (k.as_str(), v.as_str()))
-		.filter(|(k, v)| {
-			let name_match = name_search.is_empty()
-				|| k.to_lowercase().contains(&name_lower);
-			let content_match = content_search.is_empty()
-				|| v.to_lowercase().contains(&content_lower);
-			name_match && content_match
-		})
-		.collect();
-	vars.sort_by(|a, b| a.0.cmp(b.0));
+	let vars = super::helpers::filter_env_vars(
+		&props.environ,
+		name_search,
+		content_search,
+	);
 
 	if vars.is_empty() {
 		return div()

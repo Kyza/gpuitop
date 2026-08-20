@@ -25,6 +25,11 @@ pub fn gpu_tab(
 	let dark = theme_dark_or_light(cx);
 
 	if snapshot.gpu_devices.is_empty() {
+		let message = if snapshot.gpu_polling_enabled {
+			"No GPU detected."
+		} else {
+			"GPU data is off."
+		};
 		return div().flex().flex_col().gap(px(14.0)).child(
 			card("GPU", cx).child(
 				div()
@@ -43,7 +48,7 @@ pub fn gpu_tab(
 						div()
 							.text_size(px(13.0))
 							.text_color(cx.theme().muted_foreground)
-							.child("No GPU detected."),
+							.child(message),
 					),
 			),
 		);

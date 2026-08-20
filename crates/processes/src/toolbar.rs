@@ -30,7 +30,8 @@ impl ProcessesTab {
 			Filter::Electron,
 		];
 
-		let snapshot = self.snapshot_cell.borrow().clone();
+		let snapshot = self.engine.borrow().snapshot();
+		let delegate = self.get_delegate();
 		let pid_filters: Vec<(Filter, String)> = self
 			.view_state
 			.borrow()
@@ -38,8 +39,13 @@ impl ProcessesTab {
 			.iter()
 			.filter(|f| matches!(f, Filter::Pid(_)))
 			.map(|f| {
-				let label = f.label(&snapshot.processes);
-				(f.clone(), label)
+				if let Filter::Pid(pid) = f {
+					let name = f.label(&snapshot.processes);
+					let count = delegate.count_descendants_of(*pid);
+					(f.clone(), format!("{name} (+{count} children)"))
+				} else {
+					(f.clone(), f.label(&snapshot.processes))
+				}
 			})
 			.collect();
 		let unique_usernames: Vec<String> = match self.cached_usernames.take()

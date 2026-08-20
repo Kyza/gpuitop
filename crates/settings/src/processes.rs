@@ -4,21 +4,25 @@ use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{
 	button::{Button, ButtonVariants},
+	menu::{DropdownMenu, PopupMenuItem},
 	setting::{SettingField, SettingGroup, SettingItem, SettingPage},
 	ActiveTheme, Disableable, Sizable,
 };
 use gpuitop_components::assets::lucide::LucideIcon;
 use gpuitop_core::config::Config;
 use gpuitop_core::model::SortColumn;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub fn processes_page(
 	view: &Entity<SettingsTab>,
 	default_config: &Config,
+	gpu_data: &Arc<AtomicBool>,
+	redetect: &Arc<AtomicBool>,
 ) -> SettingPage {
 	let view = view.clone();
-	let default_vram = SharedString::from(
-		default_config.processes.behaviour.vram_polling.to_string(),
-	);
+	let gpu_data = gpu_data.clone();
+	let redetect = redetect.clone();
 	let default_filter = SharedString::from(
 		default_config
 			.processes
@@ -75,48 +79,130 @@ pub fn processes_page(
 		.groups(vec![
 			SettingGroup::new().title("Behaviour").items(vec![
 				SettingItem::new(
-					"VRAM Polling",
-					SettingField::dropdown(
-						vec![
-							("Auto".into(), "Auto".into()),
-							("On".into(), "On".into()),
-							("Off".into(), "Off".into()),
-						],
-						{
-							let view = view.clone();
-							move |cx: &App| {
-								SharedString::from(
-									view.read(cx)
-										.config
-										.processes
-										.behaviour
-										.vram_polling
-										.to_string(),
+					"GPU Data",
+					SettingField::render({
+						let view = view.clone();
+						move |_options, _window, cx| {
+							let gpu_data = gpu_data.clone();
+							let redetect = redetect.clone();
+							let enabled = gpu_data.load(Ordering::SeqCst);
+							let old_value = view
+								.read(cx)
+								.config
+								.get()
+								.processes
+								.behaviour
+								.gpu_data
+								.to_string();
+							div()
+								.flex()
+								.flex_row()
+								.items_center()
+								.gap(px(8.0))
+								.child(
+									Button::new("gpu-redetect")
+										.label("Redetect GPU Backends")
+										.xsmall()
+										.disabled(!enabled)
+										.on_click(move |_, _, _| {
+											redetect.store(
+												true,
+												Ordering::SeqCst,
+											);
+										}),
 								)
-							}
-						},
-						{
-							let view = view.clone();
-							move |val: SharedString, cx: &mut App| {
-								view.update(cx, |this, cx| {
-									settings::set_vram_polling(
-										&mut this.config,
-										&val,
-									);
-									this.save();
-									cx.notify();
-								});
-							}
-						},
-					)
-					.default_value(default_vram),
+								.child(
+									Button::new("gpu-data-dropdown")
+										.label(old_value.clone())
+										.dropdown_caret(true)
+										.outline()
+										.small()
+										.dropdown_menu_with_anchor(
+											gpui::Anchor::TopRight,
+											{
+												let view = view.clone();
+												let gpu_data =
+													gpu_data.clone();
+												let old_value =
+													old_value.clone();
+												move |menu, _, _| {
+													menu.item(
+														PopupMenuItem::new(
+															"On",
+														)
+														.checked(
+															old_value == "On",
+														)
+														.on_click({
+															let view =
+																view.clone();
+															let gpu_data =
+																gpu_data
+																	.clone();
+															move |_, _, cx| {
+																let gpu_data =
+																	gpu_data
+																		.clone(
+																		);
+																view.update(
+																cx,
+																move |this,
+																		cx| {
+																	this.config.mutate(|c| {
+																		settings::set_gpu_data(c, &gpu_data, "On");
+																	});
+																	cx.notify();
+																},
+															);
+															}
+														}),
+													)
+													.item(
+														PopupMenuItem::new(
+															"Off",
+														)
+														.checked(
+															old_value
+																== "Off",
+														)
+														.on_click({
+															let view =
+																view.clone();
+															let gpu_data =
+																gpu_data
+																	.clone();
+															move |_, _, cx| {
+																let gpu_data =
+																	gpu_data
+																		.clone(
+																		);
+																view.update(
+																cx,
+																move |this,
+																		cx| {
+																	this.config.mutate(|c| {
+																		settings::set_gpu_data(c, &gpu_data, "Off");
+																	});
+																	cx.notify();
+																},
+															);
+															}
+														}),
+													)
+												}
+											},
+										),
+								)
+								.into_any()
+						}
+					}),
 				)
 				.description(
-					"Auto detects the GPU at startup and tracks VRAM if \
-					 available. On forces polling. Off disables it \
-					 completely.",
+					"On collects GPU data (per-PID VRAM and per-device \
+					 telemetry) every tick, re-probing for GPUs until one \
+					 is found. Off disables it completely.",
 				)
-				.keywords(["gpu", "memory", "video"]),
+				.keywords(["gpu", "vram", "memory", "video"]),
 				SettingItem::new(
 					"Process Tree Filter",
 					SettingField::dropdown(
@@ -133,6 +219,7 @@ pub fn processes_page(
 								SharedString::from(
 									view.read(cx)
 										.config
+										.get()
 										.processes
 										.behaviour
 										.pid_filter_mode
@@ -144,11 +231,11 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: SharedString, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									settings::set_pid_filter_mode(
-										&mut this.config,
-										&val,
-									);
-									this.save();
+									this.config.mutate(|c| {
+										settings::set_pid_filter_mode(
+											c, &val,
+										);
+									});
 									cx.notify();
 								});
 							}
@@ -169,6 +256,7 @@ pub fn processes_page(
 							move |cx: &App| {
 								view.read(cx)
 									.config
+									.get()
 									.processes
 									.behaviour
 									.clear_search_on_pin
@@ -178,11 +266,11 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: bool, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									settings::set_clear_search_on_pin(
-										&mut this.config,
-										val,
-									);
-									this.save();
+									this.config.mutate(|c| {
+										settings::set_clear_search_on_pin(
+											c, val,
+										);
+									});
 									cx.notify();
 								});
 							}
@@ -208,6 +296,7 @@ pub fn processes_page(
 								SharedString::from(
 									view.read(cx)
 										.config
+										.get()
 										.processes
 										.behaviour
 										.resource_view_mode
@@ -219,11 +308,11 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: SharedString, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									settings::set_resource_view_mode(
-										&mut this.config,
-										&val,
-									);
-									this.save();
+									this.config.mutate(|c| {
+										settings::set_resource_view_mode(
+											c, &val,
+										);
+									});
 									cx.notify();
 								});
 							}
@@ -249,6 +338,7 @@ pub fn processes_page(
 								SharedString::from(
 									view.read(cx)
 										.config
+										.get()
 										.processes
 										.behaviour
 										.default_view_mode
@@ -260,11 +350,11 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: SharedString, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									settings::set_default_view_mode(
-										&mut this.config,
-										&val,
-									);
-									this.save();
+									this.config.mutate(|c| {
+										settings::set_default_view_mode(
+											c, &val,
+										);
+									});
 									cx.notify();
 								});
 							}
@@ -292,6 +382,7 @@ pub fn processes_page(
 							let visible = view
 								.read(cx)
 								.config
+								.get()
 								.processes
 								.columns
 								.iter()
@@ -326,12 +417,11 @@ pub fn processes_page(
 												view.update(
 													cx,
 													|this, cx| {
-														settings::toggle_column_visibility(
-															&mut this
-																.config,
-															col,
+														this.config.mutate(
+															|c| {
+																settings::toggle_column_visibility(c, col);
+															},
 														);
-														this.save();
 														cx.notify();
 													},
 												);
@@ -358,14 +448,11 @@ pub fn processes_page(
 												view.update(
 													cx,
 													|this, cx| {
-														settings::swap_columns(
-															&mut this
-																.config,
-															idx,
-															idx
-																- 1,
+														this.config.mutate(
+															|c| {
+																settings::swap_columns(c, idx, idx - 1);
+															},
 														);
-														this.save();
 														cx.notify();
 													},
 												);
@@ -392,14 +479,11 @@ pub fn processes_page(
 												view.update(
 													cx,
 													|this, cx| {
-														settings::swap_columns(
-															&mut this
-																.config,
-															idx,
-															idx
-																+ 1,
+														this.config.mutate(
+															|c| {
+																settings::swap_columns(c, idx, idx + 1);
+															},
 														);
-														this.save();
 														cx.notify();
 													},
 												);
@@ -422,6 +506,7 @@ pub fn processes_page(
 								SharedString::from(
 									view.read(cx)
 										.config
+										.get()
 										.processes
 										.default_sort
 										.column
@@ -433,11 +518,9 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: SharedString, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									settings::set_sort_column(
-										&mut this.config,
-										&val,
-									);
-									this.save();
+									this.config.mutate(|c| {
+										settings::set_sort_column(c, &val);
+									});
 									cx.notify();
 								});
 							}
@@ -455,6 +538,7 @@ pub fn processes_page(
 							move |cx: &App| {
 								view.read(cx)
 									.config
+									.get()
 									.processes
 									.default_sort
 									.descending
@@ -464,11 +548,9 @@ pub fn processes_page(
 							let view = view.clone();
 							move |val: bool, cx: &mut App| {
 								view.update(cx, |this, cx| {
-									settings::set_sort_descending(
-										&mut this.config,
-										val,
-									);
-									this.save();
+									this.config.mutate(|c| {
+										settings::set_sort_descending(c, val);
+									});
 									cx.notify();
 								});
 							}

@@ -1,6 +1,5 @@
 use crate::model::{
-	DefaultViewMode, PidFilterMode, ProcessGrouping, ResourceViewMode,
-	SortColumn, VramPolling,
+	DefaultViewMode, GpuData, PidFilterMode, ResourceViewMode, SortColumn,
 };
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -96,7 +95,7 @@ fn default_column_layout() -> Vec<ColumnEntry> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BehaviourConfig {
 	#[serde(default)]
-	pub vram_polling: VramPolling,
+	pub gpu_data: GpuData,
 	#[serde(default)]
 	pub pid_filter_mode: PidFilterMode,
 	#[serde(default = "default_true")]
@@ -110,7 +109,7 @@ pub struct BehaviourConfig {
 impl Default for BehaviourConfig {
 	fn default() -> Self {
 		Self {
-			vram_polling: VramPolling::Auto,
+			gpu_data: GpuData::On,
 			pid_filter_mode: PidFilterMode::DirectChildren,
 			clear_search_on_pin: true,
 			resource_view_mode: ResourceViewMode::SelfOnly,
@@ -156,12 +155,6 @@ pub struct Config {
 	#[serde(default)]
 	pub processes: ProcessesConfig,
 	#[serde(default)]
-	pub default_grouping: ProcessGrouping,
-	#[serde(default)]
-	pub disk_devices: Vec<String>,
-	#[serde(default)]
-	pub network_interfaces: Vec<String>,
-	#[serde(default)]
 	pub window_size: (u32, u32),
 }
 
@@ -170,9 +163,6 @@ impl Default for Config {
 		Self {
 			general: GeneralConfig::default(),
 			processes: ProcessesConfig::default(),
-			default_grouping: ProcessGrouping::Auto,
-			disk_devices: Vec::new(),
-			network_interfaces: Vec::new(),
 			window_size: (1100, 700),
 		}
 	}
@@ -196,23 +186,40 @@ impl Config {
 	}
 
 	pub fn load_from(path: Option<&std::path::Path>) -> Self {
-		if let Some(path) = path {
-			match std::fs::read_to_string(path) {
+		let path = match path {
+			Some(p) => p.to_path_buf(),
+			None => Self::config_path(),
+		};
+		if path.exists() {
+			match std::fs::read_to_string(&path) {
 				Ok(data) => match ron::from_str(&data) {
 					Ok(config) => return config,
-					Err(e) => eprintln!(
-						"Failed to parse config '{}': {e}. Using defaults.",
-						path.display()
-					),
+					Err(e) => {
+						eprintln!(
+							"Failed to parse config '{}': {e}. Backing it \
+							 up and using defaults.",
+							path.display()
+						);
+						backup_config(&path);
+					}
 				},
-				Err(e) => eprintln!(
-					"Failed to read config '{}': {e}. Using defaults.",
-					path.display()
-				),
+				Err(e) => {
+					eprintln!(
+						"Failed to read config '{}': {e}. Backing it up and \
+						 using defaults.",
+						path.display()
+					);
+					backup_config(&path);
+				}
 			}
-			return Self::default();
 		}
-		Self::load()
+		let config = Self::default();
+		if path == Self::config_path() {
+			if let Err(e) = config.save() {
+				eprintln!("Failed to save default config: {e}");
+			}
+		}
+		config
 	}
 
 	pub fn config_path() -> PathBuf {
@@ -232,30 +239,6 @@ impl Config {
 		Ok(base)
 	}
 
-	pub fn load() -> Self {
-		let path = Self::config_path();
-		if path.exists() {
-			match std::fs::read_to_string(&path) {
-				Ok(data) => match ron::from_str(&data) {
-					Ok(config) => return config,
-					Err(e) => eprintln!(
-						"Failed to parse config '{}': {e}. Using defaults.",
-						path.display()
-					),
-				},
-				Err(e) => eprintln!(
-					"Failed to read config '{}': {e}. Using defaults.",
-					path.display()
-				),
-			}
-		}
-		let config = Self::default();
-		if let Err(e) = config.save() {
-			eprintln!("Failed to save default config: {e}");
-		}
-		config
-	}
-
 	pub fn save(&self) -> Result<()> {
 		let base = Self::ensure_dir()?;
 		let path = base.join("config.ron");
@@ -264,10 +247,33 @@ impl Config {
 			ron::ser::PrettyConfig::default(),
 		)
 		.with_context(|| "Failed to serialize config")?;
-		std::fs::write(&path, data).with_context(|| {
-			format!("Failed to write config to {:?}", path)
+		// Write to a temp file then rename so an interrupted save can never
+		// truncate the real config: a corrupt file on disk is a user-data
+		// loss event, and `load_from` would otherwise replace it with
+		// defaults on the next launch.
+		let tmp = base.join("config.ron.tmp");
+		std::fs::write(&tmp, data).with_context(|| {
+			format!("Failed to write config to {:?}", tmp)
+		})?;
+		std::fs::rename(&tmp, &path).with_context(|| {
+			format!("Failed to replace config at {:?}", path)
 		})?;
 		Ok(())
+	}
+}
+
+/// Preserve a config file that failed to load instead of destroying it.
+/// `load_from` falls back to defaults when a file won't parse; without this,
+/// that fallback's `save()` would silently overwrite the user's real settings
+/// (e.g. after a crash truncated the file). Only the first backup is kept, so
+/// an earlier good copy survives repeated nukes.
+fn backup_config(path: &std::path::Path) {
+	let backup = path.with_extension("ron.bak");
+	if backup.exists() {
+		return;
+	}
+	if let Err(e) = std::fs::copy(path, &backup) {
+		eprintln!("Failed to back up config to {:?}: {e}", backup);
 	}
 }
 
@@ -291,8 +297,7 @@ mod dirs {
 mod tests {
 	use super::*;
 	use crate::model::{
-		DefaultViewMode, PidFilterMode, ResourceViewMode, SortColumn,
-		VramPolling,
+		DefaultViewMode, GpuData, PidFilterMode, ResourceViewMode, SortColumn,
 	};
 
 	#[test]
@@ -325,7 +330,7 @@ mod tests {
 	#[test]
 	fn test_behaviour_config_default() {
 		let b = BehaviourConfig::default();
-		assert_eq!(b.vram_polling, VramPolling::Auto);
+		assert_eq!(b.gpu_data, GpuData::On);
 		assert_eq!(b.pid_filter_mode, PidFilterMode::DirectChildren);
 		assert!(b.clear_search_on_pin);
 		assert_eq!(b.resource_view_mode, ResourceViewMode::SelfOnly);
@@ -352,8 +357,6 @@ mod tests {
 		assert_eq!(cfg.window_size, (1100, 700));
 		assert_eq!(cfg.general, GeneralConfig::default());
 		assert_eq!(cfg.processes, ProcessesConfig::default());
-		assert!(cfg.disk_devices.is_empty());
-		assert!(cfg.network_interfaces.is_empty());
 	}
 
 	#[test]
@@ -411,6 +414,38 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn load_from_bad_config_backs_up_and_never_clobbers_previous_backup() {
+		let dir = std::env::temp_dir().join(format!(
+			"gpuitop-config-backup-test-{}",
+			std::process::id()
+		));
+		let _ = std::fs::remove_dir_all(&dir);
+		std::env::set_var("XDG_CONFIG_HOME", &dir);
+
+		let path = Config::config_path();
+		std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+
+		std::fs::write(&path, "this is not valid ron {").unwrap();
+		let config = Config::load_from(None);
+		assert_eq!(config, Config::default());
+		let backup = path.with_extension("ron.bak");
+		assert!(backup.exists());
+		assert_eq!(
+			std::fs::read_to_string(&backup).unwrap(),
+			"this is not valid ron {"
+		);
+
+		std::fs::write(&path, "corrupt attempt 2").unwrap();
+		Config::load_from(None);
+		assert_eq!(
+			std::fs::read_to_string(&backup).unwrap(),
+			"this is not valid ron {"
+		);
+
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
 	fn roundtrip<
 		T: Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
 	>(
@@ -462,7 +497,7 @@ mod tests {
 	fn test_behaviour_config_roundtrip() {
 		roundtrip(&BehaviourConfig::default());
 		roundtrip(&BehaviourConfig {
-			vram_polling: VramPolling::On,
+			gpu_data: GpuData::Off,
 			pid_filter_mode: PidFilterMode::AllDescendants,
 			clear_search_on_pin: false,
 			resource_view_mode: ResourceViewMode::Cumulative,
@@ -487,8 +522,6 @@ mod tests {
 		roundtrip(&Config::default());
 		let mut cfg = Config::default();
 		cfg.window_size = (1920, 1080);
-		cfg.disk_devices = vec!["sda".into(), "nvme0n1".into()];
-		cfg.network_interfaces = vec!["eth0".into()];
 		roundtrip(&cfg);
 	}
 
@@ -539,12 +572,12 @@ mod tests {
 	#[test]
 	fn test_apply_override_preserves_unspecified() {
 		let mut cfg = Config::default();
-		cfg.processes.behaviour.vram_polling = VramPolling::Off;
+		cfg.processes.behaviour.gpu_data = GpuData::Off;
 		cfg.apply_override(
 			r#"(general: (interface: (refresh_ms: 500, theme: "Default Dark")))"#,
 		)
 		.unwrap();
-		assert_eq!(cfg.processes.behaviour.vram_polling, VramPolling::Off);
+		assert_eq!(cfg.processes.behaviour.gpu_data, GpuData::Off);
 		assert_eq!(cfg.window_size, (1100, 700));
 	}
 

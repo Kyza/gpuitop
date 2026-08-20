@@ -6,8 +6,8 @@ use gpui_component::menu::DropdownMenu;
 use gpui_component::tab::{Tab, TabBar};
 use gpui_component::{ActiveTheme, Disableable, Sizable, TitleBar};
 use gpuitop_components::assets::lucide::LucideIcon;
-use gpuitop_core::config::Config;
-use gpuitop_core::model::{GpuBackend, SystemSnapshot};
+use gpuitop_core::config_store::ConfigStore;
+use gpuitop_core::model::{GpuBackend, GpuData, SystemSnapshot};
 use gpuitop_core::service_manager::{detect_init, InitSystem};
 use gpuitop_elevation::relaunch_elevated;
 use gpuitop_gpu::detect_gpu;
@@ -26,9 +26,10 @@ const PAUSE_KEY: &str = "escape";
 
 pub struct App {
 	active_tab: usize,
-	pub config: Config,
+	pub config: ConfigStore,
 	snapshot: Rc<SystemSnapshot>,
 	gpu_backends: Vec<GpuBackend>,
+	gpu_data: Arc<AtomicBool>,
 	init_system: InitSystem,
 	rx: mpsc::Receiver<SystemSnapshot>,
 	paused: Arc<AtomicBool>,
@@ -48,7 +49,7 @@ impl App {
 		performance_tab: Option<usize>,
 		search: Option<String>,
 		override_view: Option<bool>,
-		config: Config,
+		config: ConfigStore,
 		desktop_cache: Arc<DesktopEntryCache>,
 		cx: &mut Context<Self>,
 	) -> Self {
@@ -75,12 +76,20 @@ impl App {
 				cx,
 			)
 		});
-		let refresh_ms =
-			Arc::new(AtomicU64::new(config.general.interface.refresh_ms));
+		let refresh_ms = Arc::new(AtomicU64::new(
+			config.get().general.interface.refresh_ms,
+		));
+		let gpu_data = Arc::new(AtomicBool::new(matches!(
+			config.get().processes.behaviour.gpu_data,
+			GpuData::On
+		)));
+		let redetect = Arc::new(AtomicBool::new(false));
 		let settings_tab = cx.new(|cx| {
 			SettingsTab::new(
 				config.clone(),
 				refresh_ms.clone(),
+				gpu_data.clone(),
+				redetect.clone(),
 				initial_settings_page,
 				crate::built::DIRECT_DEPS,
 				cx,
@@ -93,13 +102,19 @@ impl App {
 		let (wake_tx, wake_rx) = async_channel::unbounded::<()>();
 		let thread_refresh = refresh_ms.clone();
 		let thread_backends = gpu_backends.clone();
+		let thread_gpu_data = gpu_data.clone();
+		let thread_redetect = redetect.clone();
 		let paused = Arc::new(AtomicBool::new(false));
 		let thread_paused = paused.clone();
 		let thread_wake = wake_tx.clone();
 
 		std::thread::spawn(move || {
-			let mut state =
-				CollectorState::new(thread_backends, desktop_cache);
+			let mut state = CollectorState::new(
+				thread_backends,
+				desktop_cache,
+				thread_gpu_data,
+				thread_redetect,
+			);
 			loop {
 				if !thread_paused.load(Ordering::SeqCst) {
 					let snapshot = collect_snapshot(&mut state);
@@ -157,9 +172,10 @@ impl App {
 							None,
 							cx,
 						);
-						this.config.general.interface.theme =
-							"Default Dark".to_string();
-						let _ = this.config.save();
+						this.config.mutate(|c| {
+							c.general.interface.theme =
+								"Default Dark".to_string();
+						});
 						cx.notify();
 					}
 				},
@@ -170,6 +186,7 @@ impl App {
 			config,
 			snapshot: initial_snapshot,
 			gpu_backends,
+			gpu_data,
 			init_system,
 			rx,
 			paused,
@@ -348,7 +365,6 @@ impl Render for App {
 								))
 						})
 						.child({
-							let config = self.config.clone();
 							let entity: Entity<App> = cx.entity().clone();
 							Button::new("theme-btn")
 								.ghost()
@@ -366,30 +382,19 @@ impl Render for App {
 									let on_commit = {
 										let entity = entity.clone();
 										Rc::new(
-											move |name: &SharedString,
-											      cx: &mut GpuiApp| {
-												entity.update(cx, |this, cx| {
-												this.config
-													.general
+									move |name: &SharedString,
+									      cx: &mut GpuiApp| {
+										entity.update(cx, |this, cx| {
+											this.config.mutate(|c| {
+												c.general
 													.interface
 													.theme =
 													name.as_ref()
 														.to_string();
-													this.settings_tab.update(
-														cx,
-														|tab, cx| {
-															tab.config
-																.general
-																.interface
-																.theme =
-																name.as_ref()
-																	.to_string();
-															cx.notify();
-														},
-													);
-													cx.notify();
-												});
-											},
+											});
+											cx.notify();
+										});
+									},
 										) as Rc<
 											dyn Fn(
 												&SharedString,
@@ -398,15 +403,17 @@ impl Render for App {
 										>
 									};
 									gpuitop_components::theme_menu::build_theme_menu(
-										menu, &config, &on_commit, window, cx,
-									)
+									menu, &on_commit, window, cx,
+								)
 								})
 						}),
 				),
 			)
 			.child(div().flex_grow(1.0).size_full().child(content))
 			.child({
-				let gpu_label = if gpu.is_empty() {
+				let gpu_label = if !self.gpu_data.load(Ordering::SeqCst) {
+					"Off".to_string()
+				} else if gpu.is_empty() {
 					"None".to_string()
 				} else {
 					gpu.iter()

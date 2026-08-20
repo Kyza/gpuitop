@@ -1,4 +1,5 @@
 use super::{LimitEntry, ProcessProperties, SmapsSummary};
+use gpuitop_snapshot::{ProcBasics, ReadError};
 use procfs::process::LimitValue;
 
 use gpuitop_core::model;
@@ -11,19 +12,17 @@ fn limit_to_str(limit: &LimitValue) -> String {
 }
 
 #[hotpath::measure]
-pub fn collect(pid: i32) -> Option<ProcessProperties> {
-	let proc = procfs::process::Process::new(pid).ok()?;
-	let stat = proc.stat().ok()?;
-	let status = proc.status().ok()?;
-
-	let hertz = procfs::ticks_per_second() as f64;
+pub fn collect(pid: i32) -> Result<ProcessProperties, ReadError> {
+	let proc =
+		procfs::process::Process::new(pid).map_err(|_| ReadError::Dead)?;
+	let basics = ProcBasics::read(&proc)?;
+	let stat = &basics.stat;
+	let status = &basics.status;
 
 	let uid = status.ruid;
-	let username = users::get_user_by_uid(uid)
-		.map(|u| u.name().to_string_lossy().into_owned())
-		.unwrap_or_else(|| uid.to_string());
+	let username = gpuitop_snapshot::username_for_uid(uid);
 
-	let command = proc.cmdline().unwrap_or_default();
+	let command = basics.cmdline.clone();
 	let exe_path = proc.exe().ok().map(|p| p.to_string_lossy().into_owned());
 	let cwd = proc.cwd().ok().map(|p| p.to_string_lossy().into_owned());
 	let root_path =
@@ -83,8 +82,7 @@ pub fn collect(pid: i32) -> Option<ProcessProperties> {
 	let io = proc.io().ok();
 	let limits_data = proc.limits().ok();
 
-	let cpu_ticks =
-		stat.utime + stat.stime + stat.cutime as u64 + stat.cstime as u64;
+	let cpu_ticks = basics.cpu_tick_sum();
 
 	let mut limits = Vec::new();
 	if let Some(ref l) = limits_data {
@@ -193,21 +191,21 @@ pub fn collect(pid: i32) -> Option<ProcessProperties> {
 		})
 	});
 
-	Some(ProcessProperties {
+	Ok(ProcessProperties {
 		pid: stat.pid,
 		ppid: stat.ppid,
-		name: stat.comm.clone(),
+		name: basics.name(),
 		command,
 		state: stat.state,
 		state_label: model::state_label(stat.state).to_string(),
 		threads: stat.num_threads,
 		user: username,
 		uid,
-		groups: status.groups,
+		groups: status.groups.clone(),
 		priority: stat.priority,
 		nice: stat.nice,
 		cpu_time_ticks: cpu_ticks,
-		cpu_time_secs: cpu_ticks as f64 / hertz,
+		cpu_time_secs: basics.cpu_time_secs(),
 		starttime_ticks: stat.starttime,
 		processor: stat.processor,
 		vm_size: status.vmsize.map(|v| v * 1024),
@@ -244,4 +242,19 @@ pub fn collect(pid: i32) -> Option<ProcessProperties> {
 		nonvoluntary_ctxt_switches: status.nonvoluntary_ctxt_switches,
 		smaps,
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn limit_to_str_unlimited() {
+		assert_eq!(limit_to_str(&LimitValue::Unlimited), "unlimited");
+	}
+
+	#[test]
+	fn limit_to_str_value() {
+		assert_eq!(limit_to_str(&LimitValue::Value(1024)), "1024");
+	}
 }

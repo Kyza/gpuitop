@@ -47,6 +47,7 @@ pub fn general_page(
 							SharedString::from(
 								view.read(cx)
 									.config
+									.get()
 									.general
 									.interface
 									.refresh_ms
@@ -59,12 +60,13 @@ pub fn general_page(
 						let refresh_ms = refresh_ms.clone();
 						move |val: SharedString, cx: &mut App| {
 							view.update(cx, |this, cx| {
-								settings::set_refresh_ms(
-									&mut this.config,
-									&refresh_ms,
-									&val,
-								);
-								this.save();
+								this.config.mutate(|c| {
+									settings::set_refresh_ms(
+										c,
+										&refresh_ms,
+										&val,
+									);
+								});
 								cx.notify();
 							});
 						}
@@ -82,7 +84,7 @@ pub fn general_page(
 				SettingField::render({
 					let view = view.clone();
 					move |_options, _window, cx| {
-						let config = view.read(cx).config.clone();
+						let config = view.read(cx).config.get().clone();
 						let label = SharedString::from(
 							config.general.interface.theme.as_str(),
 						);
@@ -96,18 +98,17 @@ pub fn general_page(
 									let view = view.clone();
 									Rc::new(move |name, cx| {
 										view.update(cx, |this, cx| {
-											this.config
-												.general
-												.interface
-												.theme = name.as_ref().to_string();
-											this.save();
+											this.config.mutate(|c| {
+												c.general.interface.theme =
+													name.as_ref().to_string();
+											});
 											cx.notify();
 										});
 									})
 								};
 								gpuitop_components::theme_menu::build_theme_menu(
-								menu, &config, &on_commit, window, cx,
-							)
+									menu, &on_commit, window, cx,
+								)
 							})
 					}
 				}),
@@ -124,18 +125,16 @@ pub fn general_page(
 					{
 						let view = view.clone();
 						move |cx: &App| {
-							view.read(cx).config.window_size.0 as f64
+							view.read(cx).config.get().window_size.0 as f64
 						}
 					},
 					{
 						let view = view.clone();
 						move |val: f64, cx: &mut App| {
 							view.update(cx, |this, cx| {
-								settings::set_window_width(
-									&mut this.config,
-									val,
-								);
-								this.save();
+								this.config.mutate(|c| {
+									settings::set_window_width(c, val);
+								});
 								cx.notify();
 							});
 						}
@@ -151,18 +150,16 @@ pub fn general_page(
 					{
 						let view = view.clone();
 						move |cx: &App| {
-							view.read(cx).config.window_size.1 as f64
+							view.read(cx).config.get().window_size.1 as f64
 						}
 					},
 					{
 						let view = view.clone();
 						move |val: f64, cx: &mut App| {
 							view.update(cx, |this, cx| {
-								settings::set_window_height(
-									&mut this.config,
-									val,
-								);
-								this.save();
+								this.config.mutate(|c| {
+									settings::set_window_height(c, val);
+								});
 								cx.notify();
 							});
 						}

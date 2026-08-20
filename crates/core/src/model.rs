@@ -82,6 +82,7 @@ impl SystemSnapshot {
 			timestamp: std::time::Instant::now(),
 			gpu_backends: Vec::new(),
 			gpu_devices: Vec::new(),
+			gpu_polling_enabled: false,
 		}
 	}
 }
@@ -96,6 +97,7 @@ pub struct SystemSnapshot {
 	pub timestamp: std::time::Instant,
 	pub gpu_backends: Vec<GpuBackend>,
 	pub gpu_devices: Vec<GpuDevice>,
+	pub gpu_polling_enabled: bool,
 }
 
 #[derive(
@@ -333,17 +335,15 @@ impl VramUsage {
 	serde::Deserialize,
 	Default,
 )]
-pub enum VramPolling {
+pub enum GpuData {
 	#[default]
-	Auto,
 	On,
 	Off,
 }
 
-impl std::fmt::Display for VramPolling {
+impl std::fmt::Display for GpuData {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::Auto => write!(f, "Auto"),
 			Self::On => write!(f, "On"),
 			Self::Off => write!(f, "Off"),
 		}
@@ -412,42 +412,13 @@ impl Filter {
 			Self::Electron => "Electron".into(),
 			Self::ProcessState(c) => state_label(*c).into(),
 			Self::Username(s) => s.clone(),
-			Self::Pid(pid) => {
-				let count = processes
-					.iter()
-					.filter(|p| is_descendant_of_flat(p.pid, *pid, processes))
-					.count();
-				let name = processes
-					.iter()
-					.find(|p| p.pid == *pid)
-					.map(|p| p.name.clone())
-					.unwrap_or_else(|| pid.to_string());
-				format!("{name} (+{count} children)")
-			}
+			Self::Pid(pid) => processes
+				.iter()
+				.find(|p| p.pid == *pid)
+				.map(|p| p.name.clone())
+				.unwrap_or_else(|| pid.to_string()),
 		}
 	}
-}
-
-fn is_descendant_of_flat(
-	child_pid: i32,
-	ancestor: i32,
-	all: &[ProcessSnapshot],
-) -> bool {
-	if child_pid == ancestor {
-		return false;
-	}
-	let mut current = child_pid;
-	for _ in 0..100 {
-		if current == ancestor {
-			return true;
-		}
-		if let Some(p) = all.iter().find(|p| p.pid == current) {
-			current = p.ppid;
-		} else {
-			return false;
-		}
-	}
-	false
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -604,78 +575,22 @@ mod tests {
 	}
 
 	#[test]
-	fn filter_label_pid_flat_child_count() {
-		let procs = vec![
-			ProcessSnapshot {
-				pid: 42,
-				ppid: 1,
-				name: "parentish".into(),
-				..make_proc(42, 1)
-			},
-			make_proc(100, 42),
-			make_proc(200, 100),
-			make_proc(300, 200),
-			make_proc(999, 1),
-		];
-		let label = Filter::Pid(42).label(&procs);
-		assert_eq!(label, "parentish (+3 children)");
-	}
-
-	#[test]
-	fn filter_label_pid_no_children() {
+	fn filter_label_pid_returns_name() {
 		let procs = vec![ProcessSnapshot {
-			pid: 7,
+			pid: 42,
 			ppid: 1,
-			name: "lonely".into(),
-			..make_proc(7, 1)
+			name: "parentish".into(),
+			..make_proc(42, 1)
 		}];
-		let label = Filter::Pid(7).label(&procs);
-		assert_eq!(label, "lonely (+0 children)");
+		let label = Filter::Pid(42).label(&procs);
+		assert_eq!(label, "parentish");
 	}
 
 	#[test]
 	fn filter_label_pid_missing_uses_pid_string() {
 		let procs = vec![];
 		let label = Filter::Pid(12345).label(&procs);
-		assert_eq!(label, "12345 (+0 children)");
-	}
-
-	#[test]
-	fn is_descendant_of_flat_direct_child() {
-		let procs = vec![make_proc(10, 5), make_proc(5, 1), make_proc(1, 0)];
-		assert!(is_descendant_of_flat(10, 5, &procs));
-		assert!(is_descendant_of_flat(10, 1, &procs));
-		assert!(!is_descendant_of_flat(5, 10, &procs));
-	}
-
-	#[test]
-	fn is_descendant_of_flat_grandchild() {
-		let procs = vec![make_proc(10, 5), make_proc(5, 1), make_proc(1, 0)];
-		assert!(is_descendant_of_flat(10, 1, &procs));
-	}
-
-	#[test]
-	fn is_descendant_of_flat_chain() {
-		let procs = vec![
-			make_proc(400, 300),
-			make_proc(300, 200),
-			make_proc(200, 100),
-			make_proc(100, 1),
-		];
-		assert!(is_descendant_of_flat(400, 100, &procs));
-		assert!(!is_descendant_of_flat(100, 400, &procs));
-	}
-
-	#[test]
-	fn is_descendant_of_flat_not_found() {
-		let procs = vec![make_proc(1, 0)];
-		assert!(!is_descendant_of_flat(999, 1, &procs));
-	}
-
-	#[test]
-	fn is_descendant_of_flat_self_is_not_descendant() {
-		let procs = vec![make_proc(1, 0), make_proc(2, 1)];
-		assert!(!is_descendant_of_flat(1, 1, &procs));
+		assert_eq!(label, "12345");
 	}
 
 	#[test]
@@ -708,10 +623,9 @@ mod tests {
 	}
 
 	#[test]
-	fn display_vram_polling() {
-		assert_eq!(VramPolling::Auto.to_string(), "Auto");
-		assert_eq!(VramPolling::On.to_string(), "On");
-		assert_eq!(VramPolling::Off.to_string(), "Off");
+	fn display_gpu_data() {
+		assert_eq!(GpuData::On.to_string(), "On");
+		assert_eq!(GpuData::Off.to_string(), "Off");
 	}
 
 	#[test]

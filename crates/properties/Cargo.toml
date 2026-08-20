@@ -7,6 +7,7 @@ license = "MIT"
 [dependencies]
 gpuitop_core = { path = "../core" }
 gpuitop_components = { path = "../components" }
+gpuitop_snapshot = { path = "../snapshot" }
 procfs = { workspace = true }
 users = { workspace = true }
 gpui = { workspace = true }

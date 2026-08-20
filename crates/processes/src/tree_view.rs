@@ -21,7 +21,7 @@ impl ProcessesTab {
 		_window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		let snapshot_ts = self.snapshot_cell.borrow().timestamp;
+		let snapshot_ts = self.engine.borrow().snapshot().timestamp;
 		let view_gen = self.view_state.borrow().generation;
 		let stamp = (snapshot_ts, view_gen);
 
@@ -44,7 +44,8 @@ impl ProcessesTab {
 		let tree_data = self.cached_tree_data.as_ref().unwrap().1.clone();
 		let view = cx.entity();
 		let view_state = self.view_state.clone();
-		let clear_search_on_pin = self.clear_search_on_pin;
+		let clear_search_on_pin =
+			self.config.get().processes.behaviour.clear_search_on_pin;
 		let double_click = self.tree_double_click.clone();
 		let init_system = self.init_system;
 		let needs_clear_input = self.needs_clear_input.clone();
@@ -113,8 +114,13 @@ impl ProcessesTab {
 		let is_match = parts.get(1).copied().unwrap_or("match") == "match";
 
 		let proc = tree_data.process_lookup.get(&pid);
-		let child_count =
-			tree_data.descendant_counts.get(&pid).copied().unwrap_or(0);
+		let shown_count = tree_data
+			.shown_descendant_counts
+			.get(&pid)
+			.copied()
+			.unwrap_or(0);
+		let total_count =
+			tree_data.subtree_counts.get(&pid).copied().unwrap_or(0);
 
 		let is_folder = entry.is_folder();
 		let is_expanded = entry.is_expanded();
@@ -163,13 +169,33 @@ impl ProcessesTab {
 						children
 					})
 					.child({
-						if child_count > 0 {
-							format!(
-								"({}) {} (+{})",
-								proc.pid, display_name, child_count
-							)
+						if total_count > 0 {
+							div()
+								.flex()
+								.flex_row()
+								.items_center()
+								.gap(px(4.0))
+								.child(format!(
+									"({}) {} (+{}/{})",
+									proc.pid,
+									display_name,
+									shown_count,
+									total_count
+								))
+								.id(format!("tree-badge-{}", proc.pid))
+								.tooltip(move |window, cx| {
+									gpui_component::tooltip::Tooltip::new(
+										format!(
+											"{} of {} descendants shown",
+											shown_count, total_count
+										),
+									)
+									.build(window, cx)
+								})
+								.into_any_element()
 						} else {
 							format!("({}) {}", proc.pid, display_name)
+								.into_any_element()
 						}
 					}),
 			);

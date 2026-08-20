@@ -17,10 +17,9 @@ pub struct ViewState {
 	pub filter_mode: FilterMode,
 	pub pid_filter_mode: PidFilterMode,
 	pub search: String,
-	pub sort_col: usize,
+	pub sort_col: SortColumn,
 	pub sort_dir: SortDirection,
 	pub resource_view_mode: ResourceViewMode,
-	pub cached: Option<(std::time::Instant, u64, Rc<Vec<ProcessSnapshot>>)>,
 }
 
 impl ViewState {
@@ -47,10 +46,9 @@ mod tests {
 			filter_mode: FilterMode::And,
 			pid_filter_mode: PidFilterMode::AllDescendants,
 			search: String::new(),
-			sort_col: 0,
+			sort_col: SortColumn::Name,
 			sort_dir: SortDirection::Ascending,
 			resource_view_mode: ResourceViewMode::SelfOnly,
-			cached: None,
 		}
 	}
 
@@ -79,11 +77,11 @@ mod tests {
 	#[test]
 	fn mutate_applies_mutation() {
 		let state = Rc::new(RefCell::new(make_test_state()));
-		assert_eq!(state.borrow().sort_col, 0);
+		assert_eq!(state.borrow().sort_col, SortColumn::Name);
 		ViewState::mutate(&state, |s| {
-			s.sort_col = 5;
+			s.sort_col = SortColumn::Cpu;
 		});
-		assert_eq!(state.borrow().sort_col, 5);
+		assert_eq!(state.borrow().sort_col, SortColumn::Cpu);
 	}
 
 	#[test]
@@ -103,9 +101,8 @@ mod tests {
 		assert!(state.filters.is_empty());
 		assert_eq!(state.filter_mode, FilterMode::And);
 		assert_eq!(state.search, "");
-		assert_eq!(state.sort_col, 0);
+		assert_eq!(state.sort_col, SortColumn::Name);
 		assert_eq!(state.sort_dir, SortDirection::Ascending);
 		assert_eq!(state.resource_view_mode, ResourceViewMode::SelfOnly);
-		assert!(state.cached.is_none());
 	}
 }

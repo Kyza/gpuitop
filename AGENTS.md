@@ -14,6 +14,12 @@ cargo +nightly fmt
 
 Build/check in debug mode unless running `cargo test` — release builds take forever due to git-pulled gpui deps plus `opt-level = 2` for `[profile.dev.package."*"]`.
 
+When piping long-running builds/tests, include the cargo progress lines in the filter so you can tell the build is moving and not stuck:
+
+```bash
+cargo test 2>&1 | rg "Building|Compiling|Running|test result:"
+```
+
 ## Features
 
 `hotpath` is declared per-crate and forwarded down the dependency chain. Each
@@ -120,3 +126,22 @@ format_macro_matchers = true
 - No comments unless explicitly requested.
 - **Files should never be thousands of lines long.** Target ~200-300 lines per file. If a file exceeds ~400 lines, split into separate concepts: extract helper functions, split related behavior into sub-modules, or componentize UI into smaller elements. Rarely go beyond 500 lines.
 - **Write unit tests for data crates** when the logic is testable (filtering, sorting, fuzzy matching, cumulative computation, settings mutations). UI files may also have tests for pure helper functions extracted from rendering.
+
+## Agent skills
+
+### Questions
+
+Always present questions to the user (grilling rounds, design decisions, any
+decision point) with the ui-based question tool — never as plain-text lists.
+
+### Issue tracker
+
+Issues and specs live as markdown files under `.scratch/<feature>/` in this repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use the default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: root `CONTEXT-MAP.md` points at one `CONTEXT.md` per crate, with ADRs under `docs/adr/`. See `docs/agents/domain.md`.

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -33,17 +34,30 @@ pub struct PrevNet {
 	pub tx_bytes: u64,
 }
 
+// Why a per-PID /proc read failed. `Dead` means the process exited or never
+// existed; `Unavailable` means it exists but the data can't be read (e.g.
+// permissions). Consumers render the two differently: dead stops polling,
+// unavailable keeps polling and shows a degraded warning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadError {
+	Dead,
+	Unavailable,
+}
+
 pub struct CollectorState {
-	pub prev_cpu: Option<PrevCpu>,
-	pub prev_proc: HashMap<i32, PrevProc>,
-	pub prev_disk: HashMap<String, PrevDisk>,
-	pub prev_net: HashMap<String, PrevNet>,
-	pub prev_time: Option<Instant>,
-	pub current_uid: u32,
-	pub user_cache: HashMap<u32, String>,
-	pub desktop_cache: Arc<DesktopEntryCache>,
-	pub gpu_backends: Vec<GpuBackend>,
-	pub core_history: HashMap<usize, Vec<f32>>,
+	prev_cpu: Option<PrevCpu>,
+	prev_proc: HashMap<i32, PrevProc>,
+	prev_disk: HashMap<String, PrevDisk>,
+	prev_net: HashMap<String, PrevNet>,
+	prev_time: Option<Instant>,
+	current_uid: u32,
+	user_cache: HashMap<u32, String>,
+	desktop_cache: Arc<DesktopEntryCache>,
+	gpu_backends: Vec<GpuBackend>,
+	// Shared with the settings tab: the live GpuData setting and a
+	// one-shot re-detect request (set by the settings button, cleared here).
+	gpu_data_enabled: Arc<AtomicBool>,
+	redetect: Arc<AtomicBool>,
 }
 
 #[cfg(unix)]
@@ -60,6 +74,8 @@ impl CollectorState {
 	pub fn new(
 		gpu_backends: Vec<GpuBackend>,
 		desktop_cache: Arc<DesktopEntryCache>,
+		gpu_data_enabled: Arc<AtomicBool>,
+		redetect: Arc<AtomicBool>,
 	) -> Self {
 		Self {
 			prev_cpu: None,
@@ -71,7 +87,8 @@ impl CollectorState {
 			user_cache: HashMap::new(),
 			desktop_cache,
 			gpu_backends,
-			core_history: HashMap::new(),
+			gpu_data_enabled,
+			redetect,
 		}
 	}
 }
@@ -84,8 +101,8 @@ mod macos;
 mod windows;
 
 #[cfg(target_os = "linux")]
-pub use linux::{collect_snapshot, pid_alive};
+pub use linux::{collect_snapshot, username_for_uid, ProcBasics};
 #[cfg(target_os = "macos")]
-pub use macos::{collect_snapshot, pid_alive};
+pub use macos::collect_snapshot;
 #[cfg(target_os = "windows")]
-pub use windows::{collect_snapshot, pid_alive};
+pub use windows::collect_snapshot;

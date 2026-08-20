@@ -80,7 +80,7 @@ mod tests {
 
 	#[test]
 	fn test_ron2_preserves_shape_but_ron_is_lossy() {
-		let input = "(window_size: (1100, 700), vram_polling: Auto)";
+		let input = "(window_size: (1100, 700), gpu_data: On)";
 
 		// ron2 keeps the tuple and the bare unit-variant name, so the merged
 		// config still deserializes.
@@ -91,9 +91,9 @@ mod tests {
 					k == "window_size" && matches!(v, ron2::Value::Tuple(_))
 				}));
 				assert!(fields.iter().any(|(k, v)| {
-					k == "vram_polling"
+					k == "gpu_data"
 						&& matches!(v, ron2::Value::Named { name, .. }
-							if name == "Auto")
+							if name == "On")
 				}));
 			}
 			other => panic!("expected Struct, got {other:?}"),

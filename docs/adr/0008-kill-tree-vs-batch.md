@@ -1,0 +1,3 @@
+# Kill-tree as a verb distinct from multi-select batch
+
+A future reader might assume multi-select batch-kill obsoletes kill-tree — killing a subtree is just "select the subtree, kill the selection." It doesn't. Batch actions target **siblings**: users multi-select peers (several CPU-hogs, all of a user's processes). Kill-tree targets a **parent's descendants** — a different shape entirely, and it has to exist anyway because signals don't propagate: killing a parent leaves its children reparented to pid 1 and running. Both are first-class verbs; kill-tree additionally sends leaves-first so a dying parent can't respawn children mid-signal. The single-shot tree collection at click time (not signal time) is deliberate — the tree can change between the two.

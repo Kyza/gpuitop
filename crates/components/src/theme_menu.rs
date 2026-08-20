@@ -6,7 +6,6 @@ use gpui::App as GpuiApp;
 use gpui::*;
 use gpui_component::menu::{PopupMenu, PopupMenuItem};
 use gpui_component::ThemeMode;
-use gpuitop_core::config::Config;
 
 use crate::assets::lucide::LucideIcon;
 use crate::themes::{apply_theme_by_name, list_theme_families};
@@ -16,14 +15,12 @@ fn theme_preview_item(
 	name: &SharedString,
 	mode: ThemeMode,
 	current: &SharedString,
-	config: &Config,
 	preview: &Rc<RefCell<Option<SharedString>>>,
 	on_commit: &Rc<dyn Fn(&SharedString, &mut GpuiApp)>,
 ) -> PopupMenu {
 	let name_owned = name.clone();
 	let item_name = name_owned.clone();
 	let item_current = name_owned == *current;
-	let item_config = RefCell::new(config.clone());
 	let preview_name = name_owned.clone();
 	let hover_preview = preview.clone();
 	let click_preview = preview.clone();
@@ -91,9 +88,6 @@ fn theme_preview_item(
 	.on_click(
 		move |_: &ClickEvent, window: &mut Window, cx: &mut GpuiApp| {
 			*click_preview.borrow_mut() = None;
-			item_config.borrow_mut().general.interface.theme =
-				item_name.as_ref().to_string();
-			let _ = item_config.borrow().save();
 			(on_commit)(&item_name, cx);
 			apply_theme_by_name(&item_name, Some(window), cx);
 		},
@@ -103,7 +97,6 @@ fn theme_preview_item(
 
 pub fn build_theme_menu(
 	mut menu: PopupMenu,
-	config: &Config,
 	on_commit: &Rc<dyn Fn(&SharedString, &mut GpuiApp)>,
 	window: &mut Window,
 	cx: &mut Context<PopupMenu>,
@@ -118,7 +111,7 @@ pub fn build_theme_menu(
 		if family.variants.len() == 1 {
 			let (name, mode) = &family.variants[0];
 			menu = theme_preview_item(
-				menu, name, *mode, &current, config, &preview, on_commit,
+				menu, name, *mode, &current, &preview, on_commit,
 			);
 		} else {
 			let family_name = SharedString::from(family.name.as_ref());
@@ -127,14 +120,12 @@ pub fn build_theme_menu(
 			let submenu = PopupMenu::build(window, cx, {
 				let variants = family.variants.clone();
 				let current = current.clone();
-				let config = config.clone();
 				let preview = preview.clone();
 				let on_commit = on_commit.clone();
 				move |mut menu, _, _| {
 					for (name, mode) in &variants {
 						menu = theme_preview_item(
-							menu, name, *mode, &current, &config, &preview,
-							&on_commit,
+							menu, name, *mode, &current, &preview, &on_commit,
 						);
 					}
 					menu

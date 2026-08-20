@@ -5,9 +5,12 @@ mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
 
+mod helpers;
+
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::{input::InputState, ActiveTheme, TitleBar};
+use gpuitop_snapshot::ReadError;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -16,10 +19,11 @@ pub struct PropertiesWindow {
 	pid: i32,
 	properties: Option<ProcessProperties>,
 	dead: bool,
+	degraded: bool,
 	tab_index: usize,
 	environ_name_state: Option<Entity<InputState>>,
 	environ_content_state: Option<Entity<InputState>>,
-	rx: mpsc::Receiver<Option<ProcessProperties>>,
+	rx: mpsc::Receiver<Result<ProcessProperties, ReadError>>,
 }
 
 impl PropertiesWindow {
@@ -34,10 +38,10 @@ impl PropertiesWindow {
 		let (wake_tx, wake_rx) = async_channel::unbounded::<()>();
 		std::thread::spawn(move || loop {
 			let result = crate::collect(pid);
-			let is_none = result.is_none();
+			let keep_polling = !matches!(result, Err(ReadError::Dead));
 			let _ = tx.send(result);
 			let _ = wake_tx.try_send(());
-			if is_none {
+			if !keep_polling {
 				break;
 			}
 			std::thread::sleep(Duration::from_millis(1500));
@@ -59,6 +63,7 @@ impl PropertiesWindow {
 			pid,
 			properties: None,
 			dead: false,
+			degraded: false,
 			tab_index: 0,
 			environ_name_state: None,
 			environ_content_state: None,
@@ -78,11 +83,15 @@ impl Render for PropertiesWindow {
 		// cx.notify() from the wake task (new properties) and user interaction.
 		while let Ok(result) = self.rx.try_recv() {
 			match result {
-				Some(props) => {
+				Ok(props) => {
 					self.properties = Some(props);
 					self.dead = false;
+					self.degraded = false;
 				}
-				None => {
+				Err(ReadError::Unavailable) => {
+					self.degraded = true;
+				}
+				Err(ReadError::Dead) => {
 					self.dead = true;
 				}
 			}
@@ -111,7 +120,12 @@ impl Render for PropertiesWindow {
 			.map(|s| s.read(cx).value().to_string())
 			.unwrap_or_default();
 
-		let title = if self.dead {
+		let title = if self.degraded {
+			format!(
+				"PID {} — Properties (unreadable, showing stale data)",
+				self.pid
+			)
+		} else if self.dead {
 			format!("PID {} — Properties (exited)", self.pid)
 		} else {
 			format!("PID {} — Properties", self.pid)
@@ -136,6 +150,7 @@ impl Render for PropertiesWindow {
 			.child(render_body(
 				self.properties.as_ref(),
 				self.dead,
+				self.degraded,
 				self.tab_index,
 				&name_search,
 				&content_search,
@@ -151,6 +166,7 @@ impl Render for PropertiesWindow {
 fn render_body(
 	properties: Option<&ProcessProperties>,
 	dead: bool,
+	degraded: bool,
 	tab_index: usize,
 	name_search: &str,
 	content_search: &str,
@@ -161,6 +177,7 @@ fn render_body(
 	linux::body(
 		properties,
 		dead,
+		degraded,
 		tab_index,
 		name_search,
 		content_search,
@@ -174,6 +191,7 @@ fn render_body(
 fn render_body(
 	properties: Option<&ProcessProperties>,
 	dead: bool,
+	_degraded: bool,
 	tab_index: usize,
 	_environ_search: &str,
 	_content_search: &str,
@@ -188,6 +206,7 @@ fn render_body(
 fn render_body(
 	properties: Option<&ProcessProperties>,
 	dead: bool,
+	_degraded: bool,
 	tab_index: usize,
 	_environ_search: &str,
 	_content_search: &str,

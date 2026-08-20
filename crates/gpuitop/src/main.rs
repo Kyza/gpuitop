@@ -11,6 +11,7 @@ use gpui_component::Root;
 use gpuitop_components::assets::{layered, lucide};
 use gpuitop_components::themes;
 use gpuitop_core::config::Config;
+use gpuitop_core::config_store::ConfigStore;
 use gpuitop_icons::load_cache;
 use gpuitop_properties::PropertiesWindow;
 use gpuitop_window_picker::GPUITOP_APP_ID;
@@ -157,13 +158,19 @@ fn main() {
 							performance_tab,
 							search,
 							override_view,
-							config.clone(),
+							ConfigStore::new(config.clone()),
 							desktop_cache.clone(),
 							cx,
 						)
 					});
-					let theme_name =
-						view.read(cx).config.general.interface.theme.clone();
+					let theme_name = view
+						.read(cx)
+						.config
+						.get()
+						.general
+						.interface
+						.theme
+						.clone();
 					themes::apply_theme_by_name(
 						&theme_name,
 						Some(window),

@@ -10,8 +10,13 @@ impl ProcessesTab {
 		_window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		let filtered_count = self.get_delegate().filtered_sorted_rows().len();
-		let total_count = self.snapshot_cell.borrow().processes.len();
+		let delegate = self.get_delegate();
+		let filtered_count = if self.show_tree_view {
+			delegate.tree_match_set().len()
+		} else {
+			delegate.rows().len()
+		};
+		let total_count = self.engine.borrow().snapshot().processes.len();
 		let active_filters = self.view_state.borrow().filters.len();
 		let mode = self.view_state.borrow().filter_mode;
 

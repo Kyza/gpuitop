@@ -18,7 +18,7 @@ impl TableDelegate for ProcessTableDelegate {
 	}
 
 	fn rows_count(&self, _: &App) -> usize {
-		self.filtered_sorted_rows().len()
+		self.rows().len()
 	}
 
 	fn column(&self, col_ix: usize, _: &App) -> Column {
@@ -105,21 +105,16 @@ impl TableDelegate for ProcessTableDelegate {
 		if self.is_col_hidden(col_ix) {
 			return div().into_any();
 		}
-		let rows = self.filtered_sorted_rows();
+		let rows = self.rows();
 		let Some(proc) = rows.get(row_ix) else {
 			return div().into_any();
 		};
 
-		let cum = self
-			.cum_cache
-			.borrow()
-			.as_ref()
-			.and_then(|m| m.get(&proc.pid))
-			.cloned();
+		let cum = self.cum(proc.pid);
 
 		match col_ix {
 			0 => {
-				let tags = tag_icons(proc, self.init_system, cx);
+				let tags = tag_icons(proc, self.init_system(), cx);
 				let is_pinned = self.pinned_pid() == Some(proc.pid);
 				div()
 					.flex()
@@ -247,7 +242,7 @@ impl TableDelegate for ProcessTableDelegate {
 				let mem_val =
 					cum.as_ref().map_or(proc.mem_rss, |c| c.mem_rss);
 				let mem_pct = if let Some(ref c) = cum {
-					let total_mem = self.snapshot_cell.borrow().memory.total;
+					let total_mem = self.snapshot().memory.total;
 					if total_mem > 0 {
 						c.mem_rss as f32 / total_mem as f32 * 100.0
 					} else {
@@ -348,8 +343,10 @@ impl TableDelegate for ProcessTableDelegate {
 			}
 			_ => gpuitop_core::model::SortDirection::Ascending,
 		};
-		ViewState::mutate(&self.view_state, |s| {
-			s.sort_col = col_ix;
+		ViewState::mutate(&self.view_state(), |s| {
+			s.sort_col =
+				gpuitop_core::model::SortColumn::from_col_index(col_ix)
+					.unwrap_or_default();
 			s.sort_dir = dir;
 		});
 		cx.notify();
@@ -362,7 +359,7 @@ impl TableDelegate for ProcessTableDelegate {
 		_window: &mut Window,
 		_cx: &mut Context<TableState<Self>>,
 	) -> PopupMenu {
-		let rows = self.filtered_sorted_rows();
+		let rows = self.rows();
 		if let Some(proc) = rows.get(row_ix) {
 			for item in crate::context_menu::build_process_menu(proc) {
 				menu = menu.item(item);

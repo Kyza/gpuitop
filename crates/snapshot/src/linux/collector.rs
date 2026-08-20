@@ -5,39 +5,38 @@ use std::time::Instant;
 
 use crate::{CollectorState, PrevCpu, PrevDisk, PrevNet};
 
-const HISTORY_LEN: usize = 60;
-
-#[hotpath::measure]
-pub fn collect_cpu(state: &mut CollectorState) -> CpuInfo {
-	let Ok(kernel) = procfs::KernelStats::current() else {
-		return CpuInfo {
-			cores: Vec::new(),
-			overall_percent: 0.0,
-			model_name: String::new(),
-			temperature: 0.0,
+impl CollectorState {
+	#[hotpath::measure]
+	pub fn collect_cpu(&mut self) -> CpuInfo {
+		let Ok(kernel) = procfs::KernelStats::current() else {
+			return CpuInfo {
+				cores: Vec::new(),
+				overall_percent: 0.0,
+				model_name: String::new(),
+				temperature: 0.0,
+			};
 		};
-	};
-	let cpuinfo = procfs::CpuInfo::current().ok();
-	let model_name = cpuinfo
-		.as_ref()
-		.and_then(|ci| ci.model_name(0))
-		.unwrap_or_default()
-		.to_string();
-	let temperature = read_cpu_temp();
-	let core_freq_mhz = |cidx: usize| -> u32 {
-		cpuinfo
+		let cpuinfo = procfs::CpuInfo::current().ok();
+		let model_name = cpuinfo
 			.as_ref()
-			.and_then(|ci| ci.get_field(cidx, "cpu MHz"))
-			.and_then(|s| s.parse::<f32>().ok())
-			.map(|f| f as u32)
-			.unwrap_or(0)
-	};
+			.and_then(|ci| ci.model_name(0))
+			.unwrap_or_default()
+			.to_string();
+		let temperature = read_cpu_temp();
+		let core_freq_mhz = |cidx: usize| -> u32 {
+			cpuinfo
+				.as_ref()
+				.and_then(|ci| ci.get_field(cidx, "cpu MHz"))
+				.and_then(|s| s.parse::<f32>().ok())
+				.map(|f| f as u32)
+				.unwrap_or(0)
+		};
 
-	let mut cur_totals: Vec<(u64, u64)> = Vec::new();
-	let times = std::iter::once(&kernel.total).chain(kernel.cpu_time.iter());
-	for time in times {
-		let total =
-			time.user
+		let mut cur_totals: Vec<(u64, u64)> = Vec::new();
+		let times =
+			std::iter::once(&kernel.total).chain(kernel.cpu_time.iter());
+		for time in times {
+			let total = time.user
 				+ time.nice + time.system
 				+ time.idle + time.iowait.unwrap_or(0)
 				+ time.irq.unwrap_or(0)
@@ -45,63 +44,180 @@ pub fn collect_cpu(state: &mut CollectorState) -> CpuInfo {
 				+ time.steal.unwrap_or(0)
 				+ time.guest.unwrap_or(0)
 				+ time.guest_nice.unwrap_or(0);
-		let idle = time.idle + time.iowait.unwrap_or(0);
-		cur_totals.push((total, idle));
-	}
+			let idle = time.idle + time.iowait.unwrap_or(0);
+			cur_totals.push((total, idle));
+		}
 
-	let mut cores = Vec::new();
-	let mut overall = 0.0f32;
+		let mut cores = Vec::new();
+		let mut overall = 0.0f32;
 
-	if let Some(ref prev) = state.prev_cpu {
-		for (i, (total, idle)) in cur_totals.iter().enumerate() {
-			if i >= prev.totals.len() {
-				continue;
-			}
-			let (prev_total, prev_idle) = prev.totals[i];
-			let dt = total.saturating_sub(prev_total) as f32;
-			let di = idle.saturating_sub(prev_idle) as f32;
-			let usage = if dt > 0.0 {
-				((dt - di) / dt * 100.0).clamp(0.0, 100.0)
-			} else {
-				0.0
-			};
-
-			if i == 0 {
-				overall = usage;
-			} else {
-				let cidx = i - 1;
-				let history = state.core_history.entry(cidx).or_default();
-				history.push(usage);
-				if history.len() > HISTORY_LEN {
-					history.remove(0);
+		if let Some(ref prev) = self.prev_cpu {
+			for (i, (total, idle)) in cur_totals.iter().enumerate() {
+				if i >= prev.totals.len() {
+					continue;
 				}
+				let (prev_total, prev_idle) = prev.totals[i];
+				let usage = usage_pct(
+					total.saturating_sub(prev_total) as f32,
+					idle.saturating_sub(prev_idle) as f32,
+				);
+
+				if i == 0 {
+					overall = usage;
+				} else {
+					let cidx = i - 1;
+					cores.push(CpuCore {
+						index: cidx,
+						usage_percent: usage,
+						frequency_mhz: core_freq_mhz(cidx),
+					});
+				}
+			}
+		}
+
+		if cores.is_empty() {
+			let ncores = cur_totals.len().saturating_sub(1).max(1);
+			for i in 0..ncores {
 				cores.push(CpuCore {
-					index: cidx,
-					usage_percent: usage,
-					frequency_mhz: core_freq_mhz(cidx),
+					index: i,
+					usage_percent: 0.0,
+					frequency_mhz: core_freq_mhz(i),
 				});
 			}
 		}
-	}
 
-	if cores.is_empty() {
-		let ncores = cur_totals.len().saturating_sub(1).max(1);
-		for i in 0..ncores {
-			cores.push(CpuCore {
-				index: i,
-				usage_percent: 0.0,
-				frequency_mhz: core_freq_mhz(i),
-			});
+		self.prev_cpu = Some(PrevCpu { totals: cur_totals });
+
+		CpuInfo {
+			cores,
+			overall_percent: overall,
+			model_name,
+			temperature,
 		}
 	}
 
-	state.prev_cpu = Some(PrevCpu { totals: cur_totals });
+	#[hotpath::measure]
+	pub fn collect_disks(&mut self, now: Instant) -> Vec<DiskInfo> {
+		let Ok(disks) = procfs::diskstats() else {
+			return Vec::new();
+		};
+		let mut cur: HashMap<String, (u64, u64)> = HashMap::new();
+		for d in &disks {
+			cur.insert(
+				d.name.clone(),
+				(d.sectors_read * 512, d.sectors_written * 512),
+			);
+		}
 
-	CpuInfo {
-		cores,
-		overall_percent: overall,
-		model_name,
-		temperature,
+		let mut result = Vec::new();
+		if let Some(ref prev_time) = self.prev_time {
+			let elapsed =
+				now.duration_since(*prev_time).as_secs_f64().max(0.001);
+			for (name, (cr, cw)) in &cur {
+				if let Some(prev) = self.prev_disk.get(name) {
+					result.push(DiskInfo {
+						device: name.clone(),
+						read_bytes_per_sec: cr.saturating_sub(prev.read_bytes)
+							as f64 / elapsed,
+						write_bytes_per_sec: cw
+							.saturating_sub(prev.write_bytes)
+							as f64 / elapsed,
+					});
+				}
+			}
+		}
+		self.prev_disk = cur
+			.into_iter()
+			.map(|(k, (r, w))| {
+				(
+					k,
+					PrevDisk {
+						read_bytes: r,
+						write_bytes: w,
+					},
+				)
+			})
+			.collect();
+		result
+	}
+
+	#[hotpath::measure]
+	pub fn collect_networks(&mut self, now: Instant) -> Vec<NetInfo> {
+		let Ok(nets) = procfs::net::dev_status() else {
+			return Vec::new();
+		};
+		let mut cur: HashMap<String, (u64, u64)> = HashMap::new();
+		for (name, dev) in nets {
+			cur.insert(name, (dev.recv_bytes, dev.sent_bytes));
+		}
+
+		let mut result = Vec::new();
+		if let Some(ref prev_time) = self.prev_time {
+			let elapsed =
+				now.duration_since(*prev_time).as_secs_f64().max(0.001);
+			for (name, (crx, ctx)) in &cur {
+				if let Some(prev) = self.prev_net.get(name) {
+					result.push(NetInfo {
+						interface: name.clone(),
+						rx_bytes_per_sec: crx.saturating_sub(prev.rx_bytes)
+							as f64 / elapsed,
+						tx_bytes_per_sec: ctx.saturating_sub(prev.tx_bytes)
+							as f64 / elapsed,
+					});
+				}
+			}
+		}
+		self.prev_net = cur
+			.into_iter()
+			.map(|(k, (r, t))| {
+				(
+					k,
+					PrevNet {
+						rx_bytes: r,
+						tx_bytes: t,
+					},
+				)
+			})
+			.collect();
+		result
+	}
+}
+
+// CPU core busy ratio from one tick's deltas, clamped to [0, 100].
+fn usage_pct(total_delta: f32, idle_delta: f32) -> f32 {
+	if total_delta > 0.0 {
+		((total_delta - idle_delta) / total_delta * 100.0).clamp(0.0, 100.0)
+	} else {
+		0.0
+	}
+}
+
+#[hotpath::measure]
+pub fn collect_memory() -> MemoryInfo {
+	let Ok(mem) = procfs::Meminfo::current() else {
+		return MemoryInfo {
+			total: 0,
+			used: 0,
+			available: 0,
+			cached: 0,
+			swap_used: 0,
+		};
+	};
+
+	let total = mem.mem_total;
+	let free = mem.mem_free;
+	let buffers = mem.buffers;
+	let cached = mem.cached + mem.s_reclaimable.unwrap_or(0);
+	let available = mem.mem_available.unwrap_or(0);
+	let used = total.saturating_sub(free + buffers + cached);
+	let swap_used = mem.swap_total.saturating_sub(mem.swap_free);
+
+	MemoryInfo {
+		total,
+		used,
+		available,
+		cached,
+		swap_used,
 	}
 }
 
@@ -148,120 +264,28 @@ fn read_cpu_temp() -> f32 {
 		.unwrap_or(0.0)
 }
 
-#[hotpath::measure]
-pub fn collect_memory() -> MemoryInfo {
-	let Ok(mem) = procfs::Meminfo::current() else {
-		return MemoryInfo {
-			total: 0,
-			used: 0,
-			available: 0,
-			cached: 0,
-			swap_used: 0,
-		};
-	};
+#[cfg(test)]
+mod tests {
+	use super::*;
 
-	let total = mem.mem_total;
-	let free = mem.mem_free;
-	let buffers = mem.buffers;
-	let cached = mem.cached + mem.s_reclaimable.unwrap_or(0);
-	let available = mem.mem_available.unwrap_or(0);
-	let used = total.saturating_sub(free + buffers + cached);
-	let swap_used = mem.swap_total.saturating_sub(mem.swap_free);
-
-	MemoryInfo {
-		total,
-		used,
-		available,
-		cached,
-		swap_used,
-	}
-}
-
-#[hotpath::measure]
-pub fn collect_disks(
-	state: &mut CollectorState,
-	now: Instant,
-) -> Vec<DiskInfo> {
-	let Ok(disks) = procfs::diskstats() else {
-		return Vec::new();
-	};
-	let mut cur: HashMap<String, (u64, u64)> = HashMap::new();
-	for d in &disks {
-		cur.insert(
-			d.name.clone(),
-			(d.sectors_read * 512, d.sectors_written * 512),
-		);
+	#[test]
+	fn usage_pct_steady_state() {
+		assert_eq!(usage_pct(100.0, 25.0), 75.0);
 	}
 
-	let mut result = Vec::new();
-	if let Some(ref prev_time) = state.prev_time {
-		let elapsed = now.duration_since(*prev_time).as_secs_f64().max(0.001);
-		for (name, (cr, cw)) in &cur {
-			if let Some(prev) = state.prev_disk.get(name) {
-				result.push(DiskInfo {
-					device: name.clone(),
-					read_bytes_per_sec: cr.saturating_sub(prev.read_bytes)
-						as f64 / elapsed,
-					write_bytes_per_sec: cw.saturating_sub(prev.write_bytes)
-						as f64 / elapsed,
-				});
-			}
-		}
-	}
-	state.prev_disk = cur
-		.into_iter()
-		.map(|(k, (r, w))| {
-			(
-				k,
-				PrevDisk {
-					read_bytes: r,
-					write_bytes: w,
-				},
-			)
-		})
-		.collect();
-	result
-}
-
-#[hotpath::measure]
-pub fn collect_networks(
-	state: &mut CollectorState,
-	now: Instant,
-) -> Vec<NetInfo> {
-	let Ok(nets) = procfs::net::dev_status() else {
-		return Vec::new();
-	};
-	let mut cur: HashMap<String, (u64, u64)> = HashMap::new();
-	for (name, dev) in nets {
-		cur.insert(name, (dev.recv_bytes, dev.sent_bytes));
+	#[test]
+	fn usage_pct_no_delta_is_zero() {
+		assert_eq!(usage_pct(0.0, 0.0), 0.0);
 	}
 
-	let mut result = Vec::new();
-	if let Some(ref prev_time) = state.prev_time {
-		let elapsed = now.duration_since(*prev_time).as_secs_f64().max(0.001);
-		for (name, (crx, ctx)) in &cur {
-			if let Some(prev) = state.prev_net.get(name) {
-				result.push(NetInfo {
-					interface: name.clone(),
-					rx_bytes_per_sec: crx.saturating_sub(prev.rx_bytes)
-						as f64 / elapsed,
-					tx_bytes_per_sec: ctx.saturating_sub(prev.tx_bytes)
-						as f64 / elapsed,
-				});
-			}
-		}
+	#[test]
+	fn usage_pct_idle_is_zero() {
+		assert_eq!(usage_pct(100.0, 100.0), 0.0);
 	}
-	state.prev_net = cur
-		.into_iter()
-		.map(|(k, (r, t))| {
-			(
-				k,
-				PrevNet {
-					rx_bytes: r,
-					tx_bytes: t,
-				},
-			)
-		})
-		.collect();
-	result
+
+	#[test]
+	fn usage_pct_clamps() {
+		assert_eq!(usage_pct(100.0, -10.0), 100.0);
+		assert_eq!(usage_pct(0.0, 50.0), 0.0);
+	}
 }

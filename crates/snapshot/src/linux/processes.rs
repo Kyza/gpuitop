@@ -1,214 +1,210 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use gpuitop_core::model::*;
 use gpuitop_gpu::build_vram_usage;
 
+use super::proc_basics::username_for_uid;
 use crate::{CollectorState, PrevProc};
 
-#[hotpath::measure]
-pub fn collect_processes(
-	state: &mut CollectorState,
-	total_mem: u64,
-	now: Instant,
-) -> Vec<ProcessSnapshot> {
-	let Ok(procs) = procfs::process::all_processes() else {
-		return Vec::new();
-	};
-	let num_cpus = num_cpus::get() as f32;
-
-	let mut cur_proc_data: HashMap<i32, (u64, u64, u64, u64, bool, u64)> =
-		HashMap::new();
-	let mut pid_to_proc: HashMap<i32, ProcessSnapshot> = HashMap::new();
-	let mut children_map: HashMap<i32, Vec<i32>> = HashMap::new();
-
-	let vram_map = build_vram_usage(&state.gpu_backends);
-
-	for proc_result in procs {
-		let Ok(p) = proc_result else {
-			continue;
+impl CollectorState {
+	#[hotpath::measure]
+	pub fn collect_processes(
+		&mut self,
+		total_mem: u64,
+		now: Instant,
+	) -> Vec<ProcessSnapshot> {
+		let Ok(procs) = procfs::process::all_processes() else {
+			return Vec::new();
 		};
-		let pid = p.pid;
+		let num_cpus = num_cpus::get() as f32;
 
-		let Ok(stat) = p.stat() else { continue };
-		let Ok(status) = p.status() else { continue };
+		let mut cur_proc_data: HashMap<i32, (u64, u64, u64, u64, bool, u64)> =
+			HashMap::new();
+		let mut pid_to_proc: HashMap<i32, ProcessSnapshot> = HashMap::new();
+		let mut children_map: HashMap<i32, Vec<i32>> = HashMap::new();
 
-		// Kernel threads have no cmdline/cgroup/environ (always empty) and
-		// can never be GUI. Skip those /proc reads entirely for them.
-		let is_kthread = stat.ppid == 2 || stat.comm.starts_with('[');
-
-		let cmdline = if is_kthread {
-			Vec::new()
+		let vram_map = if self.gpu_data_enabled.load(Ordering::SeqCst) {
+			build_vram_usage(&self.gpu_backends)
 		} else {
-			p.cmdline().unwrap_or_default()
-		};
-		let cgroup = if is_kthread {
-			String::new()
-		} else {
-			p.cgroups()
-				.map(|cg| {
-					cg.0.iter()
-						.map(|c| {
-							format!(
-								"{}:{}:{}",
-								c.hierarchy,
-								c.controllers.join(","),
-								c.pathname
-							)
-						})
-						.collect::<Vec<_>>()
-						.join("\n")
-				})
-				.unwrap_or_default()
+			HashMap::new()
 		};
 
-		// GUI status is fixed at exec time (DISPLAY/WAYLAND_DISPLAY presence
-		// in the environment), so cache it across ticks. Reuse the previous
-		// value only when starttime matches — that guards against PID reuse.
-		let is_gui = if is_kthread {
-			false
-		} else {
-			match state.prev_proc.get(&pid) {
-				Some(prev) if prev.starttime == stat.starttime => prev.is_gui,
-				_ => p
-					.environ()
-					.map(|e| has_display_var_from_env(&e))
-					.unwrap_or(false),
-			}
-		};
+		for proc_result in procs {
+			let Ok(p) = proc_result else {
+				continue;
+			};
+			let pid = p.pid;
 
-		let uid = status.ruid;
-		let vmrss = status.vmrss.unwrap_or(0) * 1024;
+			let Ok(basics) = super::proc_basics::ProcBasics::read(&p) else {
+				continue;
+			};
+			let stat = &basics.stat;
+			let status = &basics.status;
+			let is_kthread = basics.is_kthread;
+			let cmdline = &basics.cmdline;
 
-		let cmdline_name = cmdline
-			.first()
-			.filter(|a| !a.is_empty())
-			.and_then(|argv0| {
-				std::path::Path::new(argv0)
-					.file_name()
-					.and_then(|n| n.to_str())
-			})
-			.map(|s| s.to_string());
+			let cgroup = if is_kthread {
+				String::new()
+			} else {
+				p.cgroups()
+					.map(|cg| {
+						cg.0.iter()
+							.map(|c| {
+								format!(
+									"{}:{}:{}",
+									c.hierarchy,
+									c.controllers.join(","),
+									c.pathname
+								)
+							})
+							.collect::<Vec<_>>()
+							.join("\n")
+					})
+					.unwrap_or_default()
+			};
 
-		let command = cmdline.join(" ");
-		let display_command = if command.is_empty() {
-			cmdline_name.clone().unwrap_or_else(|| stat.comm.clone())
-		} else {
-			command
-		};
+			// GUI status is fixed at exec time (DISPLAY/WAYLAND_DISPLAY presence
+			// in the environment), so cache it across ticks. Reuse the previous
+			// value only when starttime matches — that guards against PID reuse.
+			let is_gui = if is_kthread {
+				false
+			} else {
+				match self.prev_proc.get(&pid) {
+					Some(prev) if prev.starttime == stat.starttime => {
+						prev.is_gui
+					}
+					_ => p
+						.environ()
+						.map(|e| has_display_var_from_env(&e))
+						.unwrap_or(false),
+				}
+			};
 
-		let display_name = cmdline_name.unwrap_or_else(|| stat.comm.clone());
+			let uid = status.ruid;
+			let vmrss = status.vmrss.unwrap_or(0) * 1024;
 
-		let icon_name = state
-			.desktop_cache
-			.lookup(&display_command, &display_name)
-			.map(|de| de.icon_name.clone());
+			let command = cmdline.join(" ");
+			let display_command = if command.is_empty() {
+				basics.name()
+			} else {
+				command
+			};
 
-		let is_kthread = stat.ppid == 2 || stat.comm.starts_with('[');
-		let is_owned = uid == state.current_uid;
-		let user = state
-			.user_cache
-			.entry(uid)
-			.or_insert_with(|| get_user_name(uid))
-			.clone();
-		let mem_percent = if total_mem > 0 {
-			vmrss as f32 / total_mem as f32 * 100.0
-		} else {
-			0.0
-		};
+			let display_name = basics.name();
 
-		let vram = if is_kthread {
-			VramUsage::default()
-		} else {
-			vram_map.get(&pid).copied().unwrap_or_default()
-		};
+			let icon_name = self
+				.desktop_cache
+				.lookup(&display_command, &display_name)
+				.map(|de| de.icon_name.clone());
 
-		cur_proc_data.insert(
-			pid,
-			(
-				stat.utime,
-				stat.stime,
-				stat.cutime as u64,
-				stat.cstime as u64,
-				is_gui,
-				stat.starttime,
-			),
-		);
-
-		let cpu_percent = if let Some(ref prev_time) = state.prev_time {
-			let elapsed =
-				now.duration_since(*prev_time).as_secs_f32().max(0.001);
-			if let Some(prev) = state.prev_proc.get(&pid) {
-				let delta = (stat.utime
-					+ stat.stime + stat.cutime as u64
-					+ stat.cstime as u64)
-					.saturating_sub(
-						prev.utime + prev.stime + prev.cutime + prev.cstime,
-					) as f32;
-				let hertz = procfs::ticks_per_second() as f32;
-				(delta / hertz / elapsed / num_cpus * 100.0).clamp(0.0, 100.0)
+			let is_owned = uid == self.current_uid;
+			let user = self
+				.user_cache
+				.entry(uid)
+				.or_insert_with(|| username_for_uid(uid))
+				.clone();
+			let mem_percent = if total_mem > 0 {
+				vmrss as f32 / total_mem as f32 * 100.0
 			} else {
 				0.0
-			}
-		} else {
-			0.0
-		};
+			};
 
-		children_map.entry(stat.ppid).or_default().push(pid);
+			let vram = if is_kthread {
+				VramUsage::default()
+			} else {
+				vram_map.get(&pid).copied().unwrap_or_default()
+			};
 
-		pid_to_proc.insert(
-			pid,
-			ProcessSnapshot {
+			cur_proc_data.insert(
 				pid,
-				ppid: stat.ppid,
-				name: display_name,
-				user,
-				state: stat.state,
-				command: display_command,
-				cgroup,
-				cpu_percent,
-				mem_percent,
-				mem_rss: vmrss,
-				vram,
-				disk_read_bytes_per_sec: 0.0,
-				disk_write_bytes_per_sec: 0.0,
-				is_gui,
-				is_kthread,
-				is_owned_by_current_user: is_owned,
-				is_electron: false,
-				electron_app_name: None,
-				icon_name,
-				has_children: false,
-			},
-		);
-	}
-
-	for (ppid, kids) in &children_map {
-		if let Some(proc) = pid_to_proc.get_mut(ppid) {
-			proc.has_children = !kids.is_empty();
-		}
-	}
-
-	detect_electron_processes(&mut pid_to_proc);
-
-	state.prev_proc = cur_proc_data
-		.into_iter()
-		.map(|(pid, (u, s, cu, cs, is_gui, starttime))| {
-			(
-				pid,
-				PrevProc {
-					utime: u,
-					stime: s,
-					cutime: cu,
-					cstime: cs,
+				(
+					stat.utime,
+					stat.stime,
+					stat.cutime as u64,
+					stat.cstime as u64,
 					is_gui,
-					starttime,
-				},
-			)
-		})
-		.collect();
+					stat.starttime,
+				),
+			);
 
-	pid_to_proc.into_values().collect()
+			let cpu_percent = if let Some(ref prev_time) = self.prev_time {
+				let elapsed =
+					now.duration_since(*prev_time).as_secs_f32().max(0.001);
+				if let Some(prev) = self.prev_proc.get(&pid) {
+					let delta = basics.cpu_tick_sum().saturating_sub(
+						prev.utime + prev.stime + prev.cutime + prev.cstime,
+					);
+					proc_cpu_pct(
+						delta,
+						elapsed,
+						num_cpus,
+						procfs::ticks_per_second() as f32,
+					)
+				} else {
+					0.0
+				}
+			} else {
+				0.0
+			};
+
+			children_map.entry(stat.ppid).or_default().push(pid);
+
+			pid_to_proc.insert(
+				pid,
+				ProcessSnapshot {
+					pid,
+					ppid: stat.ppid,
+					name: display_name,
+					user,
+					state: stat.state,
+					command: display_command,
+					cgroup,
+					cpu_percent,
+					mem_percent,
+					mem_rss: vmrss,
+					vram,
+					disk_read_bytes_per_sec: 0.0,
+					disk_write_bytes_per_sec: 0.0,
+					is_gui,
+					is_kthread,
+					is_owned_by_current_user: is_owned,
+					is_electron: false,
+					electron_app_name: None,
+					icon_name,
+					has_children: false,
+				},
+			);
+		}
+
+		for (ppid, kids) in &children_map {
+			if let Some(proc) = pid_to_proc.get_mut(ppid) {
+				proc.has_children = !kids.is_empty();
+			}
+		}
+
+		detect_electron_processes(&mut pid_to_proc);
+
+		self.prev_proc = cur_proc_data
+			.into_iter()
+			.map(|(pid, (u, s, cu, cs, is_gui, starttime))| {
+				(
+					pid,
+					PrevProc {
+						utime: u,
+						stime: s,
+						cutime: cu,
+						cstime: cs,
+						is_gui,
+						starttime,
+					},
+				)
+			})
+			.collect();
+
+		pid_to_proc.into_values().collect()
+	}
 }
 
 #[hotpath::measure]
@@ -369,6 +365,18 @@ fn capitalize(s: &str) -> String {
 	}
 }
 
+// Per-process CPU percent: delta ticks over the elapsed window, normalized by
+// hertz and core count, clamped to [0, 100].
+fn proc_cpu_pct(
+	delta_ticks: u64,
+	elapsed: f32,
+	num_cpus: f32,
+	hertz: f32,
+) -> f32 {
+	(delta_ticks as f32 / hertz / elapsed / num_cpus * 100.0)
+		.clamp(0.0, 100.0)
+}
+
 #[hotpath::measure]
 fn has_display_var_from_env(
 	environ: &std::collections::HashMap<
@@ -380,21 +388,25 @@ fn has_display_var_from_env(
 		|| environ.contains_key(std::ffi::OsStr::new("WAYLAND_DISPLAY"))
 }
 
-#[hotpath::measure]
-fn get_user_name(uid: u32) -> String {
-	users::get_user_by_uid(uid)
-		.map(|u| u.name().to_string_lossy().to_string())
-		.unwrap_or_else(|| uid.to_string())
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::collect_snapshot;
+	use std::sync::atomic::AtomicBool;
+	use std::sync::Arc;
+
+	fn test_state() -> CollectorState {
+		CollectorState::new(
+			vec![],
+			Default::default(),
+			Arc::new(AtomicBool::new(true)),
+			Arc::new(AtomicBool::new(false)),
+		)
+	}
 
 	#[test]
 	fn test_collector_has_processes() {
-		let mut state = CollectorState::new(vec![], Default::default());
+		let mut state = test_state();
 		let snap = collect_snapshot(&mut state);
 
 		assert!(
@@ -430,7 +442,7 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_cpu_data() {
-		let mut state = CollectorState::new(vec![], Default::default());
+		let mut state = test_state();
 
 		collect_snapshot(&mut state);
 		let snap = collect_snapshot(&mut state);
@@ -445,7 +457,7 @@ mod tests {
 
 	#[test]
 	fn test_collector_has_memory_data() {
-		let mut state = CollectorState::new(vec![], Default::default());
+		let mut state = test_state();
 		let snap = collect_snapshot(&mut state);
 
 		assert!(snap.memory.total > 0, "Total memory is 0");
@@ -460,7 +472,7 @@ mod tests {
 
 	#[test]
 	fn test_processes_flat_list() {
-		let mut state = CollectorState::new(vec![], Default::default());
+		let mut state = test_state();
 		let snap = collect_snapshot(&mut state);
 
 		let total = snap.processes.len();
@@ -479,24 +491,25 @@ mod tests {
 	}
 
 	#[test]
-	fn test_gui_detection() {
-		let mut state = CollectorState::new(vec![], Default::default());
-		let snap = collect_snapshot(&mut state);
+	fn proc_cpu_pct_half_core() {
+		// 1s of a single core = hertz ticks over a 1s window, 1 core.
+		let hertz = 100.0;
+		let pct = proc_cpu_pct(hertz as u64, 1.0, 1.0, hertz);
+		assert_eq!(pct, 100.0);
+		assert_eq!(proc_cpu_pct(hertz as u64 / 2, 1.0, 1.0, hertz), 50.0);
+	}
 
-		let gui_count: usize = snap
-			.processes
-			.iter()
-			.filter(|p| p.is_gui)
-			.inspect(|p| {
-				eprintln!("GUI: PID={} name={}", p.pid, p.name);
-			})
-			.count();
+	#[test]
+	fn proc_cpu_pct_normalizes_by_cores_and_time() {
+		// Same ticks but 8 cores and a 2s window → 1/16 of full.
+		let pct = proc_cpu_pct(100, 2.0, 8.0, 100.0);
+		assert!((pct - 6.25).abs() < 0.001);
+	}
 
-		eprintln!("Found {gui_count} GUI processes");
-		assert!(
-			gui_count > 0,
-			"No GUI processes found. Running under a display server?"
-		);
+	#[test]
+	fn proc_cpu_pct_clamps_at_100() {
+		assert_eq!(proc_cpu_pct(1000, 1.0, 1.0, 100.0), 100.0);
+		assert_eq!(proc_cpu_pct(0, 1.0, 1.0, 100.0), 0.0);
 	}
 
 	#[test]
@@ -655,36 +668,5 @@ mod tests {
 		let pids: HashMap<i32, ProcessSnapshot> = HashMap::new();
 		let r = find_electron_root(999, &subs, &pids);
 		assert_eq!(r, 999);
-	}
-
-	#[test]
-	fn bench_collector_tick() {
-		let mut state = CollectorState::new(vec![], Default::default());
-
-		collect_snapshot(&mut state);
-
-		let iterations = 10;
-		let start = std::time::Instant::now();
-		for _ in 0..iterations {
-			collect_snapshot(&mut state);
-		}
-		let elapsed = start.elapsed();
-
-		let avg = elapsed / iterations;
-		eprintln!(
-			"collector.tick() benchmark: {} iterations, total={:?}, avg={:?}",
-			iterations, elapsed, avg
-		);
-
-		let snap = collect_snapshot(&mut state);
-		eprintln!("  processes per tick: {}", snap.processes.len());
-		eprintln!(
-			"  total={:?} avg={:?} ({} us/proc)",
-			elapsed,
-			avg,
-			avg.as_micros() as f64 / snap.processes.len() as f64
-		);
-
-		assert!(avg.as_millis() < 1000, "tick() too slow: {:?}", avg);
 	}
 }

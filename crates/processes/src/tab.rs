@@ -8,10 +8,11 @@ use gpui_component::{
 	tree::TreeState,
 	ActiveTheme,
 };
-use gpuitop_core::config::Config;
+use gpuitop_core::config_store::ConfigStore;
 use gpuitop_core::model::Filter;
 use gpuitop_core::model::*;
-use gpuitop_core::processes::delegate::ProcessTableDelegate as CoreDelegate;
+use gpuitop_core::processes::engine::ProcessEngine;
+use gpuitop_core::processes::seeds::ProcessSeeds;
 use gpuitop_core::service_manager::InitSystem;
 use gpuitop_core::state::ViewState;
 use std::cell::{Cell, RefCell};
@@ -19,31 +20,18 @@ use std::rc::Rc;
 use std::time::Instant;
 
 pub struct ProcessesTab {
-	pub snapshot_cell: Rc<RefCell<Rc<SystemSnapshot>>>,
-	pub cum_cache: Rc<
-		RefCell<
-			Option<
-				std::collections::HashMap<
-					i32,
-					gpuitop_core::state::CumulativeResources,
-				>,
-			>,
-		>,
-	>,
-	pub pid_index: Rc<RefCell<Option<std::collections::HashMap<i32, usize>>>>,
-	pub descendant_counts:
-		Rc<RefCell<Option<std::collections::HashMap<i32, usize>>>>,
+	pub engine: Rc<RefCell<ProcessEngine>>,
 	pub view_state: Rc<RefCell<ViewState>>,
 	pub table_state: Option<Entity<TableState<ProcessTableDelegate>>>,
 	pub input_state: Option<Entity<InputState>>,
-	pub clear_search_on_pin: bool,
+	pub config: ConfigStore,
+	pub last_seen_seeds: ProcessSeeds,
 	pub needs_clear_input: Rc<Cell<bool>>,
 	pub needs_set_input: Option<String>,
 	pub needs_focus_input: bool,
 	pub _events: Option<Subscription>,
 	pub _subscriptions: Vec<Subscription>,
 	pub has_data: bool,
-	pub column_visibility: gpuitop_core::config::ProcessesConfig,
 	pub is_picking: std::sync::Arc<std::sync::atomic::AtomicBool>,
 	pub pick_result: std::sync::Arc<
 		std::sync::Mutex<Option<gpuitop_window_picker::PickedWindow>>,
@@ -63,55 +51,53 @@ pub struct ProcessesTab {
 
 impl ProcessesTab {
 	pub fn new(
-		config: Config,
+		config: ConfigStore,
 		snapshot: Rc<SystemSnapshot>,
 		init_system: InitSystem,
 		override_view: Option<bool>,
 		search: Option<String>,
 		cx: &mut Context<Self>,
 	) -> Self {
-		let sort_col = config.processes.default_sort.column.to_col_index();
-		let sort_dir = if config.processes.default_sort.descending {
+		let last_seen_seeds = ProcessSeeds::capture(&config.get().processes);
+		let pc = config.get().processes.clone();
+		let sort_col = pc.default_sort.column;
+		let sort_dir = if pc.default_sort.descending {
 			gpuitop_core::model::SortDirection::Descending
 		} else {
 			gpuitop_core::model::SortDirection::Ascending
 		};
 		let show_tree = override_view.unwrap_or(
-			config.processes.behaviour.default_view_mode
-				== DefaultViewMode::Tree,
+			pc.behaviour.default_view_mode == DefaultViewMode::Tree,
 		);
+		let view_state = Rc::new(RefCell::new(ViewState {
+			generation: 0,
+			filters: Vec::new(),
+			filter_mode: FilterMode::And,
+			pid_filter_mode: pc.behaviour.pid_filter_mode,
+			search: String::new(),
+			sort_col,
+			sort_dir,
+			resource_view_mode: pc.behaviour.resource_view_mode,
+		}));
+		let engine = Rc::new(RefCell::new(ProcessEngine::new(
+			snapshot,
+			config.clone(),
+			init_system,
+			view_state.clone(),
+		)));
 		Self {
-			snapshot_cell: Rc::new(RefCell::new(snapshot)),
-			cum_cache: Rc::new(RefCell::new(None)),
-			pid_index: Rc::new(RefCell::new(None)),
-			descendant_counts: Rc::new(RefCell::new(None)),
-			view_state: Rc::new(RefCell::new(ViewState {
-				generation: 0,
-				filters: Vec::new(),
-				filter_mode: FilterMode::And,
-				pid_filter_mode: config.processes.behaviour.pid_filter_mode,
-				search: String::new(),
-				sort_col,
-				sort_dir,
-				resource_view_mode: config
-					.processes
-					.behaviour
-					.resource_view_mode,
-				cached: None,
-			})),
+			engine,
+			view_state,
 			table_state: None,
 			input_state: None,
-			clear_search_on_pin: config
-				.processes
-				.behaviour
-				.clear_search_on_pin,
+			config,
+			last_seen_seeds,
 			needs_clear_input: Rc::new(Cell::new(false)),
 			needs_set_input: search,
 			needs_focus_input: false,
 			_events: None,
 			_subscriptions: Vec::new(),
 			has_data: false,
-			column_visibility: config.processes.clone(),
 			is_picking: std::sync::Arc::new(
 				std::sync::atomic::AtomicBool::new(false),
 			),
@@ -127,10 +113,7 @@ impl ProcessesTab {
 	}
 
 	pub fn set_snapshot(&mut self, snapshot: Rc<SystemSnapshot>) {
-		*self.snapshot_cell.borrow_mut() = snapshot;
-		*self.cum_cache.borrow_mut() = None;
-		*self.pid_index.borrow_mut() = None;
-		*self.descendant_counts.borrow_mut() = None;
+		self.engine.borrow().set_snapshot(snapshot);
 	}
 
 	pub fn toggle_filter_mode(&mut self, cx: &mut Context<Self>) {
@@ -172,15 +155,28 @@ impl ProcessesTab {
 	}
 
 	pub fn get_delegate(&self) -> ProcessTableDelegate {
-		ProcessTableDelegate(CoreDelegate {
-			snapshot_cell: self.snapshot_cell.clone(),
-			cum_cache: self.cum_cache.clone(),
-			pid_index: self.pid_index.clone(),
-			descendant_counts: self.descendant_counts.clone(),
-			view_state: self.view_state.clone(),
-			column_visibility: self.column_visibility.clone(),
-			init_system: self.init_system,
-		})
+		ProcessTableDelegate::from_engine(self.engine.clone())
+	}
+
+	fn apply_seed_changes(&mut self) {
+		let pc = self.config.get().processes.clone();
+		let changes = self.last_seen_seeds.update(&pc);
+		if changes.sort {
+			let sort_col = pc.default_sort.column;
+			let sort_dir = if pc.default_sort.descending {
+				SortDirection::Descending
+			} else {
+				SortDirection::Ascending
+			};
+			ViewState::mutate(&self.view_state, |s| {
+				s.sort_col = sort_col;
+				s.sort_dir = sort_dir;
+			});
+		}
+		if changes.default_view {
+			self.show_tree_view =
+				pc.behaviour.default_view_mode == DefaultViewMode::Tree;
+		}
 	}
 }
 
@@ -191,7 +187,9 @@ impl Render for ProcessesTab {
 		window: &mut Window,
 		cx: &mut Context<Self>,
 	) -> impl IntoElement {
-		let snapshot = self.snapshot_cell.borrow().clone();
+		self.apply_seed_changes();
+
+		let snapshot = self.engine.borrow().snapshot();
 		self.has_data = !snapshot.processes.is_empty();
 		drop(snapshot);
 
@@ -219,7 +217,7 @@ impl Render for ProcessesTab {
 					if let TableEvent::DoubleClickedRow(row_ix) = event {
 						let pid = this
 							.get_delegate()
-							.filtered_sorted_rows()
+							.rows()
 							.get(*row_ix)
 							.map(|p| p.pid);
 						if let Some(pid) = pid {
@@ -227,7 +225,13 @@ impl Render for ProcessesTab {
 								s.filters.clear();
 								s.filters.push(Filter::Pid(pid));
 							});
-							if this.clear_search_on_pin {
+							if this
+								.config
+								.get()
+								.processes
+								.behaviour
+								.clear_search_on_pin
+							{
 								ViewState::mutate(&this.view_state, |s| {
 									s.search.clear();
 								});

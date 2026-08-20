@@ -1,8 +1,8 @@
 use gpuitop_core::config::Config;
 use gpuitop_core::model::{
-	DefaultViewMode, PidFilterMode, ResourceViewMode, SortColumn, VramPolling,
+	DefaultViewMode, GpuData, PidFilterMode, ResourceViewMode, SortColumn,
 };
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Arc;
 
 pub fn set_refresh_ms(
@@ -17,12 +17,16 @@ pub fn set_refresh_ms(
 	}
 }
 
-pub fn set_vram_polling(config: &mut Config, val: &str) {
-	config.processes.behaviour.vram_polling = match val {
-		"Auto" => VramPolling::Auto,
-		"On" => VramPolling::On,
-		_ => VramPolling::Off,
-	};
+pub fn set_gpu_data(
+	config: &mut Config,
+	gpu_data: &Arc<AtomicBool>,
+	val: &str,
+) {
+	use std::sync::atomic::Ordering;
+	let on = val == "On";
+	config.processes.behaviour.gpu_data =
+		if on { GpuData::On } else { GpuData::Off };
+	gpu_data.store(on, Ordering::SeqCst);
 }
 
 pub fn set_pid_filter_mode(config: &mut Config, val: &str) {
@@ -144,19 +148,21 @@ mod tests {
 	}
 
 	#[test]
-	fn test_set_vram_polling() {
+	fn test_set_gpu_data() {
 		let mut cfg = Config::default();
-		set_vram_polling(&mut cfg, "Auto");
-		assert_eq!(cfg.processes.behaviour.vram_polling, VramPolling::Auto);
+		let atomic = Arc::new(AtomicBool::new(true));
 
-		set_vram_polling(&mut cfg, "On");
-		assert_eq!(cfg.processes.behaviour.vram_polling, VramPolling::On);
+		set_gpu_data(&mut cfg, &atomic, "Off");
+		assert_eq!(cfg.processes.behaviour.gpu_data, GpuData::Off);
+		assert!(!atomic.load(std::sync::atomic::Ordering::SeqCst));
 
-		set_vram_polling(&mut cfg, "Off");
-		assert_eq!(cfg.processes.behaviour.vram_polling, VramPolling::Off);
+		set_gpu_data(&mut cfg, &atomic, "On");
+		assert_eq!(cfg.processes.behaviour.gpu_data, GpuData::On);
+		assert!(atomic.load(std::sync::atomic::Ordering::SeqCst));
 
-		set_vram_polling(&mut cfg, "garbage");
-		assert_eq!(cfg.processes.behaviour.vram_polling, VramPolling::Off);
+		set_gpu_data(&mut cfg, &atomic, "garbage");
+		assert_eq!(cfg.processes.behaviour.gpu_data, GpuData::Off);
+		assert!(!atomic.load(std::sync::atomic::Ordering::SeqCst));
 	}
 
 	#[test]

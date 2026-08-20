@@ -8,20 +8,25 @@ use gpui_component::{
 use gpuitop_components::assets::lucide::LucideIcon;
 use gpuitop_core::about::DepInfo;
 use gpuitop_core::config::Config;
-use std::sync::atomic::AtomicU64;
+use gpuitop_core::config_store::ConfigStore;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Arc;
 
 pub struct SettingsTab {
-	pub config: Config,
+	pub config: ConfigStore,
 	refresh_ms: Arc<AtomicU64>,
+	gpu_data: Arc<AtomicBool>,
+	redetect: Arc<AtomicBool>,
 	initial_page_index: Option<usize>,
 	deps: &'static [DepInfo],
 }
 
 impl SettingsTab {
 	pub fn new(
-		config: Config,
+		config: ConfigStore,
 		refresh_ms: Arc<AtomicU64>,
+		gpu_data: Arc<AtomicBool>,
+		redetect: Arc<AtomicBool>,
 		initial_page_index: Option<usize>,
 		deps: &'static [DepInfo],
 		_cx: &mut Context<Self>,
@@ -29,14 +34,10 @@ impl SettingsTab {
 		Self {
 			config,
 			refresh_ms,
+			gpu_data,
+			redetect,
 			initial_page_index,
 			deps,
-		}
-	}
-
-	pub fn save(&self) {
-		if let Err(e) = self.config.save() {
-			eprintln!("Failed to save config: {e}");
 		}
 	}
 
@@ -48,11 +49,18 @@ impl SettingsTab {
 	) -> Vec<SettingPage> {
 		let view = cx.entity();
 		let refresh_ms = self.refresh_ms.clone();
+		let gpu_data = self.gpu_data.clone();
+		let redetect = self.redetect.clone();
 		let default_config = Config::default();
 
 		vec![
 			crate::general::general_page(&view, &refresh_ms, &default_config),
-			crate::processes::processes_page(&view, &default_config),
+			crate::processes::processes_page(
+				&view,
+				&default_config,
+				&gpu_data,
+				&redetect,
+			),
 			crate::about::about_page(self.deps),
 		]
 	}
