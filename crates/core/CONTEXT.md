@@ -144,7 +144,7 @@ Recursive RON layering of an overlay onto a base config — the mechanism behind
 **fuzzy match**:
 Whether a search needle fuzzy-matches a target (nucleo).
 **best_fuzzy_score**:
-Best fuzzy score of the search across a process's name, command, and `electron_app_name`; drives relevance ordering while a search is active.
+Search ranking score `(name_score, command_score)` for a process — the displayed name (electron_app_name or name) first, command second — so a name match outranks a command-only match even at equal fuzzy scores (e.g. `--search vesktop` in gpuitop's own cmdline never outranks the real Vesktop process). Drives relevance ordering while a search is active.
 
 ## Relationships
 

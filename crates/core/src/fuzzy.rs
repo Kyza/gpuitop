@@ -13,7 +13,11 @@ impl FuzzyMatcher {
 	}
 
 	#[hotpath::measure]
-	pub fn best_score(&mut self, needle: &str, p: &ProcessSnapshot) -> u32 {
+	pub fn best_score(
+		&mut self,
+		needle: &str,
+		p: &ProcessSnapshot,
+	) -> (u32, u32) {
 		best_fuzzy_score(needle, p, &mut self.0)
 	}
 }
@@ -37,23 +41,17 @@ pub(crate) fn best_fuzzy_score(
 	needle: &str,
 	p: &ProcessSnapshot,
 	matcher: &mut nucleo::Matcher,
-) -> u32 {
+) -> (u32, u32) {
+	// Name-first ranking: the displayed name (electron_app_name or name)
+	// is what the user sees, so a name match outranks a command-only match.
+	let name = p.electron_app_name.as_deref().unwrap_or(&p.name);
 	let name_score =
-		nucleo_fuzzy_score(needle, &p.name.to_lowercase(), matcher)
+		nucleo_fuzzy_score(needle, &name.to_lowercase(), matcher)
 			.unwrap_or(0);
 	let cmd_score =
 		nucleo_fuzzy_score(needle, &p.command.to_lowercase(), matcher)
 			.unwrap_or(0);
-	let electron_score = nucleo_fuzzy_score(
-		needle,
-		&p.electron_app_name
-			.as_deref()
-			.unwrap_or_default()
-			.to_lowercase(),
-		matcher,
-	)
-	.unwrap_or(0);
-	name_score.max(cmd_score).max(electron_score)
+	(name_score, cmd_score)
 }
 
 #[cfg(test)]
@@ -151,7 +149,7 @@ mod tests {
 		};
 		let mut m = matcher();
 		let s = m.best_score("fire", &p);
-		assert!(s > 0);
+		assert!(s.0 > 0);
 	}
 
 	#[test]
@@ -180,6 +178,6 @@ mod tests {
 		};
 		let mut m = matcher();
 		let s = m.best_score("firefox", &p);
-		assert_eq!(s, 0);
+		assert_eq!(s, (0, 0));
 	}
 }

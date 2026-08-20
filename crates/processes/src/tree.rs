@@ -84,7 +84,7 @@ impl ProcessTableDelegate {
 		}
 
 		let mut matcher = gpuitop_core::fuzzy::FuzzyMatcher::new();
-		let fuzzy_scores: HashMap<i32, u32> = if has_search {
+		let fuzzy_scores: HashMap<i32, (u32, u32)> = if has_search {
 			pid_lookup
 				.iter()
 				.map(|(pid, proc)| {
@@ -103,14 +103,14 @@ impl ProcessTableDelegate {
 			pid_lookup: &HashMap<i32, ProcessSnapshot>,
 			matched: &HashSet<i32>,
 			expand_pids: &HashSet<i32>,
-			fuzzy_scores: &HashMap<i32, u32>,
+			fuzzy_scores: &HashMap<i32, (u32, u32)>,
 			use_fuzzy_sort: bool,
 		) -> Vec<TreeItem> {
 			let mut sorted_pids = pids.to_vec();
 			if use_fuzzy_sort {
 				sorted_pids.sort_by(|a, b| {
-					let sa = fuzzy_scores.get(a).copied().unwrap_or(0);
-					let sb = fuzzy_scores.get(b).copied().unwrap_or(0);
+					let sa = fuzzy_scores.get(a).copied().unwrap_or((0, 0));
+					let sb = fuzzy_scores.get(b).copied().unwrap_or((0, 0));
 					sb.cmp(&sa)
 				});
 			} else {

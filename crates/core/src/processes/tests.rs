@@ -50,14 +50,14 @@ fn best_score_exact_ranks_higher() {
 fn best_score_matches_command() {
 	let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
 	let p = make_process(1, 0, "bash", "root", 'S', "/usr/bin/firefox-esr");
-	assert!(best_fuzzy_score("firefox", &p, &mut m) > 0);
+	assert!(best_fuzzy_score("firefox", &p, &mut m).1 > 0);
 }
 
 #[test]
 fn best_score_zero_when_no_match() {
 	let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
 	let p = make_process(1, 0, "bash", "root", 'S', "bash");
-	assert_eq!(best_fuzzy_score("xyzzy", &p, &mut m), 0);
+	assert_eq!(best_fuzzy_score("xyzzy", &p, &mut m), (0, 0));
 }
 
 #[test]
@@ -65,5 +65,28 @@ fn best_score_uses_electron_app_name() {
 	let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
 	let mut p = make_process(1, 0, "electron", "alice", 'S', "electron");
 	p.electron_app_name = Some("discord".into());
-	assert!(best_fuzzy_score("discord", &p, &mut m) > 0);
+	assert!(best_fuzzy_score("discord", &p, &mut m).0 > 0);
+}
+
+#[test]
+fn best_score_name_outranks_command() {
+	let mut m = nucleo::Matcher::new(nucleo::Config::DEFAULT);
+	// gpuitop's own cmdline carries "--search vesktop", so it matches the
+	// command; the real vesktop process matches by its displayed name. The
+	// name match must rank first, not fall through to the CPU tiebreak.
+	let gpuitop = make_process(
+		1,
+		0,
+		"gpuitop",
+		"alice",
+		'S',
+		"gpuitop --search vesktop",
+	);
+	let mut vesktop =
+		make_process(2, 0, "electron", "alice", 'S', "electron");
+	vesktop.electron_app_name = Some("vesktop".into());
+	assert!(
+		best_fuzzy_score("vesktop", &vesktop, &mut m)
+			> best_fuzzy_score("vesktop", &gpuitop, &mut m)
+	);
 }
