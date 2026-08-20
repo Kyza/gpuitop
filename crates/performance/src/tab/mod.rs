@@ -5,7 +5,10 @@ use gpui_component::tab::{Tab, TabBar};
 use gpui_component::ActiveTheme;
 use gpuitop_components::assets::lucide::LucideIcon;
 use gpuitop_core::model::SystemSnapshot;
+use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::atomic::AtomicI64;
+use std::sync::Arc;
 
 mod cpu;
 mod disks;
@@ -21,6 +24,8 @@ pub struct PerformanceTab {
 	snapshot: Rc<SystemSnapshot>,
 	active_tab: usize,
 	history: History,
+	pin_request: Arc<AtomicI64>,
+	pie_hover: Rc<Cell<Option<usize>>>,
 }
 
 const TAB_LABELS: [&str; 5] = ["CPU", "Memory", "GPU", "Disks", "Network"];
@@ -36,12 +41,15 @@ impl PerformanceTab {
 	pub fn new(
 		snapshot: Rc<SystemSnapshot>,
 		active_tab: usize,
+		pin_request: Arc<AtomicI64>,
 		_cx: &mut Context<Self>,
 	) -> Self {
 		Self {
 			snapshot,
 			active_tab: active_tab.min(TAB_LABELS.len().saturating_sub(1)),
 			history: History::new(),
+			pin_request,
+			pie_hover: Rc::new(Cell::new(None)),
 		}
 	}
 
@@ -111,7 +119,14 @@ impl Render for PerformanceTab {
 			0 => cpu::cpu_tab(&snapshot.cpu, samples, cx).into_any_element(),
 			1 => memory::memory_tab(&snapshot.memory, samples, cx)
 				.into_any_element(),
-			2 => gpu::gpu_tab(&snapshot, samples, cx).into_any_element(),
+			2 => gpu::gpu_tab(
+				&snapshot,
+				samples,
+				self.pin_request.clone(),
+				self.pie_hover.clone(),
+				cx,
+			)
+			.into_any_element(),
 			3 => disks::disks_tab(&snapshot.disks, samples, cx)
 				.into_any_element(),
 			4 => network::network_tab(&snapshot.networks, samples, cx)

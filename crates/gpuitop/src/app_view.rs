@@ -17,7 +17,7 @@ use gpuitop_processes::ProcessesTab;
 use gpuitop_settings::SettingsTab;
 use gpuitop_snapshot::{collect_snapshot, CollectorState};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,6 +33,7 @@ pub struct App {
 	init_system: InitSystem,
 	rx: mpsc::Receiver<SystemSnapshot>,
 	paused: Arc<AtomicBool>,
+	pin_request: Arc<AtomicI64>,
 	elevated: bool,
 	elevation_error: Option<String>,
 	focus_handle: FocusHandle,
@@ -69,10 +70,12 @@ impl App {
 				cx,
 			)
 		});
+		let pin_request = Arc::new(AtomicI64::new(-1));
 		let performance_tab = cx.new(|cx| {
 			PerformanceTab::new(
 				initial_snapshot.clone(),
 				performance_tab.unwrap_or(0),
+				pin_request.clone(),
 				cx,
 			)
 		});
@@ -190,6 +193,7 @@ impl App {
 			init_system,
 			rx,
 			paused,
+			pin_request,
 			elevated: gpuitop_elevation::is_elevated(),
 			elevation_error: None,
 			focus_handle,
@@ -232,6 +236,13 @@ impl Render for App {
 			self.performance_tab
 				.update(cx, |tab, _| tab.set_snapshot(snap.clone()));
 			self.snapshot = snap;
+		}
+
+		let pin = self.pin_request.swap(-1, Ordering::SeqCst);
+		if pin >= 0 {
+			self.active_tab = 0;
+			self.processes_tab
+				.update(cx, |tab, cx| tab.pin_pid(pin as i32, cx));
 		}
 
 		let active = self.active_tab;

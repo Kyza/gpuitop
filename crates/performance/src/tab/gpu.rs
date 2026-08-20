@@ -1,9 +1,13 @@
+use std::cell::Cell;
 use std::cmp::Reverse;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::Arc;
 
 use bytesize::ByteSize;
 use gpui::prelude::*;
 use gpui::*;
-use gpui_component::chart::LineChart;
+use gpui_component::chart::{LineChart, PieChart};
 use gpui_component::progress::ProgressCircle;
 use gpui_component::{ActiveTheme, Sizable};
 use gpuitop_components::assets::lucide::LucideIcon;
@@ -16,10 +20,23 @@ use super::history::Sample;
 use super::widgets::{card, chart_box, stat_tiles};
 use super::PerformanceTab;
 
+const MAX_CONSUMERS: usize = 10;
+
+#[derive(Clone)]
+struct VramSlice {
+	name: SharedString,
+	bytes: f64,
+	color: Hsla,
+	pid: Option<i32>,
+	index: usize,
+}
+
 #[hotpath::measure]
 pub fn gpu_tab(
 	snapshot: &SystemSnapshot,
 	samples: Vec<Sample>,
+	pin_request: Arc<AtomicI64>,
+	pie_hover: Rc<Cell<Option<usize>>>,
 	cx: &mut Context<PerformanceTab>,
 ) -> impl IntoElement {
 	let dark = theme_dark_or_light(cx);
@@ -60,7 +77,7 @@ pub fn gpu_tab(
 		.filter(|p| p.vram.total() > 0)
 		.collect();
 	top.sort_by_key(|p| Reverse(p.vram.total()));
-	top.truncate(10);
+	top.truncate(MAX_CONSUMERS);
 
 	let device_cards: Vec<AnyElement> = snapshot
 		.gpu_devices
@@ -87,7 +104,7 @@ pub fn gpu_tab(
 				cx,
 			)),
 		)
-		.child(top_consumers(top, cx))
+		.child(vram_composition(snapshot, &top, pin_request, pie_hover, cx))
 }
 
 fn device_card(
@@ -100,7 +117,7 @@ fn device_card(
 	let title = if device.name.is_empty() {
 		format!("{} {}", device.backend, index + 1)
 	} else {
-		device.name.clone()
+		elide(&device.name, 40)
 	};
 
 	let vram_pct = if device.vram_total > 0 {
@@ -252,64 +269,178 @@ fn fan_str(v: u32) -> String {
 }
 
 #[hotpath::measure]
-fn top_consumers(
-	top: Vec<&ProcessSnapshot>,
-	cx: &Context<PerformanceTab>,
+fn vram_composition(
+	snapshot: &SystemSnapshot,
+	top: &[&ProcessSnapshot],
+	pin_request: Arc<AtomicI64>,
+	pie_hover: Rc<Cell<Option<usize>>>,
+	cx: &mut Context<PerformanceTab>,
 ) -> impl IntoElement {
-	if top.is_empty() {
-		return card("Top VRAM Consumers", cx).child(
-			div()
-				.text_size(px(12.0))
-				.text_color(cx.theme().muted_foreground)
-				.child("No processes using VRAM."),
-		);
+	let used_total: u64 =
+		snapshot.gpu_devices.iter().map(|d| d.vram_used).sum();
+	let total: u64 = snapshot.gpu_devices.iter().map(|d| d.vram_total).sum();
+	let top_sum: u64 = top.iter().map(|p| p.vram.total()).sum();
+	let other = used_total.saturating_sub(top_sum);
+	let free = total.saturating_sub(used_total);
+
+	let palette = slice_palette(cx);
+	let mut slices: Vec<VramSlice> = top
+		.iter()
+		.enumerate()
+		.map(|(i, p)| VramSlice {
+			name: p.name.clone().into(),
+			bytes: p.vram.total() as f64,
+			color: palette[i % palette.len()],
+			pid: Some(p.pid),
+			index: i,
+		})
+		.collect();
+	let mut next_index = slices.len();
+	slices.push(VramSlice {
+		name: "Other".into(),
+		bytes: other as f64,
+		color: cx.theme().muted_foreground,
+		pid: None,
+		index: next_index,
+	});
+	next_index += 1;
+	if free > 0 {
+		slices.push(VramSlice {
+			name: "Free".into(),
+			bytes: free as f64,
+			color: cx.theme().border,
+			pid: None,
+			index: next_index,
+		});
 	}
 
-	card("Top VRAM Consumers", cx).child(
+	let hovered = pie_hover.get();
+	card("VRAM Composition", cx).child(
 		div()
 			.flex()
-			.flex_col()
-			.gap(px(6.0))
-			.children(top.iter().map(|p| consumer_row(p, cx))),
+			.flex_row()
+			.items_center()
+			.gap(px(24.0))
+			.child(
+				div().w(px(200.0)).h(px(200.0)).child(
+					PieChart::new(slices.clone())
+						.value(|d| d.bytes as f32)
+						.color(move |d| {
+							if Some(d.index) == hovered {
+								brighten(d.color, 0.12)
+							} else {
+								d.color
+							}
+						})
+						.inner_radius(55.0)
+						.outer_radius_fn(move |arc| {
+							if Some(arc.data.index) == hovered {
+								92.0
+							} else {
+								80.0
+							}
+						}),
+				),
+			)
+			.child(
+				div()
+					.flex_1()
+					.min_w_0()
+					.flex()
+					.flex_col()
+					.gap(px(6.0))
+					.children(slices.iter().map(|s| {
+						slice_row(
+							s,
+							pin_request.clone(),
+							pie_hover.clone(),
+							cx,
+						)
+					})),
+			),
 	)
 }
 
-fn consumer_row(
-	p: &ProcessSnapshot,
-	cx: &Context<PerformanceTab>,
-) -> impl IntoElement {
-	div()
+fn slice_palette(cx: &Context<PerformanceTab>) -> Vec<Hsla> {
+	let t = cx.theme();
+	vec![
+		t.chart_1, t.chart_2, t.chart_3, t.chart_4, t.chart_5, t.success,
+		t.warning, t.danger,
+	]
+}
+
+fn elide(s: &str, max: usize) -> String {
+	if s.chars().count() <= max {
+		s.to_string()
+	} else {
+		let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+		out.push('…');
+		out
+	}
+}
+
+fn brighten(c: Hsla, amount: f32) -> Hsla {
+	Hsla {
+		h: c.h,
+		s: c.s,
+		l: (c.l + amount).min(1.0),
+		a: c.a,
+	}
+}
+
+fn slice_row(
+	slice: &VramSlice,
+	pin_request: Arc<AtomicI64>,
+	pie_hover: Rc<Cell<Option<usize>>>,
+	cx: &mut Context<PerformanceTab>,
+) -> AnyElement {
+	let hover = pie_hover.clone();
+	let idx = slice.index;
+	let mut row = div()
+		.id(ElementId::Name(
+			format!("vram-slice-{}", slice.index).into(),
+		))
 		.flex()
 		.flex_row()
 		.items_center()
-		.justify_between()
-		.py(px(4.0))
-		.border_b_1()
-		.border_color(cx.theme().border.opacity(0.4))
+		.gap(px(8.0))
+		.rounded(px(4.0))
+		.px(px(4.0))
+		.hover(|this| this.bg(cx.theme().muted.opacity(0.15)))
+		.on_hover(cx.listener(move |_, is_hovered: &bool, _, cx| {
+			hover.set(if *is_hovered { Some(idx) } else { None });
+			cx.notify();
+		}))
 		.child(
 			div()
-				.flex()
-				.flex_row()
-				.items_center()
-				.gap(px(8.0))
-				.child(
-					div()
-						.text_size(px(12.0))
-						.text_color(cx.theme().foreground)
-						.child(p.name.clone()),
-				)
-				.child(
-					div()
-						.text_size(px(11.0))
-						.text_color(cx.theme().muted_foreground)
-						.child(format!("PID {}", p.pid)),
-				),
+				.w(px(10.0))
+				.h(px(10.0))
+				.rounded(px(2.0))
+				.bg(slice.color),
 		)
 		.child(
 			div()
+				.flex_1()
+				.text_size(px(12.0))
+				.text_color(cx.theme().muted_foreground)
+				.truncate()
+				.child(slice.name.clone()),
+		)
+		.child(
+			div()
+				.flex_shrink_0()
 				.text_size(px(12.0))
 				.font_weight(FontWeight::SEMIBOLD)
-				.text_color(cx.theme().chart_5)
-				.child(ByteSize::b(p.vram.total()).to_string()),
-		)
+				.text_color(cx.theme().foreground)
+				.child(ByteSize::b(slice.bytes as u64).to_string()),
+		);
+	if let Some(pid) = slice.pid {
+		row =
+			row.cursor_pointer()
+				.on_click(cx.listener(move |_, _, _, cx| {
+					pin_request.store(pid as i64, Ordering::SeqCst);
+					cx.notify();
+				}));
+	}
+	row.into_any_element()
 }

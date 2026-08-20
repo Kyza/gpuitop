@@ -116,6 +116,20 @@ impl ProcessesTab {
 		self.engine.borrow().set_snapshot(snapshot);
 	}
 
+	pub fn pin_pid(&self, pid: i32, cx: &mut Context<Self>) {
+		ViewState::mutate(&self.view_state, |s| {
+			s.filters.clear();
+			s.filters.push(Filter::Pid(pid));
+			if self.config.get().processes.behaviour.clear_search_on_pin {
+				s.search.clear();
+			}
+		});
+		if self.config.get().processes.behaviour.clear_search_on_pin {
+			self.needs_clear_input.set(true);
+		}
+		cx.notify();
+	}
+
 	pub fn toggle_filter_mode(&mut self, cx: &mut Context<Self>) {
 		ViewState::mutate(&self.view_state, |s| {
 			s.filter_mode = match s.filter_mode {
