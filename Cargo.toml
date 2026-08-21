@@ -49,7 +49,10 @@ linicon = "2.3"
 
 [profile.release]
 lto = "thin"
+codegen-units = 1
+panic = "abort"
 strip = "symbols"
 
-[profile.dev.package."*"]
-opt-level = 2
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"

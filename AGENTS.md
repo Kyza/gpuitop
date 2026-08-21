@@ -4,7 +4,7 @@
 cargo check                               # Fast compile check
 cargo test                                # Run all 250 tests
 cargo test -- <test_name>                 # Single test
-cargo build --release                     # Release (LTO thin, strip=symbols)
+cargo build --release                     # Release (LTO thin, codegen-units 1, panic=abort, strip)
 ```
 
 **Always format after finishing changes AND before committing:**
@@ -12,7 +12,7 @@ cargo build --release                     # Release (LTO thin, strip=symbols)
 cargo +nightly fmt
 ```
 
-Build/check in debug mode unless running `cargo test` — release builds take forever due to git-pulled gpui deps plus `opt-level = 2` for `[profile.dev.package."*"]`.
+Build/check in debug mode unless running `cargo test` — release builds take forever due to git-pulled gpui deps.
 
 When piping long-running builds/tests, include the cargo progress lines in the filter so you can tell the build is moving and not stuck:
 
@@ -104,7 +104,7 @@ on everything and hosts the `App` shell (`app_view.rs`).
 - **Collector runs on background thread.** `collect_snapshot(&mut CollectorState)` looped via `mpsc::channel`. Snapshots drained in `App::render` each frame. UI never reads /proc directly.
 - **`#[cfg(target_os)]` interfaces functions only.** Shared types (`CollectorState`, `DesktopEntryCache`) live in the crate's `lib.rs`; constructors/associated fns become free fns (`collect_snapshot`, `load_cache`) re-exported from the platform modules. Directory-based platform code (snapshot, window_picker) uses a `linux.rs` entry that declares `#[path = "linux/*.rs"]` submodules.
 - **Cumulative cache** (`cum_cache`) computed once per snapshot, reused by filtering and rendering. Invalidate by setting to `None` on new snapshot.
-- **`[profile.dev.package."*"]` opt-level = 2** — dependencies optimized even in debug. Startup fast, incremental `cargo check` still fast.
+- **Debug uses `debug = "line-tables-only"` + `split-debuginfo = "unpacked"`** — fast builds/links, line-level stack traces, deps compiled at opt-level 0 (debug runtime is slower; that's the trade).
 - **`procfs` crate** — all Linux /proc reads go through `procfs` (0.16). No raw `fs::read_to_string("/proc/...")`. `Meminfo::current()`, `KernelStats::current()`, `diskstats()`, `net::dev_status()`, `Process::stat()`, `Process::status()`, `Process::io()`, `Process::cmdline()`, `Process::cgroups()`, `Process::environ()`, `Process::exe()`, `Process::cwd()`, `Process::fd()`, `Process::limits()`.
 - **`target_os = "macos"`** — not `"darwin"`. Rust uses `macos` for the target triple. Module files are named `macos.rs` accordingly.
 - **Selectable text = `SelectableText`** (`components/selectable_text.rs`). gpui has no built-in selectable text, and gpui-component's `TextView` only parses Markdown/HTML (so it mangles values containing markup). `SelectableText` HTML-escapes the input and wraps `TextView::html`, so text renders verbatim while selection/copy stays exact. Each instance needs a stable unique id.
