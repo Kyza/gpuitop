@@ -2,10 +2,12 @@ use gpui::prelude::*;
 use gpui::App as GpuiApp;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
+use gpui_component::kbd::Kbd;
 use gpui_component::menu::DropdownMenu;
 use gpui_component::tab::{Tab, TabBar};
 use gpui_component::{ActiveTheme, Disableable, Root, Sizable, TitleBar};
 use gpuitop_components::assets::lucide::LucideIcon;
+use gpuitop_core::config::DEFAULT_PAUSE_KEY;
 use gpuitop_core::config_store::ConfigStore;
 use gpuitop_core::model::{GpuBackend, GpuData, SystemSnapshot};
 use gpuitop_core::service_manager::{detect_init, InitSystem};
@@ -21,8 +23,6 @@ use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
-
-const PAUSE_KEY: &str = "escape";
 
 pub struct App {
 	active_tab: usize,
@@ -247,6 +247,11 @@ impl Render for App {
 
 		let active = self.active_tab;
 		let paused = self.paused.load(Ordering::SeqCst);
+		let pause_key = self.config.get().general.interface.pause_key.clone();
+		let pause_stroke =
+			Keystroke::parse(&pause_key).unwrap_or_else(|_| {
+				Keystroke::parse(DEFAULT_PAUSE_KEY).expect("escape parses")
+			});
 		let labels = ["Processes", "Performance", "Settings"];
 		let icons = [
 			LucideIcon::List,
@@ -289,7 +294,14 @@ impl Render for App {
 			.track_focus(&self.focus_handle)
 			.on_key_down(cx.listener(
 				|this, e: &KeyDownEvent, _window, cx| {
-					if e.keystroke.key == PAUSE_KEY {
+					let stroke = Keystroke::parse(
+						&this.config.get().general.interface.pause_key,
+					)
+					.unwrap_or_else(|_| {
+						Keystroke::parse(DEFAULT_PAUSE_KEY)
+							.expect("escape parses")
+					});
+					if e.keystroke == stroke {
 						let p = !this.paused.load(Ordering::SeqCst);
 						this.paused.store(p, Ordering::SeqCst);
 						cx.notify();
@@ -449,7 +461,15 @@ impl Render for App {
 					.child(format!("GPU: {gpu_label}"))
 					.child(format!("Init: {init}"))
 					.child(div().flex_grow(1.0))
-					.child(if paused { "Esc: Resume" } else { "Esc: Pause" })
+					.child(
+						div()
+							.flex()
+							.flex_row()
+							.items_center()
+							.gap(px(6.0))
+							.child(Kbd::new(pause_stroke))
+							.child(if paused { "Resume" } else { "Pause" }),
+					)
 					.when_some(self.elevation_error.clone(), |el, msg| {
 						el.child(
 							div().text_color(cx.theme().danger).child(msg),

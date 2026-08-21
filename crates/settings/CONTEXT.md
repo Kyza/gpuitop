@@ -13,7 +13,7 @@ One of General (refresh interval, theme, window size), Processes (behaviour, col
 _Avoid_: "tab" (this crate's tab is SettingsTab; the pages are its sub-views)
 
 **Config mutation**:
-Editing a typed config field from a UI control via the `mutations.rs` gateway — the ten free functions that parse UI string values into config enums with fallback-to-default semantics for unknown input. They stay pure `&mut Config` functions; call sites wrap them in `store.mutate(|c| …)`, which persists automatically — there is no separate `save()` call.
+Editing a typed config field from a UI control via the `mutations.rs` gateway — the eleven free functions that parse UI string values into config enums with fallback-to-default semantics for unknown input. They stay pure `&mut Config` functions; call sites wrap them in `store.mutate(|c| …)`, which persists automatically — there is no separate `save()` call.
 _Avoid_: writing config from the pages directly; all mutations route through the gateway and the store
 
 **Refresh interval**:

@@ -1,4 +1,4 @@
-use gpuitop_core::config::Config;
+use gpuitop_core::config::{Config, DEFAULT_PAUSE_KEY};
 use gpuitop_core::model::{
 	DefaultViewMode, GpuData, PidFilterMode, ResourceViewMode, SortColumn,
 };
@@ -15,6 +15,15 @@ pub fn set_refresh_ms(
 		config.general.interface.refresh_ms = ms;
 		refresh_ms.store(ms, Ordering::SeqCst);
 	}
+}
+
+pub fn set_pause_key(config: &mut Config, val: &str) {
+	let key = val.trim();
+	config.general.interface.pause_key = if key.is_empty() {
+		DEFAULT_PAUSE_KEY.to_string()
+	} else {
+		key.to_string()
+	};
 }
 
 pub fn set_gpu_data(
@@ -354,5 +363,17 @@ mod tests {
 		let after: Vec<_> =
 			cfg.processes.columns.iter().map(|e| e.column).collect();
 		assert_eq!(before, after);
+	}
+
+	#[test]
+	fn test_set_pause_key() {
+		let mut cfg = Config::default();
+		assert_eq!(cfg.general.interface.pause_key, "escape");
+
+		set_pause_key(&mut cfg, "space");
+		assert_eq!(cfg.general.interface.pause_key, "space");
+
+		set_pause_key(&mut cfg, " ");
+		assert_eq!(cfg.general.interface.pause_key, "escape");
 	}
 }

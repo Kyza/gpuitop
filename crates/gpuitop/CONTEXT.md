@@ -14,7 +14,7 @@ A background thread owning `CollectorState`, looping `collect_snapshot` at the r
 The `async_channel` that triggers `cx.notify()` when a fresh snapshot arrives.
 
 **Pause**:
-The Esc toggle; sets a shared `Arc<AtomicBool>` that stops *collection*, not just display — with an overlay icon when paused.
+The configured key combo (default Esc); sets a shared `Arc<AtomicBool>` that stops *collection*, not just display — with an overlay icon when paused.
 
 **Main tabs**:
 Processes / Performance / Settings — the app's top-level pages, distinct from each panel's internal sub-tabs.
@@ -35,7 +35,7 @@ Pre-fills the process search.
 `elevated` / `elevation_error` in the App; the shield button relaunches elevated and quits on success, errors surface in the status bar.
 
 **Status bar**:
-GPU backends, detected init system, Esc pause hint, elevation errors.
+GPU backends, detected init system, pause keybind hint, elevation errors.
 
 **built**:
 The `include!`ed `built.rs` (`DIRECT_DEPS: &[DepInfo]`) emitted by `build.rs` from the bin's direct runtime deps, passed into `SettingsTab` for the About page.

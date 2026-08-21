@@ -17,12 +17,20 @@ fn default_theme() -> String {
 	"Default Dark".to_string()
 }
 
+fn default_pause_key() -> String {
+	DEFAULT_PAUSE_KEY.to_string()
+}
+
+pub const DEFAULT_PAUSE_KEY: &str = "escape";
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InterfaceConfig {
 	#[serde(default)]
 	pub refresh_ms: u64,
 	#[serde(default = "default_theme")]
 	pub theme: String,
+	#[serde(default = "default_pause_key")]
+	pub pause_key: String,
 }
 
 impl Default for InterfaceConfig {
@@ -30,6 +38,7 @@ impl Default for InterfaceConfig {
 		Self {
 			refresh_ms: 1500,
 			theme: default_theme(),
+			pause_key: default_pause_key(),
 		}
 	}
 }
@@ -467,6 +476,7 @@ mod tests {
 		roundtrip(&InterfaceConfig {
 			refresh_ms: 500,
 			theme: "Default Dark".to_string(),
+			pause_key: "f9".to_string(),
 		});
 	}
 
