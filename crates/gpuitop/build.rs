@@ -67,4 +67,14 @@ fn main() {
 	.unwrap();
 
 	println!("cargo:rerun-if-changed=Cargo.lock");
+
+	if env::var_os("CARGO_FEATURE_PACKAGING").is_some() {
+		let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+		if let Some(desktop) = gpuitop_packaging::desktop(&target_os) {
+			let target = env::var("CARGO_TARGET_DIR").unwrap();
+			let profile = env::var("PROFILE").unwrap();
+			let dest_dir = std::path::Path::new(&target).join(&profile);
+			fs::write(dest_dir.join("gpuitop.desktop"), desktop).unwrap();
+		}
+	}
 }

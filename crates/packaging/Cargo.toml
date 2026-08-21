@@ -1,0 +1,6 @@
+[package]
+name = "gpuitop_packaging"
+version = "0.1.0"
+edition = "2021"
+description = "Generates per-platform app integration files for gpuitop installs"
+license = "MIT"

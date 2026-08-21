@@ -70,6 +70,7 @@ crates/                        # virtual workspace (root Cargo.toml has no [pack
 ├── icons/                     # gpuitop_icons — DesktopEntryCache + icon path resolution via cfg
 ├── snapshot/                  # gpuitop_snapshot — CollectorState + collect_snapshot via cfg
 ├── window_picker/             # gpuitop_window_picker — PickedWindow, GPUITOP_APP_ID via cfg
+├── packaging/                 # gpuitop_packaging — build-time generator for platform integration files (Linux .desktop); gpuitop's build.rs uses it under the `packaging` feature (make build/install), never in dev
 ├── components/                # gpuitop_components — shared UI building blocks
 │   ├── selectable_text.rs     # SelectableText — verbatim text that is selectable/copyable
 │   ├── themes.rs              # built-in theme load/apply (gpui-component + rust-embed)

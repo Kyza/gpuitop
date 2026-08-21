@@ -2884,6 +2884,7 @@ dependencies = [
  "gpuitop_elevation",
  "gpuitop_gpu",
  "gpuitop_icons",
+ "gpuitop_packaging",
  "gpuitop_performance",
  "gpuitop_processes",
  "gpuitop_properties",
@@ -2942,6 +2943,10 @@ dependencies = [
  "hotpath",
  "linicon",
 ]
+
+[[package]]
+name = "gpuitop_packaging"
+version = "0.1.0"
 
 [[package]]
 name = "gpuitop_performance"

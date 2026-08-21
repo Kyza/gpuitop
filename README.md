@@ -132,9 +132,21 @@ sudo pacman -S base-devel cmake pkgconf \
 
 ## Install
 
+Builds the release binary and installs it with the desktop entry (so gpuitop shows in your app menu):
+
 ```bash
-cargo install --git https://github.com/Kyza/gpuitop.git
+make install
 ```
+
+The build runs as your normal user — only the file placement elevates, prompting for your password. Install into your home instead (no password needed):
+
+```bash
+make install PREFIX=~/.local
+```
+
+Stage the install for packaging with `DESTDIR` (no elevation), and remove it with `make uninstall`. Don't run `make` itself under `sudo` — it would rebuild everything as root.
+
+`cargo install --git https://github.com/Kyza/gpuitop.git` also works, but only places the binary — no desktop entry is installed.
 
 ## Config
 

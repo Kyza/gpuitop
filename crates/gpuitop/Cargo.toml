@@ -29,9 +29,11 @@ hotpath = { workspace = true }
 
 [build-dependencies]
 cargo_metadata = { workspace = true }
+gpuitop_packaging = { path = "../packaging" }
 
 [features]
 default = []
+packaging = []
 hotpath = [
 	"hotpath/hotpath",
 	"gpuitop_core/hotpath",
