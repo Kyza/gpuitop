@@ -543,6 +543,37 @@ mod tests {
 		assert!(snap.processes.iter().any(|p| p.pid == 1), "PID 1 missing");
 	}
 
+	fn fd_count() -> usize {
+		std::fs::read_dir("/proc/self/fd")
+			.map(|d| d.count())
+			.unwrap_or(0)
+	}
+
+	// Regression: the full collector (GPU data on) must not leak fds over
+	// many ticks. Pre-fix, the two per-tick Nvml::init() calls leaked 2
+	// fds/tick, exhausting the fd limit and blanking the process list.
+	#[test]
+	fn collector_does_not_leak_fds() {
+		let mut state = CollectorState::new(
+			gpuitop_gpu::detect_gpu(),
+			Default::default(),
+			Arc::new(AtomicBool::new(true)),
+			Arc::new(AtomicBool::new(false)),
+		);
+		for _ in 0..10 {
+			collect_snapshot(&mut state);
+		}
+		let before = fd_count();
+		for _ in 0..50 {
+			collect_snapshot(&mut state);
+		}
+		let after = fd_count();
+		assert!(
+			after as isize - before as isize <= 16,
+			"collector leaks fds: {before} -> {after}"
+		);
+	}
+
 	#[test]
 	fn proc_cpu_pct_half_core() {
 		// 1s of a single core = hertz ticks over a 1s window, 1 core.
