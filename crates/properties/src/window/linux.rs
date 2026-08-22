@@ -395,7 +395,7 @@ fn environ(
 			.into_any_element();
 	}
 
-	let items: Vec<DescriptionItem> = vars
+	let mut items: Vec<DescriptionItem> = vars
 		.iter()
 		.flat_map(|(k, v)| {
 			let entry = if v.is_empty() {
@@ -406,6 +406,7 @@ fn environ(
 			[entry, separator()]
 		})
 		.collect();
+	items.pop();
 
 	dl().children(items).into_any_element()
 }
@@ -425,17 +426,29 @@ fn fds(
 			.into_any_element();
 	}
 
-	let items: Vec<DescriptionItem> = props
+	let mut items: Vec<DescriptionItem> = props
 		.fds
 		.iter()
-		.enumerate()
-		.flat_map(|(i, target)| {
-			let label = format!("FD {}", i);
+		.flat_map(|(fd, target)| {
+			let label = format!("FD {fd}");
 			[item(&label, target.clone(), cx), separator()]
 		})
 		.collect();
+	items.pop();
 
-	dl().children(items).into_any_element()
+	div()
+		.flex_1()
+		.flex()
+		.flex_col()
+		.child(
+			div()
+				.pb(px(8.0))
+				.text_size(px(12.0))
+				.text_color(cx.theme().muted_foreground)
+				.child(format!("{} file descriptors", props.fds.len())),
+		)
+		.child(dl().children(items))
+		.into_any_element()
 }
 
 fn limits(
@@ -453,7 +466,7 @@ fn limits(
 			.into_any_element();
 	}
 
-	let items: Vec<DescriptionItem> = props
+	let mut items: Vec<DescriptionItem> = props
 		.limits
 		.iter()
 		.flat_map(|limit| {
@@ -461,6 +474,7 @@ fn limits(
 			[item(&limit.name, label, cx), separator()]
 		})
 		.collect();
+	items.pop();
 
 	dl().children(items).into_any_element()
 }

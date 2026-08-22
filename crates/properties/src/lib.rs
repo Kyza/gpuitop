@@ -43,7 +43,8 @@ pub struct ProcessProperties {
 	pub root_path: Option<String>,
 	pub cgroups: Vec<String>,
 	pub environ: Vec<(String, String)>,
-	pub fds: Vec<String>,
+	// (fd number, target), sorted by fd number.
+	pub fds: Vec<(i32, String)>,
 	pub voluntary_ctxt_switches: Option<u64>,
 	pub nonvoluntary_ctxt_switches: Option<u64>,
 	pub smaps: Option<SmapsSummary>,

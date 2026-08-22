@@ -44,40 +44,27 @@ pub fn collect(pid: i32) -> Result<ProcessProperties, ReadError> {
 		.map(|cg| cg.0.iter().map(|c| c.pathname.clone()).collect())
 		.unwrap_or_default();
 
-	let fds: Vec<String> = if let Ok(fd_iter) = proc.fd() {
-		fd_iter
-			.filter_map(|fd_info| {
-				fd_info.ok().map(|info| {
-					use procfs::process::FDTarget;
-					match info.target {
-						FDTarget::Path(ref p) => {
-							p.to_string_lossy().into_owned()
-						}
-						FDTarget::Socket(inode) => {
-							format!("socket:[{}]", inode)
-						}
-						FDTarget::Net(inode) => {
-							format!("net:[{}]", inode)
-						}
-						FDTarget::Pipe(inode) => {
-							format!("pipe:[{}]", inode)
-						}
-						FDTarget::AnonInode(ref s) => {
-							format!("anon_inode:[{}]", s)
-						}
-						FDTarget::MemFD(ref s) => {
-							format!("memfd:{}", s)
-						}
-						FDTarget::Other(ref s, inode) => {
-							format!("{}:[{}]", s, inode)
-						}
-					}
-				})
-			})
-			.collect()
-	} else {
-		Vec::new()
-	};
+	let mut fds: Vec<(i32, String)> = Vec::new();
+	if let Ok(fd_iter) = proc.fd() {
+		for fd_info in fd_iter.flatten() {
+			use procfs::process::FDTarget;
+			let target = match fd_info.target {
+				FDTarget::Path(ref p) => p.to_string_lossy().into_owned(),
+				FDTarget::Socket(inode) => format!("socket:[{}]", inode),
+				FDTarget::Net(inode) => format!("net:[{}]", inode),
+				FDTarget::Pipe(inode) => format!("pipe:[{}]", inode),
+				FDTarget::AnonInode(ref s) => {
+					format!("anon_inode:[{}]", s)
+				}
+				FDTarget::MemFD(ref s) => format!("memfd:{}", s),
+				FDTarget::Other(ref s, inode) => {
+					format!("{}:[{}]", s, inode)
+				}
+			};
+			fds.push((fd_info.fd, target));
+		}
+	}
+	fds.sort_unstable_by_key(|(fd, _)| *fd);
 
 	let io = proc.io().ok();
 	let limits_data = proc.limits().ok();
